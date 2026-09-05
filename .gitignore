@@ -1,0 +1,28 @@
+node_modules/
+.expo/
+dist/
+web-build/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+ios/
+android/
+coverage/
+
+# Backend (Python)
+backend/venv/
+backend/__pycache__/
+**/__pycache__/
+*.pyc
+
+# Real uploaded documents — private data, and machine-local paths besides
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Claude Code session/process metadata — not project source
+/.claude/scheduled_tasks.lock
+
+# Scratch/working files, not part of the shipped app
+frontend/.artifact-scratch/

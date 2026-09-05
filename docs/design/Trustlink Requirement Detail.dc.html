@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #FBFAF9; }
+  a { color: #0F0F0E; text-decoration: none; }
+  a:hover { color: #55524D; }
+  ::selection { background: #0F0F0E; color: #FBFAF9; }
+  @keyframes tl-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
+  input, button, textarea { font-family: 'DM Sans', sans-serif; }
+</style>
+</helmet>
+<div style="background:#FBFAF9;color:#0F0F0E;font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;padding-bottom:90px">
+
+  <header style="position:sticky;top:0;z-index:50;background:rgba(251,250,249,0.92);backdrop-filter:blur(10px);border-bottom:1px solid rgba(15,15,14,0.1)">
+    <div style="max-width:1720px;margin:0 auto;padding:0 clamp(16px,3vw,56px);height:66px;display:flex;align-items:center;gap:clamp(10px,2vw,32px);min-width:0">
+      <a href="#home" style="display:flex;align-items:center;gap:9px;flex:none">
+        <svg viewBox="0 0 24 24" fill="none" style="width:21px;height:21px" aria-hidden="true"><circle cx="12" cy="12" r="10.2" stroke="#164E78" stroke-width="1.2"></circle><path d="M7.6 12.3l3 3 5.8-6.3" stroke="#164E78" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:500;font-size:17px;letter-spacing:-0.03em">Trustlink</span>
+      </a>
+
+      <label style="flex:1 1 120px;min-width:0;max-width:340px;display:flex;align-items:center;gap:9px;background:rgba(15,15,14,0.05);border:1px solid transparent;border-radius:999px;padding:9px 14px">
+        <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;flex:none;color:rgba(15,15,14,0.45)"><circle cx="7.2" cy="7.2" r="4.6" stroke="currentColor" stroke-width="1.3"></circle><path d="M10.6 10.6L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path></svg>
+        <input type="text" placeholder="Search requirements or businesses" style="flex:1;min-width:0;background:transparent;border:none;outline:none;font-size:13.5px;color:#0F0F0E">
+      </label>
+
+      <div style="flex:1"></div>
+
+      <nav style="display:flex;align-items:center;gap:2px;min-width:0;flex:0 1 auto">
+        <a href="#home" title="Home" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 clamp(7px,1.1vw,14px);color:rgba(15,15,14,0.55)" style-hover="color:#0F0F0E">
+          <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><path d="M4 10.4 12 4l8 6.4V19a1 1 0 0 1-1 1h-4v-5.4H9V20H5a1 1 0 0 1-1-1v-8.6Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+          <span style="font-size:11.5px;white-space:nowrap">Home</span>
+        </a>
+        <a href="#quotations" title="My Quotations" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 clamp(7px,1.1vw,14px);color:rgba(15,15,14,0.55)" style-hover="color:#0F0F0E">
+          <span style="position:relative;display:flex">
+            <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><path d="M6 3.5h8.5L19 8v12.5H6a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path><path d="M8.5 12h7M8.5 15.5h4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path></svg>
+            <span style="position:absolute;top:-5px;left:12px;font-family:'DM Mono',monospace;font-size:9.5px;line-height:1;background:#164E78;color:#FBFAF9;border:1.5px solid #FBFAF9;border-radius:999px;padding:2px 4px">3</span>
+          </span>
+          <span style="font-size:11.5px;white-space:nowrap">My Quotations</span>
+        </a>
+        <a href="#requirements" title="My Requirements" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 clamp(7px,1.1vw,14px);color:{{ navReqColor }}" style-hover="color:#0F0F0E">
+          <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><path d="M4.5 5.5h15v13.5a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V5.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path><path d="M8 3v4.5M16 3v4.5M4.5 10h15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path></svg>
+          <span style="font-size:11.5px;white-space:nowrap">My Requirements</span>
+        </a>
+        <a href="#alerts" title="Alerts" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 clamp(7px,1.1vw,14px);color:rgba(15,15,14,0.55)" style-hover="color:#0F0F0E">
+          <span style="position:relative;display:flex">
+            <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><path d="M6.2 9.6a5.8 5.8 0 0 1 11.6 0c0 4 1.3 5.6 1.9 6.2.3.3.1.9-.4.9H4.7c-.5 0-.7-.6-.4-.9.6-.6 1.9-2.2 1.9-6.2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path><path d="M9.8 20a2.4 2.4 0 0 0 4.4 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path></svg>
+            <span style="position:absolute;top:-5px;left:12px;font-family:'DM Mono',monospace;font-size:9.5px;line-height:1;background:#B4331F;color:#FBFAF9;border:1.5px solid #FBFAF9;border-radius:999px;padding:2px 4px">2</span>
+          </span>
+          <span style="font-size:11.5px;white-space:nowrap">Alerts</span>
+        </a>
+
+        <span style="width:1px;height:26px;background:rgba(15,15,14,0.12);margin:0 clamp(6px,1vw,14px)"></span>
+
+        <a href="#profile" style="display:flex;align-items:center;gap:9px;min-width:0;overflow:hidden">
+          <div style="width:32px;height:32px;border-radius:999px;background:#0F0F0E;color:#FBFAF9;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-size:13px;font-weight:500;flex:none">{{ acctInitials }}</div>
+          <div style="line-height:1.25;min-width:0">
+            <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ acctName }}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:#164E78">{{ acctTier }}</div>
+          </div>
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <div style="border-bottom:1px solid rgba(15,15,14,0.1);background:rgba(15,15,14,0.025)">
+    <div style="max-width:1720px;margin:0 auto;padding:11px clamp(16px,3vw,56px);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Prototype · view state</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <sc-for list="{{ stateTabs }}" as="t" hint-placeholder-count="3">
+          <button onClick="{{ t.pick }}" style="background:{{ t.bg }};color:{{ t.fg }};border:1px solid {{ t.border }};border-radius:999px;padding:6px 13px;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">{{ t.label }}</button>
+        </sc-for>
+      </div>
+      <sc-if value="{{ isRespondent }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ toggleSubmitted }}" style="background:transparent;border:1px dashed rgba(15,15,14,0.25);border-radius:999px;padding:6px 13px;font-size:12.5px;color:rgba(15,15,14,0.6);cursor:pointer;white-space:nowrap">{{ submittedToggleLabel }}</button>
+      </sc-if>
+    </div>
+  </div>
+
+  <main style="max-width:1720px;margin:0 auto;padding:22px clamp(16px,3vw,56px) 0">
+
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(15,15,14,0.5);flex-wrap:wrap">
+      <a href="#back" style="color:rgba(15,15,14,0.5)" style-hover="color:#0F0F0E">{{ backLabel }}</a>
+      <span>/</span>
+      <span style="font-family:'DM Mono',monospace;font-size:11.5px;letter-spacing:0.06em">RQ-2026-0418</span>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;margin-top:14px">
+      <div style="flex:1 1 460px;min-width:0">
+        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+          <span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:4px 10px;color:#164E78">Metal Fabrication</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;background:{{ statusBg }};color:{{ statusFg }};border:1px solid {{ statusBorder }};border-radius:999px;padding:4px 10px">
+            <span style="width:6px;height:6px;border-radius:999px;background:currentColor;animation:{{ statusDot }}"></span>
+            <span>{{ statusLabel }}</span>
+          </span>
+        </div>
+        <h1 style="margin:12px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(25px,3vw,36px);font-weight:500;line-height:1.1;letter-spacing:-0.035em;max-width:24ch;text-wrap:pretty">Fabrication and installation of steel mezzanine platform, 240 sqm</h1>
+        <div style="margin-top:11px;font-size:13.5px;color:rgba(15,15,14,0.55)">Posted 4 Aug 2026 · Barangay Canlubang, Calamba, Laguna</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:clamp(18px,2vw,28px);align-items:flex-start;margin-top:26px">
+
+      <div style="flex:3 1 520px;min-width:0;display:flex;flex-direction:column;gap:16px">
+
+        <div style="border:1px solid {{ bandBorder }};border-radius:16px;background:{{ bandBg }};padding:20px 22px">
+
+          <sc-if value="{{ isRespondent }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:18px;padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid rgba(15,15,14,0.09)">
+              <div>
+                <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Quantity</div>
+                <div style="margin-top:7px;font-size:14.5px;font-weight:500;line-height:1.4">One platform, 240 sqm<br><span style="font-weight:400;color:rgba(15,15,14,0.55)">Supplied and installed</span></div>
+              </div>
+              <div>
+                <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Location</div>
+                <div style="margin-top:7px;font-size:14.5px;font-weight:500;line-height:1.4">Calamba, Laguna<br><span style="font-weight:400;color:rgba(15,15,14,0.55)">Bayan Logistics Hub 3</span></div>
+              </div>
+              <div>
+                <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Indicative budget</div>
+                <div style="margin-top:7px;font-size:14.5px;font-weight:500;line-height:1.4">₱ 450,000 — 700,000<br><span style="font-weight:400;color:rgba(15,15,14,0.55)">Stated, not binding</span></div>
+              </div>
+              <div>
+                <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Needed by</div>
+                <div style="margin-top:7px;font-size:14.5px;font-weight:500;line-height:1.4">15 Sep — 30 Oct 2026<br><span style="font-weight:400;color:rgba(15,15,14,0.55)">Installation window</span></div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:13px;flex-wrap:wrap;padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid rgba(15,15,14,0.09)">
+              <div style="width:38px;height:38px;border-radius:11px;background:#0F0F0E;color:#FBFAF9;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-size:13px;font-weight:500;flex:none">BL</div>
+              <div style="flex:1 1 250px;min-width:0">
+                <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                  <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:500;letter-spacing:-0.025em">Bayan Logistics Corp.</span>
+                  <span title="DTI and BIR records checked on 3 March 2025." style="display:inline-flex;align-items:center;gap:5px;color:#164E78;cursor:default">
+                    <svg viewBox="0 0 24 24" fill="none" style="width:13px;height:13px;flex:none"><circle cx="12" cy="12" r="10.2" stroke="currentColor" stroke-width="1.6"></circle><path d="M7.6 12.3l3 3 5.8-6.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase">Verified 3 Mar 2025</span>
+                  </span>
+                  <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.55);border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:3px 8px">Tier 3 of 3</span>
+                </div>
+                <div style="margin-top:6px;font-size:13px;color:rgba(15,15,14,0.58)">18 requirements posted · 14 awarded on Trustlink</div>
+              </div>
+              <a href="#buyer" style="border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:9px 15px;font-size:13px;font-weight:500;color:rgba(15,15,14,0.7);white-space:nowrap" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">View buyer profile</a>
+            </div>
+          </sc-if>
+
+          <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+            <div style="min-width:186px">
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">{{ clockLabel }}</div>
+              <div style="display:inline-flex;align-items:center;gap:9px;margin-top:7px;color:{{ clockColor }}">
+                <span style="width:7px;height:7px;border-radius:999px;background:currentColor;animation:{{ clockDot }}"></span>
+                <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:500;letter-spacing:-0.03em;white-space:nowrap">{{ countdown }}</span>
+              </div>
+              <div style="margin-top:6px;font-size:12.5px;color:rgba(15,15,14,0.55)">{{ closingStamp }}</div>
+            </div>
+
+            <span style="width:1px;align-self:stretch;background:rgba(15,15,14,0.1)"></span>
+
+            <div style="min-width:130px">
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">{{ countLabel }}</div>
+              <div style="margin-top:7px;font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:500;letter-spacing:-0.03em">{{ countValue }}</div>
+              <div style="margin-top:4px;font-size:12.5px;color:rgba(15,15,14,0.55)">{{ countSub }}</div>
+            </div>
+
+            <span style="flex:1;min-width:8px"></span>
+
+            <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+              <sc-if value="{{ showSave }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ toggleSave }}" style="display:inline-flex;align-items:center;gap:7px;background:{{ saveBg }};border:1px solid rgba(15,15,14,0.18);color:rgba(15,15,14,0.72);border-radius:999px;padding:10px 16px;font-size:13.5px;font-weight:500;cursor:pointer">
+                  <svg viewBox="0 0 16 16" fill="{{ saveFill }}" style="width:13px;height:13px"><path d="M4 2.6h8a.8.8 0 0 1 .8.8v10L8 10.8 3.2 13.4v-10a.8.8 0 0 1 .8-.8Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+                  <span>{{ saveLabel }}</span>
+                </button>
+              </sc-if>
+              <sc-if value="{{ showPrimary }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ noop }}" style="display:inline-flex;align-items:center;gap:9px;background:#164E78;color:#FBFAF9;border:none;border-radius:999px;padding:11px 19px;font-size:13.5px;font-weight:500;cursor:pointer" style-hover="background:#103A5A">
+                  <span>{{ primaryLabel }}</span>
+                  <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M2.5 8h10.5M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                </button>
+              </sc-if>
+            </div>
+          </div>
+
+          <div style="margin-top:15px;padding-top:14px;border-top:1px solid rgba(15,15,14,0.09);display:flex;align-items:flex-start;gap:9px">
+            <svg viewBox="0 0 24 24" fill="none" style="width:15px;height:15px;flex:none;margin-top:1px;color:{{ sealIconColor }}"><rect x="5" y="10.5" width="14" height="9.5" rx="1.6" stroke="currentColor" stroke-width="1.5"></rect><path d="M8.4 10.5V7.8a3.6 3.6 0 0 1 7.2 0v2.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+            <div style="font-size:13px;line-height:1.55;color:rgba(15,15,14,0.62);max-width:78ch">{{ sealLine }}</div>
+          </div>
+        </div>
+
+        <sc-if value="{{ isSealedOwner }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:clamp(26px,3vw,42px) clamp(22px,3vw,40px)">
+            <div style="display:flex;flex-direction:column;align-items:center;text-align:center">
+              <div style="width:62px;height:62px;border-radius:999px;background:rgba(22,78,120,0.07);display:flex;align-items:center;justify-content:center;color:#164E78">
+                <svg viewBox="0 0 24 24" fill="none" style="width:27px;height:27px"><rect x="4.5" y="10.2" width="15" height="10" rx="1.8" stroke="currentColor" stroke-width="1.5"></rect><path d="M8 10.2V7.6a4 4 0 0 1 8 0v2.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path><circle cx="12" cy="15.2" r="1.5" fill="currentColor"></circle></svg>
+              </div>
+              <div style="margin-top:20px;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(21px,2.2vw,27px);font-weight:500;letter-spacing:-0.03em;line-height:1.2;max-width:22ch;text-wrap:pretty">7 quotations are sealed</div>
+              <div style="margin-top:13px;font-size:14.5px;line-height:1.6;color:rgba(15,15,14,0.62);max-width:52ch;text-wrap:pretty">All submissions remain hidden until 14 Aug 2026, 5:00 PM. At closing, all quotations open simultaneously.</div>
+
+              <div style="display:flex;gap:6px;margin-top:26px;width:100%;max-width:480px">
+                <sc-for list="{{ sealBars }}" as="b" hint-placeholder-count="12">
+                  <span style="flex:1;height:38px;border-radius:6px;background:{{ b.bg }};border:1px solid rgba(22,78,120,0.2)"></span>
+                </sc-for>
+              </div>
+              <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.4)">7 sealed records · contents unreadable</div>
+            </div>
+
+              <button onClick="{{ toggleHow }}" style="display:inline-flex;align-items:center;gap:8px;margin-top:22px;background:transparent;border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:9px 16px;font-size:13px;font-weight:500;color:rgba(15,15,14,0.68);cursor:pointer" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">
+                <span>How sealed quotations work</span>
+                <svg viewBox="0 0 16 16" fill="none" style="width:11px;height:11px;transform:{{ howArrow }}"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </button>
+
+              <sc-if value="{{ showHow }}" hint-placeholder-val="{{ false }}">
+                <div style="width:100%;max-width:620px;text-align:left;margin-top:20px;padding-top:20px;border-top:1px solid rgba(15,15,14,0.09);display:flex;flex-direction:column;gap:15px">
+                  <div style="font-size:13.5px;line-height:1.6;color:rgba(15,15,14,0.65)">Quotations stay unreadable so nobody can undercut a price they cannot see — the last quotation you receive is priced on the same information as the first.</div>
+                  <div style="font-size:13.5px;line-height:1.6;color:rgba(15,15,14,0.65)">Each submission is recorded in a tamper-evident log the moment it arrives. At closing, every record is re-checked and any quotation altered after submission opens with a flag rather than being hidden. Withdrawals stay in the record alongside their replacement.</div>
+                  <a href="#audit" style="align-self:flex-start;font-size:13px;font-weight:500;color:#164E78">View audit record</a>
+                </div>
+              </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isReleased }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:14px">
+
+            <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:19px 22px">
+              <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                <div style="min-width:0">
+                  <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:19px;font-weight:500;letter-spacing:-0.025em">7 quotations released</div>
+                  <div style="margin-top:4px;font-size:13px;color:rgba(15,15,14,0.58)">Opened 14 Aug 2026, 5:00 PM · 1 withdrawal in the record · <span style="color:#B4331F">1 integrity flag</span></div>
+                </div>
+                <span style="flex:1;min-width:8px"></span>
+                <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+                  <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Sort</span>
+                  <sc-for list="{{ sorts }}" as="s" hint-placeholder-count="4">
+                    <button onClick="{{ s.pick }}" style="background:{{ s.bg }};color:{{ s.fg }};border:1px solid {{ s.border }};border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">{{ s.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="margin-top:15px;padding-top:14px;border-top:1px solid rgba(15,15,14,0.09);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Quotation range</div>
+                <div style="font-family:'DM Mono',monospace;font-size:15px">₱ 412,000 — ₱ 689,000</div>
+                <span style="font-size:12.5px;color:rgba(15,15,14,0.5)">Shown because seven or more quotations were received.</span>
+              </div>
+            </div>
+
+            <sc-for list="{{ quotations }}" as="q" hint-placeholder-count="4">
+              <article style="border:1px solid {{ q.cardBorder }};border-left:3px solid {{ q.accent }};border-radius:16px;background:#FFFFFF;padding:20px 22px">
+
+                <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+                  <div style="width:40px;height:40px;border-radius:11px;background:{{ q.avatarBg }};color:#FBFAF9;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-size:14px;font-weight:500;flex:none">{{ q.initials }}</div>
+                  <div style="flex:1 1 240px;min-width:0">
+                    <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                      <a href="#respondent" style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.025em" style-hover="color:#55524D">{{ q.name }}</a>
+                      <span style="display:inline-flex;align-items:center;gap:5px;color:#164E78">
+                        <svg viewBox="0 0 24 24" fill="none" style="width:13px;height:13px;flex:none"><circle cx="12" cy="12" r="10.2" stroke="currentColor" stroke-width="1.6"></circle><path d="M7.6 12.3l3 3 5.8-6.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                        <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase">Verified {{ q.verifiedOn }}</span>
+                      </span>
+                      <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.55);border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:3px 8px">{{ q.tier }}</span>
+                    </div>
+                    <div style="margin-top:6px;font-size:12.5px;color:rgba(15,15,14,0.58)">{{ q.posted }} requirements posted · {{ q.awarded }} awarded on Trustlink</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <sc-if value="{{ q.showState }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;background:{{ q.stateBg }};color:{{ q.stateFg }};border:1px solid {{ q.stateBorder }};border-radius:999px;padding:5px 11px">{{ q.stateLabel }}</span>
+                    </sc-if>
+                    <span title="{{ q.integrityHint }}" style="display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:{{ q.integrityColor }};border:1px solid {{ q.integrityBorder }};border-radius:999px;padding:5px 11px;cursor:default">
+                      <svg viewBox="0 0 24 24" fill="none" style="width:12px;height:12px;flex:none"><path d="M12 3.4l7 2.6v5.4c0 4.3-2.9 7.6-7 9.2-4.1-1.6-7-4.9-7-9.2V6l7-2.6Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+                      <span>{{ q.integrity }}</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:16px;margin-top:18px;padding-top:17px;border-top:1px solid rgba(15,15,14,0.09)">
+                  <div>
+                    <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Price</div>
+                    <div style="margin-top:6px;font-family:'Bricolage Grotesque',sans-serif;font-size:21px;font-weight:500;letter-spacing:-0.03em">{{ q.price }}</div>
+                  </div>
+                  <div>
+                    <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Lead time</div>
+                    <div style="margin-top:6px;font-size:14px;font-weight:500">{{ q.lead }}</div>
+                  </div>
+                  <div>
+                    <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Payment terms</div>
+                    <div style="margin-top:6px;font-size:14px;font-weight:500">{{ q.terms }}</div>
+                  </div>
+                  <div>
+                    <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Valid until</div>
+                    <div style="margin-top:6px;font-size:14px;font-weight:500">{{ q.validity }}</div>
+                  </div>
+                </div>
+
+                <div style="margin-top:16px;font-size:13.5px;line-height:1.6;color:rgba(15,15,14,0.68);max-width:82ch">{{ q.note }}</div>
+
+                <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:14px">
+                  <sc-for list="{{ q.files }}" as="f" hint-placeholder-count="2">
+                    <a href="#file" style="display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(15,15,14,0.14);border-radius:999px;padding:6px 12px;font-size:12.5px;color:rgba(15,15,14,0.65)" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">
+                      <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M4 2.4h5L12 5.6v8H4v-11Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path></svg>
+                      <span>{{ f.name }}</span>
+                    </a>
+                  </sc-for>
+                </div>
+
+                <sc-if value="{{ q.hasHistory }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:15px;border:1px solid rgba(15,15,14,0.12);border-radius:12px;background:rgba(15,15,14,0.025);padding:13px 15px">
+                    <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Ledger history</div>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:9px">
+                      <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.5);border:1px solid rgba(15,15,14,0.18);border-radius:999px;padding:4px 10px">Withdrawn</span>
+                      <span style="font-family:'DM Mono',monospace;font-size:12px;color:rgba(15,15,14,0.55)">{{ q.historyRef }}</span>
+                      <span style="font-size:12.5px;color:rgba(15,15,14,0.55)">{{ q.historyLine }}</span>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:17px;padding-top:15px;border-top:1px solid rgba(15,15,14,0.09)">
+                  <span style="font-family:'DM Mono',monospace;font-size:11.5px;color:rgba(15,15,14,0.5)">{{ q.stamp }}</span>
+                  <span style="flex:1;min-width:8px"></span>
+                  <button onClick="{{ noop }}" style="background:transparent;border:1px solid rgba(15,15,14,0.16);color:rgba(15,15,14,0.7);border-radius:999px;padding:9px 15px;font-size:13px;font-weight:500;cursor:pointer" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">View profile</button>
+                  <button onClick="{{ noop }}" style="background:transparent;border:1px solid rgba(15,15,14,0.16);color:rgba(15,15,14,0.7);border-radius:999px;padding:9px 15px;font-size:13px;font-weight:500;cursor:pointer" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">Message</button>
+                  <button onClick="{{ q.shortlist }}" style="background:{{ q.slBg }};border:1px solid {{ q.slBorder }};color:{{ q.slFg }};border-radius:999px;padding:9px 15px;font-size:13px;font-weight:500;cursor:pointer">{{ q.slLabel }}</button>
+                  <button onClick="{{ q.award }}" style="display:inline-flex;align-items:center;gap:8px;background:{{ q.awBg }};border:1px solid {{ q.awBorder }};color:{{ q.awFg }};border-radius:999px;padding:9px 17px;font-size:13px;font-weight:500;cursor:{{ q.awCursor }}">
+                    <span>{{ q.awLabel }}</span>
+                  </button>
+                </div>
+              </article>
+            </sc-for>
+
+            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:18px 22px">
+              <div style="flex:1 1 300px;min-width:0">
+                <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em">{{ closeoutTitle }}</div>
+                <div style="margin-top:4px;font-size:13px;line-height:1.5;color:rgba(15,15,14,0.58);max-width:70ch">{{ closeoutBody }}</div>
+              </div>
+              <button onClick="{{ noop }}" style="background:transparent;border:1px solid rgba(180,51,31,0.35);color:#B4331F;border-radius:999px;padding:10px 17px;font-size:13.5px;font-weight:500;cursor:pointer;white-space:nowrap" style-hover="background:rgba(180,51,31,0.05)">Close without award</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:24px 26px">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Scope of work</div>
+          <p style="margin:14px 0 0;font-size:15px;line-height:1.65;color:rgba(15,15,14,0.75);max-width:78ch;text-wrap:pretty">Supply, fabrication, delivery, and installation of a structural steel mezzanine platform inside an existing warehouse bay. Work covers shop fabrication of all members, transport to site, erection, welding, and finishing. The warehouse remains in partial operation throughout, so erection must be sequenced around live racking on the east side of the bay.</p>
+          <p style="margin:12px 0 0;font-size:15px;line-height:1.65;color:rgba(15,15,14,0.75);max-width:78ch;text-wrap:pretty">Civil works, electrical rough-in, and fire suppression are excluded and handled under separate requirements. Respondents are expected to have completed at least one comparable mezzanine or platform installation.</p>
+
+          <div style="margin-top:24px;border:1px solid rgba(15,15,14,0.1);border-radius:12px;overflow:hidden">
+            <sc-for list="{{ specs }}" as="s" hint-placeholder-count="7">
+              <div style="display:grid;grid-template-columns:minmax(120px,0.6fr) 1.4fr;gap:14px;padding:13px 17px;border-bottom:1px solid rgba(15,15,14,0.07);background:{{ s.bg }}">
+                <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.5)">{{ s.k }}</div>
+                <div style="font-size:13.5px;line-height:1.5;color:rgba(15,15,14,0.78)">{{ s.v }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:20px;margin-top:26px;padding-top:22px;border-top:1px solid rgba(15,15,14,0.09)">
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Site address</div>
+              <div style="margin-top:8px;font-size:14px;line-height:1.5">Bayan Logistics Hub 3<br><span style="color:rgba(15,15,14,0.55)">Barangay Canlubang, Calamba, Laguna</span></div>
+            </div>
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Site access</div>
+              <div style="margin-top:8px;font-size:14px;line-height:1.5">Mon–Sat, 7:00 AM – 6:00 PM<br><span style="color:rgba(15,15,14,0.55)">Warehouse remains in partial operation</span></div>
+            </div>
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Settlement</div>
+              <div style="margin-top:8px;font-size:14px;line-height:1.5">Direct between parties<br><span style="color:rgba(15,15,14,0.55)">Trustlink does not process payment</span></div>
+            </div>
+          </div>
+
+          <div style="margin-top:24px;padding-top:22px;border-top:1px solid rgba(15,15,14,0.09)">
+            <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Attachments</div>
+            <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px">
+              <sc-for list="{{ attachments }}" as="a" hint-placeholder-count="3">
+                <a href="#attachment" style="display:inline-flex;align-items:center;gap:9px;border:1px solid rgba(15,15,14,0.14);border-radius:12px;padding:11px 15px" style-hover="background:rgba(15,15,14,0.04)">
+                  <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;color:rgba(15,15,14,0.5)"><path d="M4 2.4h5L12 5.6v8H4v-11Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path><path d="M9 2.4v3.2h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path></svg>
+                  <span style="min-width:0">
+                    <span style="display:block;font-size:13.5px;font-weight:500">{{ a.name }}</span>
+                    <span style="display:block;margin-top:2px;font-family:'DM Mono',monospace;font-size:10.5px;color:rgba(15,15,14,0.45)">{{ a.meta }}</span>
+                  </span>
+                </a>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside style="flex:1 1 300px;min-width:270px;display:flex;flex-direction:column;gap:14px;position:sticky;top:82px">
+
+        <sc-if value="{{ showMyRecord }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid rgba(22,78,120,0.3);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;background:#164E78;color:#FBFAF9;border-radius:999px;padding:4px 10px">Submitted · sealed</span>
+            </div>
+            <div style="margin-top:14px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Your quotation is recorded and cannot be read by the buyer or any other respondent until closing.</div>
+
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px;padding-top:15px;border-top:1px solid rgba(15,15,14,0.09)">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+                <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Reference</span>
+                <span style="font-family:'DM Mono',monospace;font-size:12.5px">QT-2026-0407</span>
+              </div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+                <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Submitted</span>
+                <span style="font-family:'DM Mono',monospace;font-size:12.5px">9 Aug, 2:41 PM</span>
+              </div>
+            </div>
+
+            <div title="Ledger entry #48,213 · hash 8f3a…c19d" style="display:flex;align-items:center;gap:8px;margin-top:14px;cursor:default">
+              <svg viewBox="0 0 24 24" fill="none" style="width:13px;height:13px;flex:none;color:rgba(15,15,14,0.35)"><path d="M12 3.4l7 2.6v5.4c0 4.3-2.9 7.6-7 9.2-4.1-1.6-7-4.9-7-9.2V6l7-2.6Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+              <span style="font-size:12px;color:rgba(15,15,14,0.48)">Recorded and tamper-evident · <span style="font-family:'DM Mono',monospace;font-size:11px">#48,213</span></span>
+            </div>
+
+            <button onClick="{{ noop }}" style="width:100%;margin-top:18px;background:transparent;border:1px solid rgba(180,51,31,0.35);color:#B4331F;border-radius:999px;padding:10px;font-size:13.5px;font-weight:500;cursor:pointer" style-hover="background:rgba(180,51,31,0.05)">Withdraw quotation</button>
+            <div style="margin-top:9px;font-size:12px;line-height:1.5;color:rgba(15,15,14,0.5)">Withdrawal is recorded in the ledger. The original entry is kept and shown to the buyer at release. You may resubmit until closing.</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isSealedOwner }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+            <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Owner controls</div>
+            <button onClick="{{ noop }}" style="width:100%;margin-top:14px;background:transparent;border:1px solid rgba(15,15,14,0.16);color:rgba(15,15,14,0.72);border-radius:999px;padding:10px;font-size:13.5px;font-weight:500;cursor:pointer" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">Edit contact and site notes</button>
+
+            <div style="display:flex;flex-direction:column;gap:9px;margin-top:16px;padding-top:15px;border-top:1px solid rgba(15,15,14,0.09)">
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Locked until closing</div>
+              <sc-for list="{{ lockedFields }}" as="l" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:9px;font-size:13px;color:rgba(15,15,14,0.55)">
+                  <svg viewBox="0 0 24 24" fill="none" style="width:13px;height:13px;flex:none;color:rgba(15,15,14,0.35)"><rect x="5" y="10.5" width="14" height="9.5" rx="1.6" stroke="currentColor" stroke-width="1.5"></rect><path d="M8.4 10.5V7.8a3.6 3.6 0 0 1 7.2 0v2.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+                  <span>{{ l.name }}</span>
+                </div>
+              </sc-for>
+              <div style="margin-top:2px;font-size:12px;line-height:1.5;color:rgba(15,15,14,0.5)">Seven businesses have priced against these terms, so they cannot change. Cancellation is available only before the first quotation arrives.</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isReleased }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+            <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Decision</div>
+            <div style="margin-top:13px;font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.025em;line-height:1.25">{{ decisionTitle }}</div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.62)">{{ decisionBody }}</div>
+
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px;padding-top:15px;border-top:1px solid rgba(15,15,14,0.09)">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+                <span style="font-size:13.5px;color:rgba(15,15,14,0.62)">Released</span>
+                <span style="font-family:'DM Mono',monospace;font-size:14px">7</span>
+              </div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+                <span style="font-size:13.5px;color:rgba(15,15,14,0.62)">Shortlisted</span>
+                <span style="font-family:'DM Mono',monospace;font-size:14px">{{ shortlistCount }}</span>
+              </div>
+
+            </div>
+          </div>
+
+          <div style="border:1px solid rgba(180,51,31,0.28);border-radius:16px;background:#FFFFFF;padding:18px 20px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <svg viewBox="0 0 24 24" fill="none" style="width:15px;height:15px;flex:none;color:#B4331F"><path d="M12 3.4l7 2.6v5.4c0 4.3-2.9 7.6-7 9.2-4.1-1.6-7-4.9-7-9.2V6l7-2.6Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path><path d="M12 9v3.6M12 15.6v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+              <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#B4331F">Integrity flag</span>
+            </div>
+            <div style="margin-top:10px;font-size:13px;line-height:1.55;color:rgba(15,15,14,0.65)">One quotation no longer matches the record made at submission. It stays in the list, marked, so you can judge it yourself.</div>
+            <a href="#audit" style="display:inline-block;margin-top:11px;font-size:13px;font-weight:500;color:#B4331F">View audit record</a>
+          </div>
+        </sc-if>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Record</div>
+          <div style="display:flex;flex-direction:column;gap:11px;margin-top:14px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+              <span style="font-size:13.5px;color:rgba(15,15,14,0.62)">Reference</span>
+              <span style="font-family:'DM Mono',monospace;font-size:12.5px">RQ-2026-0418</span>
+            </div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+              <span style="font-size:13.5px;color:rgba(15,15,14,0.62)">Published</span>
+              <span style="font-family:'DM Mono',monospace;font-size:12.5px">4 Aug, 10:22 AM</span>
+            </div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+              <span style="font-size:13.5px;color:rgba(15,15,14,0.62)">Closing</span>
+              <span style="font-family:'DM Mono',monospace;font-size:12.5px">14 Aug, 5:00 PM</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1024}}">
+const PESO = "\u20B1 ";
+
+const BASE = [
+  { id:"q1", name:"Ilagan Steelworks Inc.", initials:"IS", verifiedOn:"14 Jan 2025", tier:"Tier 3", posted:3, awarded:22,
+    amount:486000, lead:"6 weeks", leadDays:42, terms:"30 / 60 / 10", validity:"13 Sep 2026", integrity:"valid",
+    ts:"12 Aug 2026, 9:14 AM", tsSort:3,
+    note:"Shop fabrication at our Cabuyao plant, erection sequenced in two phases so the east racking bay stays live. Includes epoxy primer and enamel finish, and one flight of stairs with handrails both sides.",
+    files:[{name:"Method statement.pdf"},{name:"Bill of quantities.xlsx"}] },
+  { id:"q2", name:"Northgate Fabrication Corp.", initials:"NF", verifiedOn:"2 Jun 2025", tier:"Tier 2", posted:1, awarded:9,
+    amount:512500, lead:"5 weeks", leadDays:35, terms:"50 / 50", validity:"28 Sep 2026", integrity:"valid",
+    ts:"13 Aug 2026, 4:02 PM", tsSort:5,
+    note:"Resubmitted after correcting the decking thickness to 6mm checkered plate. Crew of eight, night erection available at no premium if site access is extended.",
+    files:[{name:"Structural calc sheet.pdf"}],
+    hasHistory:true, historyRef:"QT-2026-0331", historyLine:"Withdrawn 12 Aug 2026, 11:20 AM · replaced by this submission" },
+  { id:"q3", name:"Cordero Industrial Services", initials:"CI", verifiedOn:"9 Sep 2025", tier:"Tier 1", posted:0, awarded:3,
+    amount:455000, lead:"8 weeks", leadDays:56, terms:"20 / 70 / 10", validity:"13 Sep 2026", integrity:"valid",
+    ts:"11 Aug 2026, 8:47 AM", tsSort:2,
+    note:"Lowest-cost option with a longer programme. Fabrication subcontracted to an accredited Batangas shop; erection and welding by our own NC II certified crew.",
+    files:[{name:"Company profile.pdf"}] },
+  { id:"q4", name:"Pampanga Structural Trades", initials:"PS", verifiedOn:"21 Nov 2024", tier:"Tier 3", posted:6, awarded:31,
+    amount:689000, lead:"4 weeks", leadDays:28, terms:"50 / 40 / 10", validity:"13 Oct 2026", integrity:"valid",
+    ts:"9 Aug 2026, 3:31 PM", tsSort:1,
+    note:"Fastest programme on offer. Price includes third-party weld inspection, as-built drawings, and a two-year structural warranty on all welded connections.",
+    files:[{name:"Programme of works.pdf"},{name:"Weld procedure.pdf"},{name:"Past projects.pdf"}] },
+  { id:"q5", name:"Delos Reyes Welding & Supply", initials:"DR", verifiedOn:"3 Feb 2026", tier:"Tier 1", posted:0, awarded:1,
+    amount:412000, lead:"10 weeks", leadDays:70, terms:"100% on completion", validity:"29 Aug 2026", integrity:"valid",
+    ts:"14 Aug 2026, 1:08 PM", tsSort:6,
+    note:"Owner-operated shop in Santa Rosa. No advance required. Programme assumes single-shift erection with a crew of four.",
+    files:[{name:"Quotation sheet.pdf"}] },
+  { id:"q6", name:"Marikina Fabricators Co.", initials:"MF", verifiedOn:"18 Jul 2025", tier:"Tier 2", posted:2, awarded:12,
+    amount:534750, lead:"6 weeks", leadDays:42, terms:"40 / 40 / 20", validity:"13 Sep 2026", integrity:"flagged",
+    ts:"13 Aug 2026, 10:55 AM", tsSort:4,
+    note:"Includes hot-dip galvanising of stair components in place of enamel. Delivery in three lots to suit warehouse operations.",
+    files:[{name:"Technical proposal.pdf"}] },
+  { id:"q7", name:"Batangas Steel Assembly", initials:"BS", verifiedOn:"5 May 2025", tier:"Tier 2", posted:1, awarded:7,
+    amount:598000, lead:"5 weeks", leadDays:35, terms:"30 / 70", validity:"13 Sep 2026", integrity:"valid",
+    ts:"14 Aug 2026, 4:52 PM", tsSort:7,
+    note:"Full ASTM A36 wide-flange members from a single mill heat, with mill certificates supplied. Erection crew mobilises within five days of award.",
+    files:[{name:"Mill certificates.pdf"},{name:"Erection plan.pdf"}] }
+];
+
+const TIER_RANK = { "Tier 3": 0, "Tier 2": 1, "Tier 1": 2 };
+
+class Component extends DCLogic {
+  state = {
+    view: "respondent",
+    submitted: false,
+    saved: false,
+    sort: "time",
+    showHow: false,
+    shortlisted: [],
+    awarded: null,
+    left: 0
+  };
+
+  componentDidMount() {
+    this.target = Date.now() + ((2 * 24 + 6) * 60 + 41) * 60000;
+    this.tick();
+    this.timer = setInterval(() => this.tick(), 1000);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+  tick() { this.setState({ left: Math.max(0, this.target - Date.now()) }); }
+
+  fmtCountdown(ms) {
+    const t = Math.floor(ms / 1000);
+    const d = Math.floor(t / 86400), h = Math.floor((t % 86400) / 3600), m = Math.floor((t % 3600) / 60);
+    const unit = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+    if (d > 0) return unit(d, "day") + ", " + unit(h, "hour");
+    if (h > 0) return unit(h, "hour") + ", " + unit(m, "minute");
+    return unit(m, "minute");
+  }
+
+  peso(n) { return PESO + n.toLocaleString("en-PH"); }
+
+  setView(v) { this.setState({ view: v }); }
+
+  toggleShortlist(id) {
+    this.setState((s) => ({
+      shortlisted: s.shortlisted.indexOf(id) > -1
+        ? s.shortlisted.filter((x) => x !== id)
+        : s.shortlisted.concat([id])
+    }));
+  }
+
+  renderVals() {
+    const s = this.state;
+    const isRespondent = s.view === "respondent";
+    const isSealedOwner = s.view === "sealed";
+    const isReleased = s.view === "released";
+    const urgent = s.left < 24 * 3600000;
+
+    const tabs = [
+      { key: "respondent", label: "1 · Respondent, open" },
+      { key: "sealed", label: "2 · Owner, sealed" },
+      { key: "released", label: "3 · Owner, released" }
+    ].map((t) => {
+      const on = s.view === t.key;
+      return {
+        label: t.label,
+        bg: on ? "#0F0F0E" : "transparent",
+        fg: on ? "#FBFAF9" : "rgba(15,15,14,0.6)",
+        border: on ? "#0F0F0E" : "rgba(15,15,14,0.18)",
+        pick: () => this.setView(t.key)
+      };
+    });
+
+    const specs = [
+      ["Platform area", "240 sqm (20.0 m × 12.0 m), clear height 3.2 m beneath"],
+      ["Design load", "500 kg/sqm uniformly distributed, per NSCP 2015"],
+      ["Structure", "ASTM A36 wide-flange beams and columns, fully welded connections"],
+      ["Decking", "6 mm checkered steel plate, continuously welded to framing"],
+      ["Finish", "Epoxy primer plus two coats industrial enamel, mid-grey"],
+      ["Access", "One flight of steel stairs, 1.2 m width, handrail both sides"],
+      ["Quantity", "One platform, complete and installed"]
+    ].map((r, i) => ({ k: r[0], v: r[1], bg: i % 2 ? "rgba(15,15,14,0.018)" : "#FFFFFF" }));
+
+    const attachments = [
+      { name: "Structural drawings", meta: "PDF · 4.2 MB · 11 sheets" },
+      { name: "Site photographs", meta: "PDF · 2.8 MB · 9 images" },
+      { name: "Load specification", meta: "PDF · 340 KB" }
+    ];
+
+    let list = BASE.slice();
+    if (s.sort === "price") list.sort((a, b) => a.amount - b.amount);
+    else if (s.sort === "lead") list.sort((a, b) => a.leadDays - b.leadDays);
+    else if (s.sort === "time") list.sort((a, b) => a.tsSort - b.tsSort);
+    else if (s.sort === "tier") list.sort((a, b) => TIER_RANK[a.tier] - TIER_RANK[b.tier] || a.amount - b.amount);
+
+    const decided = s.awarded !== null;
+
+    const quotations = list.map((q) => {
+      const isShort = s.shortlisted.indexOf(q.id) > -1;
+      const isWin = s.awarded === q.id;
+      const lost = decided && !isWin;
+      const flagged = q.integrity === "flagged";
+
+      let stateLabel = "", stateBg = "transparent", stateFg = "", stateBorder = "", showState = false;
+      if (isWin) { stateLabel = "Awarded"; stateBg = "#0F0F0E"; stateFg = "#FBFAF9"; stateBorder = "#0F0F0E"; showState = true; }
+      else if (lost) { stateLabel = "Not selected"; stateBg = "transparent"; stateFg = "rgba(15,15,14,0.5)"; stateBorder = "rgba(15,15,14,0.18)"; showState = true; }
+      else if (isShort) { stateLabel = "Shortlisted"; stateBg = "rgba(22,78,120,0.08)"; stateFg = "#164E78"; stateBorder = "rgba(22,78,120,0.4)"; showState = true; }
+
+      return {
+        name: q.name, initials: q.initials, verifiedOn: q.verifiedOn, tier: q.tier,
+        posted: q.posted, awarded: q.awarded, note: q.note, files: q.files || [],
+        price: this.peso(q.amount), lead: q.lead, terms: q.terms, validity: q.validity,
+        stamp: "Submitted " + q.ts,
+        hasHistory: !!q.hasHistory, historyRef: q.historyRef || "", historyLine: q.historyLine || "",
+        integrity: flagged ? "Integrity check failed" : (q.hasHistory ? "Withdrawn and replaced" : "Integrity verified"),
+        integrityColor: flagged ? "#B4331F" : "rgba(15,15,14,0.42)",
+        integrityBorder: flagged ? "rgba(180,51,31,0.4)" : "transparent",
+        integrityHint: flagged
+          ? "This quotation no longer matches the record made at submission (hash mismatch). It is shown flagged, never hidden."
+          : "Contents match the tamper-evident record made at submission.",
+        accent: flagged ? "#B4331F" : (isWin ? "#0F0F0E" : (isShort ? "#164E78" : "rgba(15,15,14,0.12)")),
+        cardBorder: flagged ? "rgba(180,51,31,0.3)" : "rgba(15,15,14,0.12)",
+        avatarBg: isWin ? "#0F0F0E" : "#164E78",
+        showState: showState, stateLabel: stateLabel, stateBg: stateBg, stateFg: stateFg, stateBorder: stateBorder,
+        slLabel: isShort ? "Shortlisted" : "Shortlist",
+        slBg: isShort ? "rgba(22,78,120,0.08)" : "transparent",
+        slFg: isShort ? "#164E78" : "rgba(15,15,14,0.7)",
+        slBorder: isShort ? "rgba(22,78,120,0.4)" : "rgba(15,15,14,0.16)",
+        shortlist: decided ? () => {} : () => this.toggleShortlist(q.id),
+        awLabel: isWin ? "Awarded" : (lost ? "Not selected" : "Award"),
+        awBg: isWin ? "#0F0F0E" : (lost ? "transparent" : "#164E78"),
+        awFg: isWin ? "#FBFAF9" : (lost ? "rgba(15,15,14,0.35)" : "#FBFAF9"),
+        awBorder: isWin ? "#0F0F0E" : (lost ? "rgba(15,15,14,0.12)" : "#164E78"),
+        awCursor: decided ? "default" : "pointer",
+        award: decided ? () => {} : () => this.setState({ awarded: q.id })
+      };
+    });
+
+    const sorts = [
+      { key: "price", label: "Price" },
+      { key: "lead", label: "Lead time" },
+      { key: "time", label: "Submitted" },
+      { key: "tier", label: "Trust tier" }
+    ].map((o) => {
+      const on = s.sort === o.key;
+      return {
+        label: o.label,
+        bg: on ? "rgba(22,78,120,0.08)" : "transparent",
+        fg: on ? "#164E78" : "rgba(15,15,14,0.6)",
+        border: on ? "rgba(22,78,120,0.4)" : "rgba(15,15,14,0.16)",
+        pick: () => this.setState({ sort: o.key })
+      };
+    });
+
+    const sealBars = [];
+    for (let i = 0; i < 7; i++) sealBars.push({ bg: i % 2 ? "rgba(22,78,120,0.09)" : "rgba(22,78,120,0.05)" });
+
+    const countdown = isReleased ? "Closed" : this.fmtCountdown(s.left);
+
+    return {
+      isRespondent, isSealedOwner, isReleased,
+      stateTabs: tabs, specs, attachments, quotations, sorts, sealBars, countdown,
+      noop: () => {},
+      showHow: s.showHow,
+      howArrow: s.showHow ? "rotate(180deg)" : "none",
+      toggleHow: () => this.setState({ showHow: !s.showHow }),
+      lockedFields: [
+        { name: "Scope and specifications" },
+        { name: "Quantities" },
+        { name: "Closing date and time" },
+        { name: "Cancellation" }
+      ],
+      toggleSubmitted: () => this.setState({ submitted: !s.submitted }),
+      submittedToggleLabel: s.submitted ? "Showing: already submitted" : "Showing: not yet submitted",
+      toggleSave: () => this.setState({ saved: !s.saved }),
+
+      acctName: isRespondent ? "Santiago Metal Works" : "Bayan Logistics Corp.",
+      acctInitials: isRespondent ? "SM" : "BL",
+      acctTier: isRespondent ? "Verified · Tier 2" : "Verified · Tier 3",
+      navReqColor: isRespondent ? "rgba(15,15,14,0.55)" : "#0F0F0E",
+      backLabel: isRespondent ? "Business Opportunities" : "My Requirements",
+
+      statusLabel: isReleased ? "Closed · awaiting decision" : "Open for quotations",
+      statusBg: isReleased ? "rgba(180,51,31,0.06)" : "rgba(22,78,120,0.06)",
+      statusFg: isReleased ? "#B4331F" : "#164E78",
+      statusBorder: isReleased ? "rgba(180,51,31,0.35)" : "rgba(22,78,120,0.35)",
+      statusDot: isReleased ? "none" : "tl-pulse 2.4s ease-in-out infinite",
+
+      bandBg: isSealedOwner ? "rgba(22,78,120,0.035)" : "#FFFFFF",
+      bandBorder: isSealedOwner ? "rgba(22,78,120,0.28)" : "rgba(15,15,14,0.12)",
+
+      clockLabel: isReleased ? "Closed" : "Closes in",
+      clockColor: isReleased ? "rgba(15,15,14,0.55)" : (urgent ? "#B4331F" : "#0F0F0E"),
+      clockDot: !isReleased && urgent ? "tl-pulse 1.6s ease-in-out infinite" : "none",
+      closingStamp: isReleased ? "14 Aug 2026, 5:00 PM" : "Closes 14 Aug 2026, 5:00 PM",
+
+      countLabel: isReleased ? "Quotations released" : (isSealedOwner ? "Sealed quotations" : "Quotations"),
+      countValue: "7",
+      countSub: isReleased ? "opened simultaneously" : "contents sealed",
+
+      showSave: isRespondent,
+      saveLabel: s.saved ? "Saved" : "Save",
+      saveBg: s.saved ? "rgba(15,15,14,0.05)" : "transparent",
+      saveFill: s.saved ? "currentColor" : "none",
+      showPrimary: isRespondent && !s.submitted,
+      primaryLabel: "Submit quotation",
+
+      sealIconColor: isReleased ? "rgba(15,15,14,0.4)" : "#164E78",
+      sealLine: isReleased
+        ? "Every quotation opened together at the closing time. Nobody saw a price before that moment."
+        : (isSealedOwner
+          ? "You cannot see who has quoted or what they offered. Neither can they. Everything opens together at closing."
+          : "Your price stays hidden until closing — from the buyer and from every other business quoting."),
+
+      showBuyer: isRespondent,
+      showMyRecord: isRespondent && s.submitted,
+
+      shortlistCount: String(s.shortlisted.length),
+      ledgerCount: "9",
+
+      decisionTitle: s.awarded ? "Awarded" : (s.shortlisted.length ? "Shortlist in progress" : "No decision recorded"),
+      decisionBody: s.awarded
+        ? "The award is written to the ledger. Contact details have been exchanged — Trustlink does not handle payment, delivery, or contracts, and observes nothing beyond this point."
+        : "Shortlisting is optional. You may award directly from the released quotations, or shortlist first when comparing many.",
+
+      closeoutTitle: s.awarded ? "This requirement is awarded" : "No suitable quotation?",
+      closeoutBody: s.awarded
+        ? "All other respondents were notified that the requirement was awarded to another business."
+        : "Closing without award notifies every respondent and records the outcome on your public profile. The requirement cannot be reopened."
+    };
+  }
+}
+</script>
+</body>
+</html>

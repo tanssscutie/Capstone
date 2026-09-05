@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #FBFAF9; }
+  a { color: #164E78; text-decoration: none; }
+  a:hover { color: #103A5A; }
+  ::selection { background: #0F0F0E; color: #FBFAF9; }
+  @keyframes tl-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
+  input, button, textarea, select { font-family: 'DM Sans', sans-serif; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: rgba(22,78,120,0.55) !important; }
+  input::placeholder { color: rgba(15,15,14,0.3); }
+</style>
+</helmet>
+<div style="background:#FBFAF9;color:#0F0F0E;font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;padding-bottom:80px">
+
+  <header style="border-bottom:1px solid rgba(15,15,14,0.1);background:#FBFAF9">
+    <div style="max-width:1000px;margin:0 auto;padding:0 clamp(18px,4vw,40px);height:62px;display:flex;align-items:center;gap:12px">
+      <a href="#home" style="display:flex;align-items:center;gap:9px">
+        <svg viewBox="0 0 24 24" fill="none" style="width:21px;height:21px" aria-hidden="true"><circle cx="12" cy="12" r="10.2" stroke="#164E78" stroke-width="1.2"></circle><path d="M7.6 12.3l3 3 5.8-6.3" stroke="#164E78" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:500;font-size:17px;letter-spacing:-0.03em">Trustlink</span>
+      </a>
+      <span style="flex:1"></span>
+      <span style="font-size:13px;color:rgba(15,15,14,0.5);white-space:nowrap">{{ accountEmail }}</span>
+    </div>
+  </header>
+
+  <div style="border-bottom:1px solid rgba(15,15,14,0.1);background:rgba(15,15,14,0.025)">
+    <div style="max-width:1000px;margin:0 auto;padding:11px clamp(18px,4vw,40px);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Prototype · view state</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <sc-for list="{{ stateTabs }}" as="t" hint-placeholder-count="6">
+          <button onClick="{{ t.pick }}" style="background:{{ t.bg }};color:{{ t.fg }};border:1px solid {{ t.border }};border-radius:999px;padding:6px 13px;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">{{ t.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <main style="max-width:660px;margin:0 auto;padding:clamp(26px,4vw,44px) clamp(18px,4vw,40px) 0">
+
+    <sc-if value="{{ inFlow }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:clamp(8px,2vw,18px);margin-bottom:clamp(22px,3vw,32px)">
+        <sc-for list="{{ steps }}" as="st" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;gap:9px;min-width:0">
+            <span style="width:22px;height:22px;border-radius:999px;background:{{ st.dotBg }};border:1.5px solid {{ st.dotBorder }};color:{{ st.dotFg }};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:10.5px;flex:none">{{ st.n }}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:{{ st.labelColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ st.label }}</span>
+          </div>
+          <span style="flex:1;height:1px;background:{{ st.railBg }};min-width:10px;display:{{ st.railShow }}"></span>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isS1 }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(26px,3.4vw,34px);font-weight:500;line-height:1.12;letter-spacing:-0.035em;max-width:20ch;text-wrap:pretty">Tell us about your business</h1>
+        <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:rgba(15,15,14,0.62);max-width:56ch;text-wrap:pretty">This is a business account — one business, whether you are posting requirements or quoting for them. Three short steps, then you are in.</p>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:clamp(20px,3vw,28px);margin-top:24px">
+
+          <div style="display:flex;flex-direction:column;gap:20px">
+
+            <div>
+              <label style="display:block;font-size:14px;font-weight:600;letter-spacing:-0.01em">Registered business name</label>
+              <div style="margin-top:5px;font-size:13px;line-height:1.5;color:rgba(15,15,14,0.55)">Exactly as it appears on your DTI or SEC certificate — including words like "and General Merchandise". We check the two against each other.</div>
+              <input type="text" value="{{ f_regName }}" onChange="{{ on_regName }}" onBlur="{{ blur_regName }}" placeholder="SANTIAGO METAL WORKS AND GENERAL MERCHANDISE" style="width:100%;box-sizing:border-box;margin-top:10px;background:transparent;border:1px solid {{ err_regName_border }};border-radius:12px;padding:12px 14px;font-size:14.5px;color:#0F0F0E">
+              <sc-if value="{{ err_regName }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:7px;font-size:12.5px;color:#B4331F">{{ err_regName_msg }}</div>
+              </sc-if>
+            </div>
+
+            <div>
+              <label style="display:block;font-size:14px;font-weight:600;letter-spacing:-0.01em">Display name <span style="font-weight:400;color:rgba(15,15,14,0.45)">— optional</span></label>
+              <div style="margin-top:5px;font-size:13px;line-height:1.5;color:rgba(15,15,14,0.55)">The shorter name people know you by. This is what shows on requirements and quotations.</div>
+              <input type="text" value="{{ f_displayName }}" onChange="{{ on_displayName }}" placeholder="Santiago Metal Works" style="width:100%;box-sizing:border-box;margin-top:10px;background:transparent;border:1px solid rgba(15,15,14,0.16);border-radius:12px;padding:12px 14px;font-size:14.5px;color:#0F0F0E">
+            </div>
+
+            <div>
+              <label style="display:block;font-size:14px;font-weight:600;letter-spacing:-0.01em">Contact person</label>
+              <div style="margin-top:5px;font-size:13px;line-height:1.5;color:rgba(15,15,14,0.55)">Who the other business speaks to if you win work or award it.</div>
+              <input type="text" value="{{ f_contact }}" onChange="{{ on_contact }}" onBlur="{{ blur_contact }}" placeholder="Maria Santiago" style="width:100%;box-sizing:border-box;margin-top:10px;background:transparent;border:1px solid {{ err_contact_border }};border-radius:12px;padding:12px 14px;font-size:14.5px;color:#0F0F0E">
+              <sc-if value="{{ err_contact }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:7px;font-size:12.5px;color:#B4331F">We need a name for the handover after an award.</div>
+              </sc-if>
+            </div>
+
+            <div>
+              <label style="display:block;font-size:14px;font-weight:600;letter-spacing:-0.01em">Mobile number</label>
+              <div style="margin-top:5px;font-size:13px;line-height:1.5;color:rgba(15,15,14,0.55)">Trustlink does not handle payment or contracts — when a requirement is awarded, the two businesses are given each other's details and settle directly. This is that number. It is never shown publicly before an award.</div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:10px;border:1px solid {{ err_mobile_border }};border-radius:12px;padding:12px 14px">
+                <span style="font-family:'DM Mono',monospace;font-size:14px;color:rgba(15,15,14,0.45)">+63</span>
+                <input type="text" value="{{ f_mobile }}" onChange="{{ on_mobile }}" onBlur="{{ blur_mobile }}" placeholder="917 555 0142" style="flex:1;min-width:0;background:transparent;border:none;font-size:14.5px;color:#0F0F0E">
+              </div>
+              <sc-if value="{{ err_mobile }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:7px;font-size:12.5px;color:#B4331F">{{ err_mobile_msg }}</div>
+              </sc-if>
+            </div>
+
+            <div style="height:1px;background:rgba(15,15,14,0.09)"></div>
+
+            <div>
+              <label style="display:block;font-size:14px;font-weight:600;letter-spacing:-0.01em">Business type</label>
+              <div style="margin-top:5px;font-size:13px;line-height:1.5;color:rgba(15,15,14,0.55)">Decides which registration document we ask for in step 3.</div>
+              <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:11px">
+                <sc-for list="{{ bizTypes }}" as="b" hint-placeholder-count="4">
+                  <button onClick="{{ b.pick }}" style="background:{{ b.bg }};color:{{ b.fg }};border:1px solid {{ b.border }};border-radius:999px;padding:10px 15px;font-size:13.5px;font-weight:500;cursor:pointer;white-space:nowrap">{{ b.label }}</button>
+                </sc-for>
+              </div>
+              <sc-if value="{{ showDocHint }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:10px;font-size:12.5px;color:rgba(15,15,14,0.55)">{{ docHint }}</div>
+              </sc-if>
+            </div>
+
+            <div>
+              <label style="display:block;font-size:14px;font-weight:600;letter-spacing:-0.01em">Industry category</label>
+              <div style="margin-top:5px;font-size:13px;line-height:1.5;color:rgba(15,15,14,0.55)">Pick the one closest to your main line of work. Your capabilities in step 2 carry the detail.</div>
+              <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:11px">
+                <sc-for list="{{ categories }}" as="c" hint-placeholder-count="6">
+                  <button onClick="{{ c.pick }}" style="background:{{ c.bg }};color:{{ c.fg }};border:1px solid {{ c.border }};border-radius:999px;padding:10px 15px;font-size:13.5px;font-weight:500;cursor:pointer;white-space:nowrap">{{ c.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+
+
+
+          </div>
+        </div>
+
+        <sc-if value="{{ showS1Summary }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:flex-start;gap:9px;margin-top:16px;border:1px solid rgba(180,51,31,0.3);border-radius:12px;background:#FFFFFF;padding:14px 16px">
+            <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;flex:none;margin-top:2px;color:#B4331F"><circle cx="8" cy="8" r="6.2" stroke="currentColor" stroke-width="1.4"></circle><path d="M8 4.8v3.6M8 10.9v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+            <div style="font-size:13px;line-height:1.55;color:rgba(15,15,14,0.7)">{{ s1SummaryMsg }}</div>
+          </div>
+        </sc-if>
+
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:22px">
+          <span style="flex:1"></span>
+          <button onClick="{{ goS2 }}" style="display:inline-flex;align-items:center;gap:9px;background:#164E78;color:#FBFAF9;border:none;border-radius:999px;padding:13px 24px;font-size:14.5px;font-weight:500;cursor:pointer" style-hover="background:#103A5A">
+            <span>Continue</span>
+            <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M2.5 8h10.5M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isS2 }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(26px,3.4vw,34px);font-weight:500;line-height:1.12;letter-spacing:-0.035em;max-width:20ch;text-wrap:pretty">What you do, and where</h1>
+        <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:rgba(15,15,14,0.62);max-width:56ch;text-wrap:pretty">This is what puts requirements in front of you. Everything here is editable later, but the more accurate it is now, the better your first feed.</p>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:clamp(20px,3vw,28px);margin-top:24px">
+
+          <div>
+            <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+              <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em">What does your business provide?</div>
+              <span style="flex:1"></span>
+              <span style="font-family:'DM Mono',monospace;font-size:11px;color:{{ capCountColor }}">{{ capCount }}</span>
+            </div>
+            <div style="margin-top:5px;font-size:13px;line-height:1.5;color:rgba(15,15,14,0.55)">Pick between three and eight. Choosing everything you could possibly do makes your feed worse, not better.</div>
+
+            <label style="display:flex;align-items:center;gap:9px;margin-top:12px;background:rgba(15,15,14,0.04);border:1px solid transparent;border-radius:999px;padding:10px 14px">
+              <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;flex:none;color:rgba(15,15,14,0.45)"><circle cx="7.2" cy="7.2" r="4.6" stroke="currentColor" stroke-width="1.3"></circle><path d="M10.6 10.6L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path></svg>
+              <input type="text" value="{{ capQuery }}" onChange="{{ onCapQuery }}" placeholder="Search capabilities in {{ categoryName }}" style="flex:1;min-width:0;background:transparent;border:none;font-size:13.5px;color:#0F0F0E">
+            </label>
+
+            <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:14px">
+              <sc-for list="{{ capabilities }}" as="c" hint-placeholder-count="14">
+                <button onClick="{{ c.pick }}" style="display:inline-flex;align-items:center;gap:7px;background:{{ c.bg }};color:{{ c.fg }};border:1px solid {{ c.border }};border-radius:999px;padding:9px 14px;font-size:13.5px;font-weight:500;cursor:{{ c.cursor }};opacity:{{ c.opacity }}">
+                  <sc-if value="{{ c.on }}" hint-placeholder-val="{{ false }}">
+                    <svg viewBox="0 0 16 16" fill="none" style="width:11px;height:11px;flex:none"><path d="M3 8.4l3.2 3.2L13 4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  </sc-if>
+                  <span>{{ c.label }}</span>
+                </button>
+              </sc-for>
+            </div>
+
+            <sc-if value="{{ capNoResults }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:14px;font-size:13px;line-height:1.55;color:rgba(15,15,14,0.55)">Nothing in {{ categoryName }} matches "{{ capQuery }}". Try a broader word — the list covers the trades this category buys and sells most.</div>
+            </sc-if>
+          </div>
+
+          <div style="height:1px;background:rgba(15,15,14,0.09);margin:26px 0"></div>
+
+          <div>
+            <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em">Where does your business operate?</div>
+            <div style="margin-top:5px;font-size:13px;line-height:1.5;color:rgba(15,15,14,0.55)">Trustlink is running in Metro Manila only for now.</div>
+
+            <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:14px">
+              <div style="flex:1 1 200px;min-width:0">
+                <label style="display:block;font-size:13px;font-weight:600;letter-spacing:-0.01em">Based in</label>
+                <div style="position:relative;margin-top:8px">
+                  <select value="{{ f_city }}" onChange="{{ on_city }}" onBlur="{{ blur_city }}" style="width:100%;box-sizing:border-box;appearance:none;background:transparent;border:1px solid {{ err_city_border }};border-radius:12px;padding:11px 34px 11px 14px;font-size:14px;color:{{ cityColor }};cursor:pointer">
+                    <sc-for list="{{ cityOptions }}" as="c" hint-placeholder-count="17">
+                      <option value="{{ c.value }}">{{ c.label }}</option>
+                    </sc-for>
+                  </select>
+                  <svg viewBox="0 0 16 16" fill="none" style="position:absolute;right:13px;top:50%;margin-top:-4px;width:11px;height:8px;pointer-events:none;color:rgba(15,15,14,0.4)"><path d="M2.5 4l5.5 6 5.5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                </div>
+                <sc-if value="{{ err_city }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:7px;font-size:12.5px;color:#B4331F">Choose where your business is based.</div>
+                </sc-if>
+              </div>
+              <div style="flex:1 1 200px;min-width:0">
+                <label style="display:block;font-size:13px;font-weight:600;letter-spacing:-0.01em">Region</label>
+                <div style="display:flex;align-items:center;gap:9px;margin-top:8px;border:1px solid rgba(15,15,14,0.12);border-radius:12px;padding:11px 14px;background:rgba(15,15,14,0.03)">
+                  <svg viewBox="0 0 24 24" fill="none" style="width:13px;height:13px;flex:none;color:rgba(15,15,14,0.35)"><rect x="5" y="10.5" width="14" height="9.5" rx="1.6" stroke="currentColor" stroke-width="1.5"></rect><path d="M8.4 10.5V7.8a3.6 3.6 0 0 1 7.2 0v2.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+                  <span style="font-size:14px;color:rgba(15,15,14,0.6)">National Capital Region</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:18px;font-size:13px;font-weight:600;letter-spacing:-0.01em">Cities you would travel to for work</div>
+            <div style="margin-top:5px;font-size:12.5px;line-height:1.5;color:rgba(15,15,14,0.55)">{{ areaHelp }}</div>
+
+            <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;display:{{ collapsedRowDisplay }}">
+              <sc-for list="{{ selectedAreas }}" as="a" hint-placeholder-count="1">
+                <button onClick="{{ a.pick }}" style="display:inline-flex;align-items:center;gap:7px;background:rgba(22,78,120,0.08);color:#164E78;border:1px solid rgba(22,78,120,0.45);border-radius:999px;padding:9px 14px;font-size:13.5px;font-weight:500;cursor:pointer">
+                  <svg viewBox="0 0 16 16" fill="none" style="width:11px;height:11px;flex:none"><path d="M3 8.4l3.2 3.2L13 4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  <span>{{ a.label }}</span>
+                </button>
+              </sc-for>
+              <sc-if value="{{ areasCollapsed }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ expandAreas }}" style="display:inline-flex;align-items:center;gap:7px;background:transparent;border:1px dashed rgba(15,15,14,0.22);border-radius:999px;padding:9px 14px;font-size:13.5px;font-weight:500;color:rgba(15,15,14,0.62);cursor:pointer" style-hover="border-color:rgba(15,15,14,0.4);color:#0F0F0E">
+                  <svg viewBox="0 0 16 16" fill="none" style="width:11px;height:11px;flex:none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+                  <span>Add another area</span>
+                </button>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{ areasExpanded }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:12px">
+                <div style="font-size:12.5px;color:rgba(15,15,14,0.5)">Tap to add or remove.</div>
+                <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:11px">
+                  <sc-for list="{{ areas }}" as="a" hint-placeholder-count="10">
+                    <button onClick="{{ a.pick }}" style="display:inline-flex;align-items:center;gap:7px;background:{{ a.bg }};color:{{ a.fg }};border:1px solid {{ a.border }};border-radius:999px;padding:9px 14px;font-size:13.5px;font-weight:500;cursor:pointer">
+                      <sc-if value="{{ a.on }}" hint-placeholder-val="{{ false }}">
+                        <svg viewBox="0 0 16 16" fill="none" style="width:11px;height:11px;flex:none"><path d="M3 8.4l3.2 3.2L13 4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                      </sc-if>
+                      <span>{{ a.label }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+                <button onClick="{{ pickAllNCR }}" style="margin-top:11px;background:transparent;border:none;padding:0;font-size:13px;font-weight:500;color:#164E78;cursor:pointer;text-decoration:underline">{{ allNCRLabel }}</button>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <div style="border:1px solid {{ matchBorder }};border-left:3px solid {{ matchAccent }};border-radius:16px;background:#FFFFFF;padding:18px 20px;margin-top:16px">
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <svg viewBox="0 0 24 24" fill="none" style="width:16px;height:16px;flex:none;margin-top:3px;color:{{ matchAccent }}"><circle cx="10.6" cy="10.6" r="6.6" stroke="currentColor" stroke-width="1.6"></circle><path d="M15.4 15.4L20 20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+            <div style="min-width:0">
+              <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.025em;line-height:1.3">{{ matchTitle }}</div>
+              <div style="margin-top:6px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.62)">{{ matchBody }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:22px">
+          <button onClick="{{ goS1 }}" style="background:transparent;border:none;padding:6px 0;font-size:14px;font-weight:500;color:rgba(15,15,14,0.55);cursor:pointer" style-hover="color:#0F0F0E">Back</button>
+          <span style="flex:1"></span>
+          <sc-if value="{{ showS2Summary }}" hint-placeholder-val="{{ false }}">
+            <span style="font-size:12.5px;color:#B4331F;max-width:24ch">{{ s2SummaryMsg }}</span>
+          </sc-if>
+          <button onClick="{{ goS3 }}" style="display:inline-flex;align-items:center;gap:9px;background:#164E78;color:#FBFAF9;border:none;border-radius:999px;padding:13px 24px;font-size:14.5px;font-weight:500;cursor:pointer" style-hover="background:#103A5A">
+            <span>Continue</span>
+            <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M2.5 8h10.5M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isS3 }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(26px,3.4vw,34px);font-weight:500;line-height:1.12;letter-spacing:-0.035em;max-width:20ch;text-wrap:pretty">{{ s3Title }}</h1>
+        <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:rgba(15,15,14,0.62);max-width:56ch;text-wrap:pretty">{{ s3Intro }}</p>
+
+        <sc-if value="{{ isCorrection }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid rgba(180,51,31,0.3);border-left:3px solid #B4331F;border-radius:16px;background:#FFFFFF;padding:20px 22px;margin-top:20px">
+            <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#B4331F">{{ correctionKicker }}</div>
+            <div style="margin-top:10px;font-size:14.5px;line-height:1.6;color:rgba(15,15,14,0.72)">{{ correctionBody }}</div>
+            <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(15,15,14,0.09);font-size:13px;color:rgba(15,15,14,0.55)">Reviewed {{ correctionDate }} · everything else you entered is kept</div>
+          </div>
+        </sc-if>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:clamp(20px,3vw,28px);margin-top:20px;display:flex;flex-direction:column;gap:22px">
+          <sc-for list="{{ documents }}" as="d" hint-placeholder-count="3">
+            <div>
+              <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em">{{ d.name }}</div>
+                <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:{{ d.tagFg }};border:1px solid {{ d.tagBorder }};border-radius:999px;padding:3px 8px">{{ d.tag }}</span>
+              </div>
+              <div style="margin-top:5px;font-size:13px;line-height:1.5;color:rgba(15,15,14,0.55)">{{ d.help }}</div>
+
+              <sc-if value="{{ d.empty }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px">
+                  <button onClick="{{ d.capture }}" style="flex:1 1 220px;display:inline-flex;align-items:center;justify-content:center;gap:10px;background:rgba(22,78,120,0.05);border:1px solid rgba(22,78,120,0.35);color:#164E78;border-radius:14px;padding:18px 16px;font-size:14.5px;font-weight:500;cursor:pointer" style-hover="background:rgba(22,78,120,0.09)">
+                    <svg viewBox="0 0 24 24" fill="none" style="width:19px;height:19px;flex:none"><path d="M3.5 8.4A1.6 1.6 0 0 1 5.1 6.8h2.3l1.2-2h6.8l1.2 2h2.3a1.6 1.6 0 0 1 1.6 1.6v8.4a1.6 1.6 0 0 1-1.6 1.6H5.1a1.6 1.6 0 0 1-1.6-1.6V8.4Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path><circle cx="12" cy="12.4" r="3.4" stroke="currentColor" stroke-width="1.5"></circle></svg>
+                    <span>Take a photo</span>
+                  </button>
+                  <button onClick="{{ d.capture }}" style="flex:0 1 150px;display:inline-flex;align-items:center;justify-content:center;gap:9px;background:transparent;border:1px solid rgba(15,15,14,0.16);color:rgba(15,15,14,0.65);border-radius:14px;padding:18px 16px;font-size:13.5px;font-weight:500;cursor:pointer" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">
+                    <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px;flex:none"><path d="M4 2.4h5L12 5.6v8H4v-11Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path><path d="M9 2.4v3.2h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path></svg>
+                    <span>Choose a file</span>
+                  </button>
+                </div>
+                <div style="margin-top:9px;font-size:12.5px;line-height:1.5;color:rgba(15,15,14,0.5)">A clear phone photo is fine — lay it flat, get all four corners in, and make sure the text is readable. JPG, PNG, or PDF up to 10 MB.</div>
+              </sc-if>
+
+              <sc-if value="{{ d.filled }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:13px;margin-top:12px;border:1px solid {{ d.cardBorder }};border-radius:14px;padding:13px 15px;background:{{ d.cardBg }}">
+                  <div style="width:42px;height:42px;border-radius:9px;background:rgba(15,15,14,0.07);display:flex;align-items:center;justify-content:center;flex:none;color:rgba(15,15,14,0.4)">
+                    <svg viewBox="0 0 24 24" fill="none" style="width:17px;height:17px"><rect x="4" y="5.5" width="16" height="13" rx="1.6" stroke="currentColor" stroke-width="1.5"></rect><path d="M4 15l4.2-3.8 3.4 3 3-2.4L20 15.4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+                  </div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.fileName }}</div>
+                    <div style="margin-top:3px;font-family:'DM Mono',monospace;font-size:10.5px;color:{{ d.metaColor }}">{{ d.fileMeta }}</div>
+                  </div>
+                  <button onClick="{{ d.remove }}" title="Remove" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;border-radius:8px;color:rgba(15,15,14,0.35);cursor:pointer;flex:none" style-hover="background:rgba(15,15,14,0.06);color:#B4331F">
+                    <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+                  </button>
+                </div>
+                <sc-if value="{{ d.hasIssue }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:8px;font-size:12.5px;line-height:1.5;color:#B4331F">{{ d.issue }}</div>
+                </sc-if>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:9px;margin-top:16px;padding:0 4px">
+          <svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px;flex:none;margin-top:2px;color:rgba(15,15,14,0.35)"><path d="M12 3.4l7 2.6v5.4c0 4.3-2.9 7.6-7 9.2-4.1-1.6-7-4.9-7-9.2V6l7-2.6Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+          <div style="font-size:12.5px;line-height:1.55;color:rgba(15,15,14,0.5);max-width:64ch">Your documents are seen by the Trustlink team who check them and by nobody else. They are never shown on your profile — only the fact that you were verified, and the date.</div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:22px">
+          <button onClick="{{ goS2 }}" style="background:transparent;border:none;padding:6px 0;font-size:14px;font-weight:500;color:rgba(15,15,14,0.55);cursor:pointer" style-hover="color:#0F0F0E">Back</button>
+          <span style="flex:1"></span>
+          <sc-if value="{{ showS3Summary }}" hint-placeholder-val="{{ false }}">
+            <span style="font-size:12.5px;color:#B4331F;max-width:26ch">{{ s3SummaryMsg }}</span>
+          </sc-if>
+          <button onClick="{{ submitDocs }}" style="display:inline-flex;align-items:center;gap:9px;background:#164E78;color:#FBFAF9;border:none;border-radius:999px;padding:13px 24px;font-size:14.5px;font-weight:500;cursor:pointer" style-hover="background:#103A5A">
+            <span>{{ s3Primary }}</span>
+            <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M2.5 8h10.5M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </button>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button onClick="{{ finishLater }}" style="background:transparent;border:none;padding:0;font-size:13.5px;color:rgba(15,15,14,0.55);cursor:pointer;text-decoration:underline" style-hover="color:#0F0F0E">Finish later and browse requirements</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isArrival }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display:flex;flex-direction:column;align-items:center;text-align:center">
+          <div style="width:62px;height:62px;border-radius:999px;background:{{ arrivalIconBg }};display:flex;align-items:center;justify-content:center;color:{{ arrivalIconFg }}">
+            <sc-if value="{{ arrivalIsPending }}" hint-placeholder-val="{{ true }}">
+              <svg viewBox="0 0 24 24" fill="none" style="width:27px;height:27px"><circle cx="12" cy="12" r="8.6" stroke="currentColor" stroke-width="1.5"></circle><path d="M12 7.4V12l3 1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </sc-if>
+            <sc-if value="{{ arrivalIsRejected }}" hint-placeholder-val="{{ false }}">
+              <svg viewBox="0 0 24 24" fill="none" style="width:27px;height:27px"><circle cx="12" cy="12" r="8.6" stroke="currentColor" stroke-width="1.5"></circle><path d="M12 7.6v5.2M12 16v.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+            </sc-if>
+            <sc-if value="{{ arrivalIsIncomplete }}" hint-placeholder-val="{{ false }}">
+              <svg viewBox="0 0 24 24" fill="none" style="width:27px;height:27px"><path d="M5 19.5h14M12 4.5v10.4M7.8 10.7l4.2 4.2 4.2-4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </sc-if>
+          </div>
+          <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;background:{{ arrivalPillBg }};color:{{ arrivalPillFg }};border:1px solid {{ arrivalPillBorder }};border-radius:999px;padding:5px 12px;margin-top:18px">{{ arrivalPill }}</span>
+          <h1 style="margin:18px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(25px,3.2vw,34px);font-weight:500;line-height:1.12;letter-spacing:-0.035em;max-width:20ch;text-wrap:pretty">{{ arrivalTitle }}</h1>
+          <p style="margin:14px 0 0;font-size:15px;line-height:1.6;color:rgba(15,15,14,0.65);max-width:52ch;text-wrap:pretty">{{ arrivalBody }}</p>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:22px 24px;margin-top:28px">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">{{ arrivalRecordLabel }}</div>
+
+          <div style="display:flex;align-items:center;gap:13px;margin-top:16px">
+            <div style="width:44px;height:44px;border-radius:12px;background:#0F0F0E;color:#FBFAF9;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-size:15px;font-weight:500;flex:none">SM</div>
+            <div style="min-width:0">
+              <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.025em;line-height:1.25">Santiago Metal Works</div>
+              <div style="margin-top:4px;font-size:12.5px;color:rgba(15,15,14,0.55)">Sole proprietorship · Construction &amp; Hardware</div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:13px;margin-top:18px;padding-top:16px;border-top:1px solid rgba(15,15,14,0.09)">
+            <div style="display:grid;grid-template-columns:minmax(96px,0.5fr) 1.5fr;gap:14px">
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45);padding-top:2px">Based in</div>
+              <div style="font-size:13.5px;line-height:1.5">{{ arrivalBasedIn }}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:minmax(96px,0.5fr) 1.5fr;gap:14px">
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45);padding-top:2px">Capabilities</div>
+              <div style="font-size:13.5px;line-height:1.5">{{ arrivalCaps }}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:minmax(96px,0.5fr) 1.5fr;gap:14px">
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45);padding-top:2px">Service area</div>
+              <div style="font-size:13.5px;line-height:1.5">{{ arrivalAreas }}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:minmax(96px,0.5fr) 1.5fr;gap:14px">
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45);padding-top:2px">Contact</div>
+              <div style="font-size:13.5px;line-height:1.5">Maria Santiago · +63 917 555 0142</div>
+            </div>
+            <div style="display:grid;grid-template-columns:minmax(96px,0.5fr) 1.5fr;gap:14px">
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45);padding-top:2px">Documents</div>
+              <div style="font-size:13.5px;line-height:1.5;color:{{ arrivalDocColor }}">{{ arrivalDocs }}</div>
+            </div>
+          </div>
+
+          <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(15,15,14,0.09);display:flex;align-items:flex-start;gap:9px">
+            <svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px;flex:none;margin-top:2px;color:rgba(15,15,14,0.35)"><circle cx="12" cy="12" r="9.2" stroke="currentColor" stroke-width="1.5"></circle><path d="M12 11v5.4M12 7.9v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+            <div style="font-size:12.5px;line-height:1.55;color:rgba(15,15,14,0.55);max-width:62ch">The verified badge and your trust tier are not part of this record. Verification is a check we carry out; tier is earned from requirements awarded to you. Neither comes from completing this form.</div>
+          </div>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:22px 24px;margin-top:16px">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">What happens next</div>
+          <div style="display:flex;flex-direction:column;margin-top:18px">
+            <sc-for list="{{ arrivalTimeline }}" as="t" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:24px 1fr;gap:14px">
+                <div style="display:flex;flex-direction:column;align-items:center">
+                  <span style="width:11px;height:11px;border-radius:999px;background:{{ t.dotBg }};border:2px solid {{ t.dotBorder }};flex:none;margin-top:4px"></span>
+                  <span style="flex:1;width:1.5px;background:{{ t.lineBg }};min-height:{{ t.lineH }}"></span>
+                </div>
+                <div style="padding-bottom:{{ t.pad }}">
+                  <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                    <span style="font-size:14px;font-weight:{{ t.weight }};color:{{ t.color }}">{{ t.title }}</span>
+                    <span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.45)">{{ t.when }}</span>
+                  </div>
+                  <div style="margin-top:5px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.6);max-width:58ch">{{ t.body }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:22px">
+          <a href="#feed" style="display:inline-flex;align-items:center;gap:9px;background:#164E78;color:#FBFAF9;border-radius:999px;padding:13px 22px;font-size:14.5px;font-weight:500" style-hover="background:#103A5A">
+            <span>{{ arrivalPrimary }}</span>
+            <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M2.5 8h10.5M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </a>
+          <sc-if value="{{ arrivalShowUpload }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ goS3 }}" style="background:transparent;border:1px solid rgba(15,15,14,0.16);color:rgba(15,15,14,0.7);border-radius:999px;padding:13px 20px;font-size:14px;font-weight:500;cursor:pointer" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">{{ arrivalUploadLabel }}</button>
+          </sc-if>
+          <span style="flex:1;min-width:8px"></span>
+          <a href="#profile" style="font-size:13.5px;font-weight:500;color:rgba(15,15,14,0.6)" style-hover="color:#0F0F0E">Review my details</a>
+        </div>
+      </div>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1120,&quot;height&quot;:1024}}">
+const CATEGORIES = [
+  "Construction & Hardware", "Food & Agriculture", "Printing & Packaging",
+  "Logistics & Transport", "Professional Services", "Electrical & Electronics"
+];
+
+const CAPS = {
+  "Construction & Hardware": ["Steel fabrication", "Welding", "Metal supply", "Installation", "Roofing", "Concrete works", "Masonry", "Carpentry", "Painting & finishing", "Scaffolding", "Cement & aggregates supply", "Hardware supply", "Glass & aluminium", "Demolition", "Structural repair", "Tile works"],
+  "Food & Agriculture": ["Bulk grains supply", "Fresh produce", "Cold storage", "Meat & poultry", "Food processing", "Packaging supply", "Catering", "Distribution"],
+  "Printing & Packaging": ["Offset printing", "Digital printing", "Large format", "Corrugated boxes", "Labels & stickers", "Bookbinding", "Signage", "Packaging design"],
+  "Logistics & Transport": ["Trucking", "Warehousing", "Courier", "Freight forwarding", "Heavy equipment hauling", "Cold chain", "Last-mile delivery"],
+  "Professional Services": ["Bookkeeping", "Audit", "Legal services", "Architectural design", "Structural engineering", "Surveying", "IT services", "Permit processing"],
+  "Electrical & Electronics": ["Electrical installation", "Panel fabrication", "Generator supply", "Lighting supply", "CCTV & security", "Network cabling", "Aircon installation", "Equipment repair"]
+};
+
+const NCR_CITIES = [
+  "Quezon City", "Manila", "Makati", "Pasig", "Taguig", "Caloocan", "Parañaque",
+  "Mandaluyong", "Marikina", "Valenzuela", "Las Piñas", "Muntinlupa", "Malabon",
+  "Navotas", "San Juan", "Pasay", "Pateros"
+];
+
+const BIZ_TYPES = ["Sole proprietorship", "Partnership", "Corporation", "Cooperative"];
+
+class Component extends DCLogic {
+  state = {
+    view: "s1",
+    showAllAreas: false,
+    regName: "", displayName: "", bizType: "", category: "",
+    city: "", contact: "", mobile: "",
+    caps: [], capQuery: "", areas: [],
+    docs: {},
+    touched: {}, showSummary: false
+  };
+
+  set(k, v) { this.setState({ [k]: v, showSummary: false }); }
+  touch(k) { this.setState((s) => ({ touched: Object.assign({}, s.touched, { [k]: true }) })); }
+
+  go(view) { this.setState({ view: view, showSummary: false }); window.scrollTo(0, 0); }
+
+  toggle(key, val, cap) {
+    this.setState((s) => {
+      const cur = s[key];
+      const has = cur.indexOf(val) > -1;
+      if (!has && cap && cur.length >= cap) return { showSummary: false };
+      return { [key]: has ? cur.filter((x) => x !== val) : cur.concat([val]), showSummary: false };
+    });
+  }
+
+  pill(on, disabled) {
+    return {
+      bg: on ? "rgba(22,78,120,0.08)" : "transparent",
+      fg: on ? "#164E78" : (disabled ? "rgba(15,15,14,0.35)" : "rgba(15,15,14,0.65)"),
+      border: on ? "rgba(22,78,120,0.45)" : "rgba(15,15,14,0.16)"
+    };
+  }
+
+  docSpec() {
+    const t = this.state.bizType;
+    const primary = (t === "Corporation" || t === "Partnership")
+      ? { key: "sec", name: "SEC certificate of registration", help: "The certificate issued when your " + (t === "Partnership" ? "partnership" : "corporation") + " was registered with the SEC." }
+      : (t === "Cooperative"
+        ? { key: "cda", name: "CDA certificate of registration", help: "The certificate issued when your cooperative was registered with the CDA." }
+        : { key: "dti", name: "DTI certificate of business name registration", help: "The certificate issued when you registered your business name with the DTI." });
+    return [
+      Object.assign({ required: true }, primary),
+      { key: "bir", required: true, name: "BIR certificate of registration", help: "Form 2303. We read your TIN from it — no need to type it anywhere.", },
+      { key: "permit", required: false, name: "Mayor's permit", help: "Not needed to get verified. Businesses that add it later can reach Tier 2 sooner." }
+    ];
+  }
+
+  renderVals() {
+    const s = this.state;
+    const v = s.view;
+    const inFlow = v === "s1" || v === "s2" || v === "s3";
+    const isArrival = v === "pending" || v === "rejected" || v === "incomplete";
+    const correction = v === "s3-correction";
+    const isS3 = v === "s3" || correction;
+
+    const stepIndex = v === "s1" ? 1 : (v === "s2" ? 2 : 3);
+    const steps = ["Your business", "What you do", "Verification"].map((label, i) => {
+      const n = i + 1;
+      const done = n < stepIndex, now = n === stepIndex;
+      return {
+        n: String(n), label: label,
+        dotBg: done ? "#164E78" : (now ? "#FBFAF9" : "transparent"),
+        dotBorder: done || now ? "#164E78" : "rgba(15,15,14,0.2)",
+        dotFg: done ? "#FBFAF9" : (now ? "#164E78" : "rgba(15,15,14,0.4)"),
+        labelColor: now ? "#0F0F0E" : (done ? "rgba(15,15,14,0.55)" : "rgba(15,15,14,0.38)"),
+        railBg: done ? "rgba(22,78,120,0.35)" : "rgba(15,15,14,0.12)",
+        railShow: n === 3 ? "none" : "block"
+      };
+    });
+
+    const activeCat = s.category || CATEGORIES[0];
+    const pool = CAPS[activeCat] || [];
+    const q = s.capQuery.trim().toLowerCase();
+    const shown = q ? pool.filter((c) => c.toLowerCase().indexOf(q) > -1) : pool;
+    const atCap = s.caps.length >= 8;
+
+    const matchCount = (() => {
+      if (!s.caps.length || !s.areas.length) return 0;
+      const base = s.caps.length * 2 + s.areas.length * 3;
+      return s.category === "Construction & Hardware" ? base + 2 : Math.max(0, base - 4);
+    })();
+
+    const allNCR = s.areas.length >= NCR_CITIES.length;
+    const areaWord = allNCR ? "Metro Manila" : (s.areas.length === 0 ? "" :
+      (s.areas.length === 1 ? s.areas[0] : (s.areas.length === 2 ? s.areas.join(" and ") : s.areas.slice(0, 2).join(", ") + " and " + (s.areas.length - 2) + " more")));
+
+    const docs = this.docSpec();
+    const missingDocs = docs.filter((d) => d.required && !s.docs[d.key]);
+
+    const regBad = s.touched.regName && s.regName.trim().length > 0 && s.regName.trim().length < 4;
+    const mobileDigits = s.mobile.replace(/[^0-9]/g, "");
+    const mobileBad = s.touched.mobile && s.mobile.trim().length > 0 && (mobileDigits.length < 10 || mobileDigits.length > 11);
+
+    const s1Missing = [];
+    if (!s.regName.trim()) s1Missing.push("your registered business name");
+    if (!s.bizType) s1Missing.push("business type");
+    if (!s.category) s1Missing.push("industry category");
+    if (!s.contact.trim()) s1Missing.push("contact person");
+    if (!s.mobile.trim()) s1Missing.push("mobile number");
+
+    const listOut = (arr) => arr.length === 1 ? arr[0] : arr.slice(0, -1).join(", ") + " and " + arr[arr.length - 1];
+
+    const s2Missing = [];
+    if (s.caps.length < 3) s2Missing.push("at least 3 capabilities");
+    if (!s.city.trim()) s2Missing.push("where you are based");
+    if (!s.areas.length) s2Missing.push("one city you work in");
+
+    const arrivalRejected = v === "rejected";
+    const arrivalIncomplete = v === "incomplete";
+    const uploadedDocs = docs.filter((d) => s.docs[d.key]);
+    const shortName = (d) => d.name.replace(" of business name registration", "").replace(" of registration", "");
+    const docsRow = arrivalRejected
+      ? "DTI certificate, BIR certificate — both rejected"
+      : (v === "pending"
+        ? listOut(docs.filter((d) => d.required || s.docs[d.key]).map(shortName)) + " · submitted just now"
+        : uploadedDocs.length === 0
+        ? "None uploaded yet — " + listOut(missingDocs.map(shortName)) + " still needed"
+        : listOut(uploadedDocs.map(shortName)) + " · added just now"
+          + (missingDocs.length ? " · still needed: " + listOut(missingDocs.map(shortName)) : ""));
+
+    return {
+      accountEmail: "maria@santiagometal.ph",
+      inFlow, steps, isS1: v === "s1", isS2: v === "s2", isS3, isArrival,
+      isCorrection: correction,
+
+      stateTabs: [
+        { key: "s1", label: "S1 · Your business" },
+        { key: "s2", label: "S2 · What you do" },
+        { key: "s3", label: "S3 · Verification" },
+        { key: "pending", label: "Arrival · pending" },
+        { key: "incomplete", label: "Arrival · finish later" },
+        { key: "s3-correction", label: "Needs correction" },
+        { key: "rejected", label: "Rejected" }
+      ].map((t) => {
+        const on = v === t.key;
+        return {
+          label: t.label,
+          bg: on ? "#0F0F0E" : "transparent",
+          fg: on ? "#FBFAF9" : "rgba(15,15,14,0.6)",
+          border: on ? "#0F0F0E" : "rgba(15,15,14,0.18)",
+          pick: () => this.go(t.key)
+        };
+      }),
+
+
+      f_regName: s.regName, on_regName: (e) => this.set("regName", e.target.value), blur_regName: () => this.touch("regName"),
+      err_regName: regBad, err_regName_msg: "That looks short for a registered name — check it against the certificate.",
+      err_regName_border: regBad ? "rgba(180,51,31,0.5)" : "rgba(15,15,14,0.16)",
+
+      f_displayName: s.displayName, on_displayName: (e) => this.set("displayName", e.target.value),
+
+      bizTypes: BIZ_TYPES.map((b) => Object.assign({ label: b, pick: () => this.set("bizType", b) }, this.pill(s.bizType === b))),
+      showDocHint: !!s.bizType,
+      docHint: "Step 3 will ask for your " + docs[0].name.replace(" certificate of registration", "").replace(" certificate of business name registration", "") + " certificate and your BIR registration.",
+
+      categories: CATEGORIES.map((c) => Object.assign({ label: c, pick: () => this.set("category", c) }, this.pill(s.category === c))),
+
+      f_city: s.city,
+      on_city: (e) => {
+        const city = e.target.value;
+        this.setState((st) => {
+          const kept = st.areas.filter((a) => a !== st.city && a !== city);
+          return { city: city, showSummary: false, areas: city ? [city].concat(kept) : kept };
+        });
+      },
+      blur_city: () => this.touch("city"),
+      err_city: s.touched.city && !s.city.trim(),
+      err_city_border: s.touched.city && !s.city.trim() ? "rgba(180,51,31,0.5)" : "rgba(15,15,14,0.16)",
+
+      cityOptions: [{ value: "", label: "Select a city" }].concat(NCR_CITIES.map((c) => ({ value: c, label: c }))),
+      cityColor: s.city ? "#0F0F0E" : "rgba(15,15,14,0.42)",
+
+      f_contact: s.contact, on_contact: (e) => this.set("contact", e.target.value), blur_contact: () => this.touch("contact"),
+      err_contact: s.touched.contact && !s.contact.trim(),
+      err_contact_border: s.touched.contact && !s.contact.trim() ? "rgba(180,51,31,0.5)" : "rgba(15,15,14,0.16)",
+
+      f_mobile: s.mobile, on_mobile: (e) => this.set("mobile", e.target.value), blur_mobile: () => this.touch("mobile"),
+      err_mobile: mobileBad, err_mobile_msg: "That does not look like a Philippine mobile number — 10 digits after +63.",
+      err_mobile_border: mobileBad ? "rgba(180,51,31,0.5)" : "rgba(15,15,14,0.16)",
+
+      showS1Summary: s.showSummary && s1Missing.length > 0,
+      s1SummaryMsg: s1Missing.length ? "Still needed before you continue: " + listOut(s1Missing) + "." : "",
+      goS2: () => {
+        if (s1Missing.length) {
+          this.setState({ showSummary: true, touched: { regName: true, city: true, contact: true, mobile: true } });
+        } else this.go("s2");
+      },
+      goS1: () => this.go("s1"),
+
+      categoryName: activeCat,
+      capQuery: s.capQuery, onCapQuery: (e) => this.set("capQuery", e.target.value),
+      capCount: s.caps.length + " of 8 selected",
+      capCountColor: s.caps.length >= 3 ? "#164E78" : "rgba(15,15,14,0.45)",
+      capabilities: shown.map((c) => {
+        const on = s.caps.indexOf(c) > -1;
+        const blocked = !on && atCap;
+        return Object.assign({
+          label: c, on: on, cursor: blocked ? "not-allowed" : "pointer", opacity: blocked ? "0.45" : "1",
+          pick: () => this.toggle("caps", c, 8)
+        }, this.pill(on, blocked));
+      }),
+      capNoResults: q.length > 0 && shown.length === 0,
+
+      areas: NCR_CITIES.map((p) => {
+        const on = s.areas.indexOf(p) > -1;
+        return Object.assign({ label: p, on: on, pick: () => this.toggle("areas", p) }, this.pill(on));
+      }),
+      allNCRLabel: allNCR ? "Clear all cities" : "Cover all of Metro Manila",
+      pickAllNCR: () => this.setState({ areas: allNCR ? [] : NCR_CITIES.slice(), showSummary: false }),
+      selectedAreas: s.areas.map((p) => ({ label: p, pick: () => this.toggle("areas", p) })),
+      areaHelp: s.city
+        ? "Pre-selected from where you are based. Add more only if you would genuinely take a job there."
+        : "Choose where you are based first, or add cities yourself.",
+      areasCollapsed: !s.showAllAreas,
+      collapsedRowDisplay: s.showAllAreas ? "none" : "flex",
+      areasExpanded: s.showAllAreas,
+      expandAreas: () => this.setState({ showAllAreas: true }),
+
+      matchTitle: (s.caps.length < 3 || !s.areas.length)
+        ? "Pick capabilities and an area to see what is open"
+        : (matchCount === 0
+          ? "No open requirements match this yet"
+          : matchCount + " open requirement" + (matchCount === 1 ? "" : "s") + " match this right now"),
+      matchBody: (s.caps.length < 3 || !s.areas.length)
+        ? "This count updates as you choose, so you can see what your feed will look like before you finish."
+        : (matchCount === 0
+          ? "That is honest, not a problem — requirements are posted daily. We will alert you the moment one matches what you do in " + (areaWord || "your area") + "."
+          : "Posted by verified businesses in " + areaWord + ", closing in the next two weeks. You will see them the moment you finish."),
+      matchAccent: (s.caps.length >= 3 && s.areas.length && matchCount > 0) ? "#164E78" : "rgba(15,15,14,0.3)",
+      matchBorder: (s.caps.length >= 3 && s.areas.length && matchCount > 0) ? "rgba(22,78,120,0.3)" : "rgba(15,15,14,0.12)",
+
+      showS2Summary: s.showSummary && s2Missing.length > 0,
+      s2SummaryMsg: s2Missing.length ? "Add " + listOut(s2Missing) + " first." : "",
+      goS3: () => {
+        if (v === "s2" && s2Missing.length) { this.setState({ showSummary: true }); return; }
+        this.go("s3");
+      },
+
+      s3Title: correction ? "Two things need fixing" : "Verify your business",
+      s3Intro: correction
+        ? "Your documents were checked on 15 August. One could not be read and one did not match — replace them and we will look again, usually the same day."
+        : "Two documents, checked by the Trustlink team. You can browse requirements while we check, but posting and quoting open once you are verified.",
+      correctionKicker: "Needs correction",
+      correctionBody: "The BIR certificate photo was too dark to read the TIN, and the name on the DTI certificate reads \u201CSANTIAGO METALWORKS\u201D while you entered \u201CSANTIAGO METAL WORKS AND GENERAL MERCHANDISE\u201D. Replace the photo, and either correct the name you entered or upload the certificate that matches it.",
+      correctionDate: "15 Aug 2026",
+
+      documents: docs.map((d) => {
+        const file = s.docs[d.key];
+        const flagged = correction && (d.key === "bir" || d.key === "dti" || d.key === "sec" || d.key === "cda") && !file;
+        return {
+          name: d.name, help: d.help,
+          tag: d.required ? "Required" : "Optional",
+          tagFg: d.required ? "#164E78" : "rgba(15,15,14,0.45)",
+          tagBorder: d.required ? "rgba(22,78,120,0.35)" : "rgba(15,15,14,0.16)",
+          empty: !file, filled: !!file,
+          fileName: file ? file.name : "",
+          fileMeta: file ? file.meta : "",
+          metaColor: "rgba(15,15,14,0.45)",
+          cardBorder: "rgba(15,15,14,0.14)", cardBg: "#FFFFFF",
+          hasIssue: flagged, issue: flagged ? "Replace this one — see the note above." : "",
+          capture: () => this.setState((st) => ({
+            docs: Object.assign({}, st.docs, { [d.key]: { name: "IMG_20260815_" + d.key.toUpperCase() + ".jpg", meta: "Photo · 2.4 MB · added just now" } }),
+            showSummary: false
+          })),
+          remove: () => this.setState((st) => {
+            const next = Object.assign({}, st.docs); delete next[d.key];
+            return { docs: next };
+          })
+        };
+      }),
+
+      showS3Summary: s.showSummary && missingDocs.length > 0,
+      s3SummaryMsg: missingDocs.length ? "Add your " + listOut(missingDocs.map((d) => d.name.split(" ")[0])) + " document" + (missingDocs.length > 1 ? "s" : "") + " to submit." : "",
+      s3Primary: correction ? "Resubmit for checking" : "Submit for verification",
+      submitDocs: () => {
+        if (missingDocs.length) { this.setState({ showSummary: true }); return; }
+        this.go("pending");
+      },
+      finishLater: () => this.go("incomplete"),
+
+      arrivalIsPending: !arrivalRejected && !arrivalIncomplete,
+      arrivalIsRejected: arrivalRejected,
+      arrivalIsIncomplete: arrivalIncomplete,
+      arrivalShowUpload: arrivalRejected || arrivalIncomplete,
+      arrivalUploadLabel: arrivalRejected ? "Upload new documents" : "Upload documents",
+      arrivalIconBg: arrivalRejected ? "rgba(180,51,31,0.07)" : (arrivalIncomplete ? "rgba(15,15,14,0.05)" : "rgba(22,78,120,0.07)"),
+      arrivalIconFg: arrivalRejected ? "#B4331F" : (arrivalIncomplete ? "rgba(15,15,14,0.45)" : "#164E78"),
+      arrivalPill: arrivalRejected
+        ? "Verification not approved"
+        : (arrivalIncomplete
+          ? (uploadedDocs.length ? "Verification not yet submitted" : "Documents not yet uploaded")
+          : "Pending verification"),
+      arrivalPillBg: arrivalRejected || arrivalIncomplete ? "transparent" : "#164E78",
+      arrivalPillFg: arrivalRejected ? "#B4331F" : (arrivalIncomplete ? "rgba(15,15,14,0.55)" : "#FBFAF9"),
+      arrivalPillBorder: arrivalRejected ? "rgba(180,51,31,0.4)" : (arrivalIncomplete ? "rgba(15,15,14,0.2)" : "#164E78"),
+      arrivalTitle: arrivalRejected
+        ? "We could not verify this business"
+        : (arrivalIncomplete
+          ? (uploadedDocs.length
+            ? (missingDocs.length === 1 ? "You are in — one document still to go" : "You are in — " + missingDocs.length + " documents still to go")
+            : "You are in — your documents are still to come")
+          : "You are in — we are checking your documents"),
+      arrivalBody: arrivalRejected
+        ? "The DTI record for the name you gave belongs to a different business, and the BIR certificate has expired. You can browse requirements, but posting and quoting stay closed until this is resolved."
+        : (arrivalIncomplete
+          ? (uploadedDocs.length
+            ? "Browse requirements now — your profile is complete enough to match them. Add " + listOut(missingDocs.map(shortName)) + " and we will check everything together, usually within one working day."
+            : "Browse requirements now — your profile is complete enough to match them. Posting a requirement and submitting a quotation open once you upload your documents and we check them.")
+          : "Browse requirements now. Posting a requirement and submitting a quotation open as soon as your documents are checked — usually within one working day."),
+      arrivalRecordLabel: arrivalRejected ? "What we reviewed" : (arrivalIncomplete ? "Your business so far" : "What you submitted"),
+      arrivalBasedIn: (s.city || "Quezon City") + ", National Capital Region",
+      arrivalCaps: s.caps.length ? s.caps.slice(0, 4).join(" · ") + (s.caps.length > 4 ? " · +" + (s.caps.length - 4) : "") : "Steel fabrication · Welding · Metal supply",
+      arrivalAreas: allNCR ? "All of Metro Manila" : (s.areas.length ? s.areas.join(" · ") : "Quezon City"),
+      arrivalDocs: docsRow,
+      arrivalDocColor: arrivalRejected ? "#B4331F" : (missingDocs.length ? "rgba(15,15,14,0.6)" : "rgba(15,15,14,0.75)"),
+
+      arrivalTimeline: (arrivalIncomplete
+        ? [
+          { title: uploadedDocs.length ? "Profile saved, " + listOut(uploadedDocs.map(shortName)) + " received" : "Your business profile is saved", when: "Just now", done: true, body: "Everything you entered is kept. Requirements matching what you do are already waiting in your feed." },
+          { title: uploadedDocs.length ? "Add the rest" : "Upload your documents", when: "Whenever you are ready", done: false, body: "Still needed: " + listOut(missingDocs.map(shortName)) + ". A clear phone photo of each is enough — it takes about a minute." },
+          { title: "We check them", when: "Within 1 working day of upload", done: false, last: true, body: "Once checked, your profile gains the verified badge and its date, and posting and quoting open." }
+        ]
+        : arrivalRejected
+        ? [
+          { title: "Documents reviewed", when: "16 Aug", done: true, body: "A member of the Trustlink team checked both documents against DTI and BIR records." },
+          { title: "Upload replacements", when: "Whenever you are ready", done: false, body: "Correct the business name or upload the certificate that matches it, and a current BIR registration. There is no limit on attempts." },
+          { title: "Checked again", when: "Usually same day", done: false, last: true, body: "We alert you either way. Nothing you entered is lost in the meantime." }
+        ]
+        : [
+          { title: "Documents submitted", when: "Just now", done: true, body: "Both are with the Trustlink team. You do not need to do anything else." },
+          { title: "We check them", when: "Within 1 working day", done: false, body: "Against DTI and BIR records. If something cannot be read or does not match, we tell you exactly what to replace." },
+          { title: "Verified", when: "After the check", done: false, last: true, body: "Your profile gains the verified badge and its date, and posting and quoting open. Trust tier is separate — it comes from requirements awarded to you." }
+        ]).map((t) => ({
+          title: t.title, when: t.when, body: t.body,
+          weight: t.done ? "600" : "500",
+          color: t.done ? "#0F0F0E" : "rgba(15,15,14,0.72)",
+          dotBg: t.done ? "#164E78" : "#FBFAF9",
+          dotBorder: t.done ? "#164E78" : "rgba(15,15,14,0.22)",
+          lineBg: t.last ? "transparent" : "rgba(15,15,14,0.12)",
+          lineH: t.last ? "0px" : "8px",
+          pad: t.last ? "0px" : "20px"
+        })),
+
+      arrivalPrimary: "See requirements for you"
+    };
+  }
+}
+</script>
+</body>
+</html>

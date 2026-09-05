@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #FBFAF9; }
+  a { color: #0F0F0E; text-decoration: none; }
+  a:hover { color: #55524D; }
+  ::selection { background: #0F0F0E; color: #FBFAF9; }
+  @keyframes tl-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+</style>
+</helmet>
+<div style="background:#FBFAF9;color:#0F0F0E;font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;padding-bottom:80px">
+
+  <header style="position:sticky;top:0;z-index:50;background:rgba(251,250,249,0.92);backdrop-filter:blur(10px);border-bottom:1px solid rgba(15,15,14,0.1)">
+    <div style="max-width:1720px;margin:0 auto;padding:0 clamp(20px,3vw,56px);height:66px;display:flex;align-items:center;gap:clamp(10px,2vw,32px);min-width:0">
+      <a href="#home" style="display:flex;align-items:center;gap:9px;flex:none">
+        <svg viewBox="0 0 24 24" fill="none" style="width:21px;height:21px" aria-hidden="true"><circle cx="12" cy="12" r="10.2" stroke="#164E78" stroke-width="1.2"></circle><path d="M7.6 12.3l3 3 5.8-6.3" stroke="#164E78" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:500;font-size:17px;letter-spacing:-0.03em">Trustlink</span>
+      </a>
+
+      <label style="flex:1 1 120px;min-width:0;max-width:340px;display:flex;align-items:center;gap:9px;background:rgba(15,15,14,0.05);border:1px solid transparent;border-radius:999px;padding:9px 14px;transition:border-color .15s ease" style-focus-within="border-color:rgba(22,78,120,0.4);background:#FFFFFF">
+        <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;flex:none;color:rgba(15,15,14,0.45)"><circle cx="7.2" cy="7.2" r="4.6" stroke="currentColor" stroke-width="1.3"></circle><path d="M10.6 10.6l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path></svg>
+        <input type="text" placeholder="Search requirements or businesses" style="flex:1;min-width:0;background:transparent;border:none;outline:none;font-family:'DM Sans',sans-serif;font-size:13.5px;color:#0F0F0E">
+      </label>
+
+      <div style="flex:1"></div>
+
+      <nav style="display:flex;align-items:stretch;gap:2px;height:66px;min-width:0;flex:0 1 auto">
+        <a href="#home" title="Home" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;padding:0 clamp(7px,1.1vw,14px);color:#0F0F0E;border-bottom:2px solid #0F0F0E">
+          <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><path d="M4 10.4 12 4l8 6.4V19a1 1 0 0 1-1 1h-4v-5.4H9V20H5a1 1 0 0 1-1-1v-8.6Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+          <span style="font-size:11.5px;font-weight:600;white-space:nowrap">Home</span>
+        </a>
+        <a href="#quotations" title="My Quotations" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;padding:0 clamp(7px,1.1vw,14px);color:rgba(15,15,14,0.55);border-bottom:2px solid transparent;transition:color .15s ease" style-hover="color:#0F0F0E">
+          <span style="position:relative;display:flex">
+            <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><path d="M6 3.5h8.5L19 8v12.5H6a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path><path d="M14 3.6V8.4h4.8M8.6 12.6h6.8M8.6 16h4.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path></svg>
+            <span style="position:absolute;top:-5px;left:12px;font-family:'DM Mono',monospace;font-size:9.5px;line-height:1;background:#164E78;color:#FBFAF9;border:1.5px solid #FBFAF9;border-radius:999px;padding:2px 5px">2</span>
+          </span>
+          <span style="font-size:11.5px;font-weight:400;white-space:nowrap">My Quotations</span>
+        </a>
+        <a href="#requirements" title="My Requirements" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;padding:0 clamp(7px,1.1vw,14px);color:rgba(15,15,14,0.55);border-bottom:2px solid transparent;transition:color .15s ease" style-hover="color:#0F0F0E">
+          <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><rect x="4" y="4.5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.5"></rect><path d="M8 9.5h8M8 13h5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+          <span style="font-size:11.5px;font-weight:400;white-space:nowrap">My Requirements</span>
+        </a>
+        <a href="#saved" title="Saved requirements" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;padding:0 clamp(7px,1.1vw,14px);color:rgba(15,15,14,0.55);border-bottom:2px solid transparent;transition:color .15s ease" style-hover="color:#0F0F0E">
+          <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><path d="M6.5 4.5h11a1 1 0 0 1 1 1v14L12 16l-6.5 3.5v-14a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+          <span style="font-size:11.5px;font-weight:400;white-space:nowrap">Saved</span>
+        </a>
+        <button onClick="{{ toggleAlerts }}" title="4 new alerts" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;padding:0 clamp(7px,1.1vw,14px);background:transparent;border:none;border-bottom:2px solid {{ alertsUnderline }};font-family:'DM Sans',sans-serif;cursor:pointer;color:{{ alertsColor }};transition:color .15s ease" style-hover="color:#0F0F0E">
+          <span style="position:relative;display:flex">
+            <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><path d="M6.2 9.6a5.8 5.8 0 0 1 11.6 0c0 4 1.3 5.6 1.9 6.2.3.3.1.9-.4.9H4.7c-.5 0-.7-.6-.4-.9.6-.6 1.9-2.2 1.9-6.2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M10 19.2a2.2 2.2 0 0 0 4 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path></svg>
+            <span style="position:absolute;top:-5px;left:12px;font-family:'DM Mono',monospace;font-size:9.5px;line-height:1;background:{{ urgent }};color:#FBFAF9;border:1.5px solid #FBFAF9;border-radius:999px;padding:2px 5px">4</span>
+          </span>
+          <span style="font-size:11.5px;font-weight:400;white-space:nowrap">Alerts</span>
+        </button>
+
+        <div style="position:absolute;top:64px;right:clamp(20px,3vw,40px);width:min(400px,calc(100vw - 40px));background:#FFFFFF;border:1px solid rgba(15,15,14,0.14);border-radius:16px;box-shadow:0 16px 44px rgba(15,15,14,0.16);overflow:hidden;z-index:70;display:{{ alertsDisplay }}">
+          <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid rgba(15,15,14,0.1)">
+            <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:15px;font-weight:500;letter-spacing:-0.02em">Alerts</span>
+            <span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.45)">4 new</span>
+            <span style="flex:1"></span>
+            <button onClick="{{ toggleAlerts }}" aria-label="Close alerts" style="background:transparent;border:none;padding:4px;cursor:pointer;color:rgba(15,15,14,0.5);display:flex" style-hover="color:#0F0F0E">
+              <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+            </button>
+          </div>
+          <div style="max-height:420px;overflow-y:auto;text-align:left">
+            <sc-for list="{{ alerts }}" as="a" hint-placeholder-count="4">
+              <div style="display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid rgba(15,15,14,0.07);background:{{ a.bg }}">
+                <span style="width:30px;height:30px;border-radius:9px;border:1px solid {{ a.iconBorder }};color:{{ a.iconColor }};display:flex;align-items:center;justify-content:center;flex:none">
+                  <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px"><circle cx="8" cy="8" r="6.2" stroke="currentColor" stroke-width="1.3"></circle><path d="{{ a.iconPath }}" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                </span>
+                <div style="min-width:0;flex:1;display:flex;flex-direction:column;gap:4px">
+                  <div style="display:flex;align-items:baseline;gap:8px">
+                    <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:{{ a.typeColor }}">{{ a.type }}</span>
+                    <span style="flex:1"></span>
+                    <span style="font-family:'DM Mono',monospace;font-size:10px;color:rgba(15,15,14,0.4);white-space:nowrap">{{ a.time }}</span>
+                  </div>
+                  <div style="font-size:13.5px;font-weight:600;line-height:1.35">{{ a.title }}</div>
+                  <div style="font-size:12.5px;line-height:1.45;color:rgba(15,15,14,0.6)">{{ a.detail }}</div>
+                  <button onClick="{{ noop }}" style="align-self:flex-start;margin-top:5px;background:transparent;border:1px solid rgba(15,15,14,0.18);border-radius:999px;padding:7px 13px;font-family:'DM Sans',sans-serif;font-size:12.5px;font-weight:500;color:#164E78;cursor:pointer;transition:transform .1s ease" style-hover="background:rgba(22,78,120,0.06)" style-active="transform:scale(0.97)">{{ a.action }}</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <a href="#alerts" style="display:flex;align-items:center;justify-content:center;padding:12px;font-size:13.5px;font-weight:500;color:#164E78" style-hover="background:rgba(22,78,120,0.06)">View all alerts</a>
+        </div>
+
+        <span style="width:1px;background:rgba(15,15,14,0.12);margin:20px 10px 20px 8px"></span>
+
+        <a href="#profile" style="display:flex;align-items:center;gap:9px;padding:0 4px 0 0;min-width:0;overflow:hidden">
+          <div style="width:32px;height:32px;border-radius:999px;background:#0F0F0E;color:#FBFAF9;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-size:12.5px;font-weight:500;flex:none">SM</div>
+          <div style="line-height:1.25;min-width:0">
+            <div style="font-size:13px;font-weight:500;white-space:nowrap;display:flex;align-items:center;gap:5px;min-width:0">
+              <span style="overflow:hidden;text-overflow:ellipsis">Santiago Metal Works</span>
+              <svg viewBox="0 0 16 16" fill="none" style="width:10px;height:10px;color:rgba(15,15,14,0.45)"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </div>
+            <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:#164E78">Verified · Tier 2</div>
+          </div>
+        </a>
+      </nav>
+    </div>
+
+    <div style="max-width:1720px;margin:0 auto;padding:0 clamp(20px,3vw,56px)">
+      <div style="display:flex;align-items:center;gap:8px;padding:12px 0 13px;border-top:1px solid rgba(15,15,14,0.07);overflow-x:auto">
+        <sc-for list="{{ categories }}" as="cat" hint-placeholder-count="5">
+          <button onClick="{{ cat.select }}" style="flex:none;background:{{ cat.bg }};color:{{ cat.fg }};border:1px solid {{ cat.border }};border-radius:999px;padding:7px 15px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:8px">
+            <span>{{ cat.name }}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:10.5px;opacity:0.55">{{ cat.count }}</span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width:1720px;margin:0 auto;padding:28px clamp(20px,3vw,56px) 0;display:flex;flex-wrap:wrap;gap:clamp(20px,2.2vw,32px);align-items:flex-start">
+
+    <aside style="position:sticky;top:132px;flex:1 1 260px;max-width:340px;min-width:0;display:flex;flex-direction:column;gap:16px">
+      <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:44px;height:44px;border-radius:12px;background:#0F0F0E;color:#FBFAF9;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-size:15px;font-weight:500;flex:none">SM</div>
+          <div style="min-width:0">
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:500;letter-spacing:-0.02em;line-height:1.15">Santiago Metal Works</div>
+            <div title="Your DTI and BIR records were checked on 12 February 2026." style="display:inline-flex;align-items:center;gap:5px;margin-top:4px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#164E78;cursor:default">
+              <svg viewBox="0 0 24 24" fill="none" style="width:12px;height:12px;flex:none"><circle cx="12" cy="12" r="10.2" stroke="currentColor" stroke-width="1.6"></circle><path d="M7.6 12.3l3 3 5.8-6.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span>Verified business</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px;margin-top:18px;padding-top:16px;border-top:1px solid rgba(15,15,14,0.1);font-size:13.5px;color:rgba(15,15,14,0.65)">
+          <div style="display:flex;align-items:center;gap:9px">
+            <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px;flex:none;color:rgba(22,78,120,0.7)"><rect x="2.2" y="4.2" width="11.6" height="9.6" rx="1.6" stroke="currentColor" stroke-width="1.2"></rect><path d="M2.2 7h11.6M5.5 4.2V2.4M10.5 4.2V2.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></path></svg>
+            <span>Construction &amp; hardware</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px">
+            <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px;flex:none;color:rgba(22,78,120,0.7)"><path d="M8 14.2s4.6-4 4.6-7.4a4.6 4.6 0 1 0-9.2 0C3.4 10.2 8 14.2 8 14.2Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"></path><circle cx="8" cy="6.8" r="1.7" stroke="currentColor" stroke-width="1.2"></circle></svg>
+            <span>Quezon City, Metro Manila</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px">
+            <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px;flex:none;color:rgba(22,78,120,0.7)"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="1.6" stroke="currentColor" stroke-width="1.2"></rect><path d="M5.2 6.6h5.6M5.2 9.4h3.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></path></svg>
+            <span>DTI 04918277 · BIR on file</span>
+          </div>
+        </div>
+
+        <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(15,15,14,0.1)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Trust tier</span>
+            <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:15px;font-weight:500">Tier 2 of 3</span>
+          </div>
+          <div style="display:flex;gap:5px;margin-top:10px">
+            <span style="flex:1;height:5px;border-radius:999px;background:#0F0F0E"></span>
+            <span style="flex:1;height:5px;border-radius:999px;background:#0F0F0E"></span>
+            <span style="flex:1;height:5px;border-radius:999px;background:rgba(15,15,14,0.12)"></span>
+          </div>
+          <div style="margin-top:9px;font-size:12.5px;line-height:1.45;color:rgba(15,15,14,0.6)">Verified 12 Feb 2026 · re-check due Feb 2027. Reach Tier 3 by adding your Mayor's permit and completing 10 awarded requirements.</div>
+        </div>
+
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(15,15,14,0.1)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Profile completion</span>
+            <span style="font-family:'DM Mono',monospace;font-size:12px">{{ completionPct }}</span>
+          </div>
+          <div style="height:5px;border-radius:999px;background:rgba(15,15,14,0.12);margin-top:10px;overflow:hidden">
+            <div style="height:100%;width:{{ completionPct }};background:#0F0F0E;border-radius:999px"></div>
+          </div>
+          <a href="#complete" style="display:flex;align-items:center;gap:8px;margin-top:11px;font-size:13px;font-weight:500" style-hover="color:#55524D">
+            <span>Add your Mayor's permit</span>
+            <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M2.5 8h10.5M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </a>
+        </div>
+
+        <a href="#profile" style="display:flex;align-items:center;justify-content:center;margin-top:18px;border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:10px;font-size:13.5px;font-weight:500" style-hover="background:rgba(15,15,14,0.04)">View business profile</a>
+      </div>
+
+      <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;padding:18px 20px">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Your activity on Trustlink</div>
+        <div style="display:flex;flex-direction:column;margin-top:12px">
+          <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(15,15,14,0.07)">
+              <span style="font-size:13.5px;color:rgba(15,15,14,0.62)">{{ s.label }}</span>
+              <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.02em">{{ s.value }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:12px;font-size:12.5px;line-height:1.45;color:rgba(15,15,14,0.55)">Buyers see these counts on your profile. Responding to more requirements raises your standing.</div>
+      </div>
+    </aside>
+
+    <div style="display:flex;flex-direction:column;gap:14px;min-width:0;flex:5 1 420px">
+
+      <div style="border:1px solid rgba(15,15,14,0.12);border-radius:14px;background:#FFFFFF;padding:14px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <div style="flex:1 1 280px;min-width:240px">
+          <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Need suppliers, contractors, or business partners?</div>
+          <div style="margin-top:3px;font-size:12.5px;color:rgba(15,15,14,0.55)">Reach verified businesses in your industry.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <button onClick="{{ noop }}" style="display:inline-flex;align-items:center;gap:8px;background:#164E78;color:#FBFAF9;border:none;border-radius:999px;padding:10px 17px;font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .15s ease,transform .1s ease" style-hover="background:#103A5A" style-active="transform:scale(0.97)">
+            <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px"><path d="M8 2.6v10.8M2.6 8h10.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+            <span>Post a Requirement</span>
+          </button>
+          <button onClick="{{ noop }}" style="display:inline-flex;align-items:center;gap:8px;background:transparent;border:1px solid rgba(15,15,14,0.16);color:rgba(15,15,14,0.7);border-radius:999px;padding:10px 16px;font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:500;cursor:pointer;white-space:nowrap;transition:transform .1s ease" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E" style-active="transform:scale(0.97)">
+            <span>Use Previous Requirement</span>
+          </button>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding-bottom:2px;padding-top:10px">
+        <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:500;letter-spacing:-0.03em">Business Opportunities</h1>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.45)">{{ resultLabel }}</div>
+      </div>
+
+      <sc-for list="{{ visible }}" as="r" hint-placeholder-count="6">
+        <article style="border:1px solid {{ r.cardBorder }};border-left:{{ r.accent }};border-radius:16px;background:#FFFFFF;padding:22px 24px;display:flex;flex-direction:column;gap:15px;transition:box-shadow .18s ease,border-color .18s ease" style-hover="border-color:rgba(15,15,14,0.3);box-shadow:0 6px 20px rgba(15,15,14,0.07)">
+
+          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+            <span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:4px 10px;color:#164E78">{{ r.category }}</span>
+            <sc-if value="{{ r.hasSignal }}" hint-placeholder-val="{{ false }}">
+              <span title="{{ r.signalHint }}" style="display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;background:{{ r.signalBg }};color:{{ r.signalFg }};border:1px solid {{ r.signalBorder }};border-radius:999px;padding:3px 10px;cursor:default">{{ r.signal }}</span>
+            </sc-if>
+            <span style="flex:1"></span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.38)">{{ r.ref }} · posted {{ r.postedAgo }}</span>
+          </div>
+
+          <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(20px,1.7vw,24px);font-weight:500;line-height:1.22;letter-spacing:-0.03em;text-wrap:pretty">{{ r.title }}</h2>
+
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:rgba(15,15,14,0.03);border-radius:12px;padding:13px 15px">
+            <div style="width:32px;height:32px;border-radius:9px;background:#0F0F0E;color:#FBFAF9;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-size:11.5px;font-weight:500;flex:none">{{ r.initials }}</div>
+            <div style="min-width:0;display:flex;flex-direction:column;gap:4px">
+              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+                <span style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">{{ r.business }}</span>
+                <span title="{{ r.verifyHint }}" style="display:inline-flex;align-items:center;gap:5px;color:#164E78;cursor:default">
+                  <svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px;flex:none"><circle cx="12" cy="12" r="10.2" stroke="currentColor" stroke-width="1.6"></circle><path d="M7.6 12.3l3 3 5.8-6.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase">Verified {{ r.verifiedOn }}</span>
+                </span>
+                <span title="{{ r.tierHint }}" style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.55);border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:2px 8px;cursor:default">Tier {{ r.tier }}</span>
+              </div>
+              <div style="font-size:12.5px;color:rgba(15,15,14,0.58)">{{ r.posted }} requirements posted · {{ r.awarded }} awarded on Trustlink</div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px 20px">
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.42)">Budget</div>
+              <div style="margin-top:4px;font-size:15px;font-weight:500">{{ r.budget }}</div>
+            </div>
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.42)">Location</div>
+              <div style="margin-top:4px;font-size:15px;font-weight:500">{{ r.location }}</div>
+            </div>
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.42)">Quotations received</div>
+              <div style="margin-top:4px;font-size:15px;font-weight:500">{{ r.responseLine }}</div>
+            </div>
+          </div>
+
+          <sc-if value="{{ r.matched }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:flex-start;gap:10px;border:1px dashed rgba(15,15,14,0.22);border-radius:12px;padding:11px 13px">
+              <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;flex:none;margin-top:2px;color:#164E78"><path d="M8 2l1.7 3.9 4.3.4-3.2 2.8.9 4.2L8 11.2 4.3 13.3l.9-4.2L2 6.3l4.3-.4L8 2Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"></path></svg>
+              <div style="min-width:0">
+                <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.5)">Why this matches</div>
+                <div style="margin-top:4px;font-size:13.5px;line-height:1.45;color:rgba(15,15,14,0.75)">{{ r.matchReason }}</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding-top:15px;border-top:1px solid rgba(15,15,14,0.09)">
+            <div style="display:inline-flex;align-items:center;gap:8px;color:{{ r.timeColor }};font-size:14px;font-weight:{{ r.timeWeight }}">
+              <span style="width:7px;height:7px;border-radius:999px;background:currentColor;animation:{{ r.dotAnim }}"></span>
+              <span>Closes in</span>
+              <span style="font-family:'DM Mono',monospace;font-size:14px;letter-spacing:0.02em">{{ r.countdown }}</span>
+            </div>
+            <span style="flex:1"></span>
+            <button onClick="{{ r.save }}" title="{{ r.saveHint }}" aria-label="{{ r.saveHint }}" style="display:inline-flex;align-items:center;gap:7px;background:{{ r.saveBg }};border:1px solid rgba(15,15,14,0.18);color:{{ r.saveFg }};border-radius:999px;padding:9px 14px;font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:500;cursor:pointer;transition:transform .1s ease" style-hover="background:rgba(15,15,14,0.05);color:#0F0F0E" style-active="transform:scale(0.97)">
+              <svg viewBox="0 0 16 16" fill="{{ r.saveFill }}" style="width:13px;height:13px"><path d="M4 2.6h8a.8.8 0 0 1 .8.8v10L8 10.8 3.2 13.4v-10a.8.8 0 0 1 .8-.8Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path></svg>
+              <span>{{ r.saveLabel }}</span>
+            </button>
+            <button onClick="{{ r.noop }}" style="display:inline-flex;align-items:center;gap:8px;background:transparent;border:1px solid rgba(15,15,14,0.18);color:rgba(15,15,14,0.72);border-radius:999px;padding:9px 16px;font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:500;cursor:pointer;transition:transform .1s ease" style-hover="background:rgba(15,15,14,0.05);color:#0F0F0E" style-active="transform:scale(0.97)">
+              <span>View requirement</span>
+            </button>
+            <button onClick="{{ r.submit }}" title="{{ r.btnHint }}" style="display:inline-flex;align-items:center;gap:9px;background:{{ r.btnBg }};color:{{ r.btnFg }};border:1px solid {{ r.btnBorder }};border-radius:999px;padding:11px 20px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;letter-spacing:-0.005em;cursor:pointer;transition:transform .1s ease" style-hover="background:{{ r.btnHoverBg }}" style-active="transform:scale(0.97)">
+              <span>{{ r.btnLabel }}</span>
+              <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M2.5 8h10.5M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </button>
+          </div>
+        </article>
+      </sc-for>
+
+      <section style="margin-top:34px;display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-top:1px solid rgba(15,15,14,0.12);padding-top:26px">
+          <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:500;letter-spacing:-0.03em">Your requirements</h2>
+          <a href="#requirements" style="font-size:13.5px;color:rgba(15,15,14,0.6)" style-hover="color:#0F0F0E">Manage all</a>
+        </div>
+
+        <sc-for list="{{ myPosts }}" as="p" hint-placeholder-count="3">
+          <article style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;padding:18px 22px;display:flex;align-items:center;gap:20px;flex-wrap:wrap" style-hover="border-color:rgba(15,15,14,0.26)">
+            <div style="min-width:240px;flex:1;display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:{{ p.statusColor }}">
+                  <span style="width:6px;height:6px;border-radius:999px;background:{{ p.statusColor }}"></span>
+                  <span>{{ p.status }}</span>
+                </span>
+                <span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.38)">{{ p.ref }}</span>
+              </div>
+              <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.022em;line-height:1.28">{{ p.title }}</div>
+              <div style="font-size:13px;color:rgba(15,15,14,0.55)">{{ p.meta }}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:24px">
+              <div style="text-align:right">
+                <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:500;letter-spacing:-0.03em;line-height:1">{{ p.count }}</div>
+                <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45);margin-top:5px">Quotations</div>
+              </div>
+              <a href="#post" style="display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(15,15,14,0.18);border-radius:999px;padding:10px 16px;font-size:13.5px;font-weight:500;white-space:nowrap" style-hover="background:rgba(15,15,14,0.04)">
+                <span>{{ p.action }}</span>
+                <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M2.5 8h10.5M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </a>
+            </div>
+          </article>
+        </sc-for>
+      </section>
+
+      <section style="margin-top:34px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-top:1px solid rgba(15,15,14,0.12);padding-top:26px">
+          <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:500;letter-spacing:-0.03em">Recently closed on Trustlink</h2>
+          <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Last 7 days</span>
+        </div>
+        <p style="margin:0 0 4px;font-size:13.5px;color:rgba(15,15,14,0.55);max-width:60ch">Outcomes are published once a buyer closes a requirement, so you can see what actually gets awarded in your category.</p>
+
+        <sc-for list="{{ closed }}" as="c" hint-placeholder-count="3">
+          <article style="border:1px solid rgba(15,15,14,0.1);border-radius:16px;background:rgba(15,15,14,0.022);padding:16px 20px;display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+            <div style="min-width:260px;flex:1;display:flex;flex-direction:column;gap:5px">
+              <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:3px 9px;color:rgba(15,15,14,0.55)">{{ c.category }}</span>
+                <span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.36)">{{ c.ref }} · closed {{ c.closedAgo }}</span>
+              </div>
+              <div style="font-size:15.5px;font-weight:500;line-height:1.35;color:rgba(15,15,14,0.85)">{{ c.title }}</div>
+              <div style="font-size:13px;color:rgba(15,15,14,0.55)">{{ c.meta }}</div>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:8px;border:1px solid {{ c.outcomeBorder }};border-radius:999px;padding:8px 14px;color:{{ c.outcomeColor }};font-size:13px;font-weight:500;white-space:nowrap">
+              <span style="width:6px;height:6px;border-radius:999px;background:currentColor"></span>
+              <span>{{ c.outcome }}</span>
+            </div>
+          </article>
+        </sc-for>
+      </section>
+    </div>
+    <aside style="position:sticky;top:132px;flex:1 1 260px;max-width:320px;min-width:0;display:flex;flex-direction:column;gap:16px">
+      <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:18px 20px">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Closing within 24 hours</div>
+        <div style="display:flex;flex-direction:column;margin-top:6px">
+          <sc-for list="{{ closingSoon }}" as="c" hint-placeholder-count="3">
+            <a href="#requirement" style="display:flex;flex-direction:column;gap:5px;padding:12px 0;border-bottom:1px solid rgba(15,15,14,0.07)" style-hover="opacity:0.72">
+              <span style="font-size:13.5px;font-weight:500;line-height:1.35">{{ c.title }}</span>
+              <span style="font-size:12px;color:rgba(15,15,14,0.55)">{{ c.business }} · {{ c.budget }}</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:11.5px;color:{{ c.color }}">
+                <span style="width:6px;height:6px;border-radius:999px;background:currentColor"></span>
+                <span>{{ c.countdown }}</span>
+              </span>
+            </a>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;padding:18px 20px">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">How matching works</div>
+        <p style="margin:10px 0 0;font-size:13px;line-height:1.55;color:rgba(15,15,14,0.65)">Trustlink compares each new requirement against your category, service area, and the capabilities listed on your profile. Matched opportunities carry a blue edge and a written reason.</p>
+        <a href="#profile" style="display:inline-flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;font-weight:500;color:#164E78" style-hover="opacity:0.75">
+          <span>Update your capabilities</span>
+          <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M2.5 8h10.5M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </a>
+      </div>
+    </aside>
+  </main>
+
+  <div style="position:fixed;right:clamp(16px,2.5vw,28px);bottom:clamp(16px,2.5vw,28px);z-index:80;display:flex;flex-direction:column;align-items:flex-end;gap:12px">
+    <div style="width:min(340px,calc(100vw - 40px));background:#FFFFFF;border:1px solid rgba(15,15,14,0.14);border-radius:16px;box-shadow:0 14px 40px rgba(15,15,14,0.14);overflow:hidden;display:{{ chatDisplay }}">
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid rgba(15,15,14,0.1)">
+        <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:15px;font-weight:500;letter-spacing:-0.02em">Messages</span>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.45)">3 unread</span>
+        <span style="flex:1"></span>
+        <button onClick="{{ toggleChat }}" aria-label="Close messages" style="background:transparent;border:none;padding:4px;cursor:pointer;color:rgba(15,15,14,0.5);display:flex" style-hover="color:#0F0F0E">
+          <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+        </button>
+      </div>
+      <div style="display:flex;flex-direction:column;max-height:320px;overflow-y:auto">
+        <sc-for list="{{ threads }}" as="t" hint-placeholder-count="3">
+          <a href="#thread" style="display:flex;align-items:flex-start;gap:11px;padding:13px 16px;border-bottom:1px solid rgba(15,15,14,0.07)" style-hover="background:rgba(15,15,14,0.03)">
+            <div style="width:30px;height:30px;border-radius:9px;background:{{ t.avatarBg }};color:#FBFAF9;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-size:11px;font-weight:500;flex:none">{{ t.initials }}</div>
+            <div style="min-width:0;flex:1">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-size:13.5px;font-weight:{{ t.weight }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.name }}</span>
+                <span style="flex:1"></span>
+                <span style="font-family:'DM Mono',monospace;font-size:10px;color:rgba(15,15,14,0.4);white-space:nowrap">{{ t.time }}</span>
+              </div>
+              <div style="margin-top:3px;font-size:12.5px;line-height:1.4;color:{{ t.previewColor }};display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden">{{ t.preview }}</div>
+              <div style="margin-top:4px;font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.4)">{{ t.ref }}</div>
+            </div>
+            <span style="width:7px;height:7px;border-radius:999px;background:{{ t.unreadDot }};margin-top:6px;flex:none"></span>
+          </a>
+        </sc-for>
+      </div>
+      <a href="#messages" style="display:flex;align-items:center;justify-content:center;padding:12px;font-size:13.5px;font-weight:500;color:#164E78" style-hover="background:rgba(22,78,120,0.06)">Open all messages</a>
+    </div>
+
+    <button onClick="{{ toggleChat }}" title="Messages — 3 unread" style="position:relative;display:inline-flex;align-items:center;gap:10px;background:#164E78;color:#FBFAF9;border:none;border-radius:999px;padding:13px 20px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(15,15,14,0.16);transition:background .15s ease,transform .1s ease" style-hover="background:#103A5A" style-active="transform:scale(0.97)">
+      <svg viewBox="0 0 16 16" fill="none" style="width:15px;height:15px"><path d="M13.4 9.4a1.4 1.4 0 0 1-1.4 1.4H5.2L2.6 13.4V3.6a1.4 1.4 0 0 1 1.4-1.4h8a1.4 1.4 0 0 1 1.4 1.4v5.8Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+      <span>Messages</span>
+      <span style="font-family:'DM Mono',monospace;font-size:11px;background:#FBFAF9;color:#164E78;border-radius:999px;padding:2px 7px;line-height:1.35">3</span>
+    </button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showMatched&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Feed&quot;},&quot;defaultCategory&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;All&quot;,&quot;Construction&quot;,&quot;Food Retail&quot;,&quot;Printing&quot;,&quot;Services&quot;],&quot;default&quot;:&quot;All&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Feed&quot;},&quot;urgentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#B4331F&quot;,&quot;#A8551A&quot;,&quot;#8C1D3F&quot;],&quot;default&quot;:&quot;#B4331F&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Feed&quot;}}">
+class Component extends DCLogic {
+  state = { filter: null, quoted: {}, saved: {}, chatOpen: false, alertsOpen: false, now: Date.now() };
+  userCat = 'Construction';
+  userCity = 'Quezon City';
+
+  componentDidMount() {
+    this.t0 = Date.now();
+    this.timer = setInterval(() => this.setState({ now: Date.now() }), 1000);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+
+  data() {
+    return [
+      { ref: 'RQ-4821', cat: 'Construction', title: 'Rebar and cement supply for a 3-storey commercial build', business: 'Ramos Construction Supply', tier: 3, verifiedOn: 'Nov 2025', posted: 24, awarded: 19, location: 'Quezon City', budget: '₱850K – 1.2M', hours: 6.4, responses: 12, latest: 4, postedAgo: '2 days ago', isNew: false },
+      { ref: 'RQ-4818', cat: 'Food Retail', title: 'Weekly bread and pastry supply for four canteen branches', business: 'Metro Canteen Group', tier: 2, verifiedOn: 'Mar 2026', posted: 9, awarded: 6, location: 'Mandaluyong', budget: '₱60K / month', hours: 52, responses: 5, latest: 38, postedAgo: '11 hours ago', isNew: true },
+      { ref: 'RQ-4815', cat: 'Construction', title: 'Scaffolding rental, 30 days, Pasig mid-rise site', business: 'Vertex Builders Inc.', tier: 2, verifiedOn: 'Jan 2026', posted: 14, awarded: 11, location: 'Pasig', budget: '₱180K', hours: 18.2, responses: 3, latest: 52, postedAgo: '1 day ago', isNew: false },
+      { ref: 'RQ-4812', cat: 'Printing', title: '5,000 tri-fold brochures, full colour, 150gsm matte', business: 'Bayanihan Cooperative', tier: 2, verifiedOn: 'Aug 2025', posted: 7, awarded: 5, location: 'Makati', budget: '₱45K', hours: 33, responses: 8, latest: 21, postedAgo: '2 days ago', isNew: false },
+      { ref: 'RQ-4809', cat: 'Construction', title: 'Ready-mix concrete delivery, 40 cubic metres, staggered', business: 'Sunrise Realty Development', tier: 3, verifiedOn: 'Jun 2025', posted: 31, awarded: 27, location: 'Quezon City', budget: '₱310K', hours: 102, responses: 2, latest: 96, postedAgo: '6 hours ago', isNew: true },
+      { ref: 'RQ-4806', cat: 'Services', title: 'Monthly bookkeeping and BIR filing for a 12-staff enterprise', business: 'Lakan Trading Corp.', tier: 1, verifiedOn: 'Apr 2026', posted: 3, awarded: 1, location: 'Manila', budget: '₱18K / month', hours: 71, responses: 7, latest: 12, postedAgo: '3 days ago', isNew: false },
+      { ref: 'RQ-4803', cat: 'Food Retail', title: 'Cold storage and chilled delivery for frozen goods', business: 'Pacific Foods PH', tier: 3, verifiedOn: 'Oct 2025', posted: 18, awarded: 15, location: 'Valenzuela', budget: '₱120K / month', hours: 22.5, responses: 9, latest: 7, postedAgo: '1 day ago', isNew: false },
+      { ref: 'RQ-4799', cat: 'Construction', title: 'Electrical fit-out for a 400 sqm warehouse conversion', business: 'Northgate Industrial Park', tier: 2, verifiedOn: 'Feb 2026', posted: 11, awarded: 8, location: 'Caloocan', budget: '₱640K', hours: 60, responses: 6, latest: 33, postedAgo: '4 hours ago', isNew: true },
+      { ref: 'RQ-4795', cat: 'Printing', title: 'Branded packaging boxes, 2,000 units, food-grade', business: "Aling Nena's Bakeshop", tier: 1, verifiedOn: 'May 2026', posted: 2, awarded: 1, location: 'Marikina', budget: '₱75K', hours: 118, responses: 1, latest: 140, postedAgo: '5 days ago', isNew: false },
+      { ref: 'RQ-4791', cat: 'Services', title: 'Preventive maintenance contract for six delivery vans', business: 'Mabuhay Logistics', tier: 2, verifiedOn: 'Dec 2025', posted: 12, awarded: 9, location: 'Parañaque', budget: '₱95K / quarter', hours: 11.6, responses: 4, latest: 26, postedAgo: '1 day ago', isNew: false }
+    ];
+  }
+
+  initials(name) {
+    return name.replace(/[^A-Za-z ]/g, '').trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  }
+
+  countdown(ms) {
+    if (ms <= 0) return 'closed';
+    const s = Math.floor(ms / 1000), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600),
+      m = Math.floor(s % 3600 / 60), sec = s % 60;
+    const p = n => String(n).padStart(2, '0');
+    if (d > 0) return d + 'd ' + h + 'h ' + p(m) + 'm';
+    return p(h) + ':' + p(m) + ':' + p(sec);
+  }
+
+  shortLeft(ms) {
+    if (ms <= 0) return 'Closed';
+    const h = Math.floor(ms / 3600000);
+    if (h < 1) return 'Ends within the hour';
+    if (h < 12) return h + 'h left';
+    return 'Ends today';
+  }
+
+  ago(min) {
+    if (min < 1) return 'just now';
+    if (min < 60) return min + ' min ago';
+    const h = Math.round(min / 60);
+    if (h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
+    const d = Math.round(h / 24);
+    return d + (d === 1 ? ' day ago' : ' days ago');
+  }
+
+  matchReason(r) {
+    const sameCity = r.location === this.userCity;
+    if (sameCity) return 'Same category as your business, and the site is in ' + this.userCity + ' — your service area. Your profile lists steel fabrication and supply.';
+    return 'Same category as your business. ' + r.location + ' is within your listed delivery range, and the scope fits your steel fabrication capability.';
+  }
+
+  renderVals() {
+    const urgent = this.props.urgentColor || '#B4331F';
+    const showMatched = this.props.showMatched !== false;
+    const filter = this.state.filter || this.props.defaultCategory || 'All';
+    const all = this.data();
+    const names = ['All', 'Construction', 'Food Retail', 'Printing', 'Services'];
+    const t0 = this.t0 || Date.now();
+    const now = this.state.now;
+
+    const categories = names.map(name => {
+      const on = name === filter;
+      return {
+        name,
+        count: name === 'All' ? all.length : all.filter(r => r.cat === name).length,
+        bg: on ? '#0F0F0E' : 'transparent',
+        fg: on ? '#FBFAF9' : 'rgba(15,15,14,0.68)',
+        border: on ? '#0F0F0E' : 'rgba(15,15,14,0.16)',
+        select: () => this.setState({ filter: name })
+      };
+    });
+
+    const visible = all
+      .filter(r => filter === 'All' || r.cat === filter)
+      .map(r => {
+        const left = t0 + r.hours * 3600000 - now;
+        const hoursLeft = left / 3600000;
+        const critical = hoursLeft < 6;
+        const isUrgent = hoursLeft < 24;
+        const matched = showMatched && r.cat === this.userCat;
+        const sent = !!this.state.quoted[r.ref];
+        const saved = !!this.state.saved[r.ref];
+        let signal = '', signalHint = '';
+        if (isUrgent) { signal = 'Closing soon'; signalHint = 'This requirement closes in under 24 hours.'; }
+        else if (r.isNew) { signal = 'New'; signalHint = 'Posted since your last visit.'; }
+        else if (r.responses >= 8) { signal = 'High demand'; signalHint = r.responses + ' businesses have already sent quotations.'; }
+        else if (matched) { signal = 'Matched'; signalHint = 'Trustlink matched this to your business profile.'; }
+        return {
+          ref: r.ref, category: r.cat, title: r.title, business: r.business, tier: r.tier,
+          verifiedOn: r.verifiedOn, posted: r.posted, awarded: r.awarded,
+          initials: this.initials(r.business),
+          location: r.location, budget: r.budget, matched, isNew: r.isNew, postedAgo: r.postedAgo,
+          matchReason: this.matchReason(r),
+          responseLine: r.responses + (r.responses === 1 ? ' quotation · latest ' : ' quotations · latest ') + this.ago(r.latest),
+          countdown: this.countdown(left),
+          timeColor: isUrgent ? urgent : 'rgba(15,15,14,0.62)',
+          timeWeight: isUrgent ? 600 : 400,
+          dotAnim: critical ? 'tl-pulse 1.4s ease-in-out infinite' : 'none',
+          cardBorder: isUrgent ? 'rgba(180,51,31,0.3)' : 'rgba(15,15,14,0.12)',
+          accent: matched ? '3px solid #164E78' : (isUrgent ? '1px solid rgba(180,51,31,0.3)' : '1px solid rgba(15,15,14,0.12)'),
+          saveLabel: saved ? 'Saved' : 'Save',
+          saveHint: saved ? 'Saved — find it under Saved' : 'Save this requirement for later',
+          saveBg: saved ? 'rgba(15,15,14,0.06)' : 'transparent',
+          saveFg: saved ? '#0F0F0E' : 'rgba(15,15,14,0.7)',
+          saveFill: saved ? 'currentColor' : 'none',
+          save: () => this.setState(s => ({ saved: { ...s.saved, [r.ref]: !s.saved[r.ref] } })),
+          signal: signal, hasSignal: !!signal, signalHint: signalHint,
+          signalBg: signal === 'Closing soon' ? urgent : 'transparent',
+          signalFg: signal === 'Closing soon' ? '#FBFAF9' : 'rgba(15,15,14,0.62)',
+          signalBorder: signal === 'Closing soon' ? urgent : 'rgba(15,15,14,0.2)',
+          verifyHint: r.business + ' completed Trustlink verification in ' + r.verifiedOn + ' (DTI and BIR records checked).',
+          tierHint: 'Trust tier ' + r.tier + ' of 3 — based on documents verified and requirements completed on Trustlink.',
+          btnLabel: sent ? 'Quotation sent' : 'Submit quotation',
+          btnHint: sent ? 'Your quotation was sent to ' + r.business : 'Send your price and terms to ' + r.business,
+          btnBg: sent ? 'transparent' : '#164E78',
+          btnFg: sent ? 'rgba(15,15,14,0.55)' : '#FBFAF9',
+          btnHoverBg: sent ? 'rgba(15,15,14,0.04)' : '#103A5A',
+          btnBorder: sent ? 'rgba(15,15,14,0.18)' : '#164E78',
+          noop: () => {},
+          submit: () => this.setState(s => ({ quoted: { ...s.quoted, [r.ref]: true } }))
+        };
+      });
+
+    return {
+      urgent, categories, visible,
+      closingSoon: all.map(r => {
+        const left = t0 + r.hours * 3600000 - now;
+        return { title: r.title, business: r.business, budget: r.budget, left,
+          countdown: this.shortLeft(left), color: urgent };
+      }).filter(c => c.left / 3600000 < 24).sort((a, b) => a.left - b.left).slice(0, 4),
+      chatDisplay: this.state.chatOpen ? 'block' : 'none',
+      alertsDisplay: this.state.alertsOpen ? 'block' : 'none',
+      alertsColor: this.state.alertsOpen ? '#0F0F0E' : 'rgba(15,15,14,0.55)',
+      alertsUnderline: this.state.alertsOpen ? '#0F0F0E' : 'transparent',
+      toggleAlerts: () => this.setState(s => ({ alertsOpen: !s.alertsOpen })),
+      alerts: [
+        { type: 'Requirement closing', title: 'Your requirement is closing soon', detail: 'RQ-4776 · Powder coating service for 200 steel railings · 6 hours remaining', time: '18m', action: 'Review 7 quotations', unread: true, urgent: true, iconPath: 'M8 4.8V8l2.2 1.5' },
+        { type: 'Quotation received', title: 'New quotation received', detail: 'Ramos Construction Supply · RQ-4821 · Rebar and cement supply', time: '1h', action: 'View quotation', unread: true, urgent: false, iconPath: 'M5.4 8h5.2M8 5.4v5.2' },
+        { type: 'Decision', title: 'Your quotation was shortlisted', detail: 'Vertex Builders Inc. · RQ-4815 · Scaffolding rental, 30 days', time: '4h', action: 'Open requirement', unread: true, urgent: false, iconPath: 'M5.4 8.2l1.9 1.9 3.5-3.9' },
+        { type: 'Decision', title: 'Your quotation was awarded', detail: 'Bayan Builders Supply · RQ-4770 · Steel roof trusses, 220 sqm workshop', time: '1d', action: 'View award', unread: true, urgent: false, iconPath: 'M5.4 8.2l1.9 1.9 3.5-3.9' },
+        { type: 'Verification', title: 'Your business verification was approved', detail: 'Santiago Metal Works · DTI and BIR records checked · valid to Feb 2027', time: '3d', action: 'View credential', unread: false, urgent: false, iconPath: 'M5.4 8.2l1.9 1.9 3.5-3.9' },
+        { type: 'Verification', title: 'Trust Tier increased to Tier 2', detail: 'Santiago Metal Works · based on verified documents and 6 awarded requirements', time: '6d', action: 'See how tiers work', unread: false, urgent: false, iconPath: 'M8 11V5M5.6 7.4L8 5l2.4 2.4' }
+      ].map(a => ({
+        ...a,
+        bg: a.unread ? 'rgba(22,78,120,0.035)' : 'transparent',
+        typeColor: a.urgent ? urgent : 'rgba(15,15,14,0.5)',
+        iconColor: a.urgent ? urgent : '#164E78',
+        iconBorder: a.urgent ? 'rgba(180,51,31,0.35)' : 'rgba(22,78,120,0.3)'
+      })),
+      toggleChat: () => this.setState(s => ({ chatOpen: !s.chatOpen })),
+      threads: [
+        { name: 'Ramos Construction Supply', initials: 'RC', preview: 'Can you deliver the first batch by the 18th?', time: '4m', ref: 'RQ-4821', unread: true },
+        { name: 'Vertex Builders Inc.', initials: 'VB', preview: 'Received your quotation — reviewing with our engineer.', time: '2h', ref: 'RQ-4815', unread: true },
+        { name: 'Bayan Builders Supply', initials: 'BB', preview: 'Awarded. Please send the sales invoice.', time: '1d', ref: 'RQ-4770', unread: true },
+        { name: 'Sunrise Realty Development', initials: 'SR', preview: 'Thanks, we will get back to you next week.', time: '3d', ref: 'RQ-4809', unread: false }
+      ].map(t => ({
+        ...t,
+        weight: t.unread ? 600 : 400,
+        previewColor: t.unread ? 'rgba(15,15,14,0.7)' : 'rgba(15,15,14,0.5)',
+        unreadDot: t.unread ? '#164E78' : 'transparent',
+        avatarBg: t.unread ? '#164E78' : 'rgba(15,15,14,0.35)'
+      })),
+      completionPct: '80%',
+      resultLabel: visible.length + ' Open · ' + visible.filter(r => r.matched).length + ' Matched to You',
+      stats: [
+        { label: 'Requirements posted', value: '9' },
+        { label: 'Quotations submitted', value: '34' },
+        { label: 'Requirements awarded to you', value: '6' },
+        { label: 'On Trustlink since', value: '2024' }
+      ],
+      myPosts: [
+        { ref: 'RQ-4776', status: 'Closing in 9 hours', statusColor: urgent, title: 'Powder coating service for 200 steel railings', meta: 'Posted 3 days ago · Construction · Quezon City · ₱120K', count: '7', action: 'Review quotations' },
+        { ref: 'RQ-4742', status: 'Open', statusColor: '#164E78', title: 'Bulk galvanised sheet supply, monthly contract', meta: 'Posted 6 days ago · Construction · Quezon City · ₱240K / month', count: '11', action: 'Review quotations' },
+        { ref: 'RQ-4688', status: 'Awarded', statusColor: 'rgba(15,15,14,0.45)', title: 'Delivery truck rental for a 2-week haul', meta: 'Closed 12 days ago · Services · Quezon City · ₱48K', count: '4', action: 'View award' }
+      ],
+      closed: [
+        { ref: 'RQ-4770', category: 'Construction', title: 'Steel roof trusses for a 220 sqm workshop', meta: 'Bayan Builders Supply · Quezon City · ₱410K', closedAgo: '2 days ago', outcome: 'Awarded · 9 quotations', outcomeColor: '#164E78', outcomeBorder: 'rgba(22,78,120,0.35)' },
+        { ref: 'RQ-4763', category: 'Printing', title: 'Vinyl signage for 6 branch storefronts', meta: 'Sagip Pharmacy Group · Pasig · ₱88K', closedAgo: '4 days ago', outcome: 'Awarded · 6 quotations', outcomeColor: '#164E78', outcomeBorder: 'rgba(22,78,120,0.35)' },
+        { ref: 'RQ-4758', category: 'Services', title: 'Night-shift security detail for a warehouse yard', meta: 'Northgate Industrial Park · Caloocan · ₱150K / month', closedAgo: '5 days ago', outcome: 'Closed · no quotations received', outcomeColor: 'rgba(15,15,14,0.5)', outcomeBorder: 'rgba(15,15,14,0.18)' },
+        { ref: 'RQ-4751', category: 'Food Retail', title: 'Rice supply contract, 2 tonnes monthly', meta: 'Metro Canteen Group · Mandaluyong · ₱190K / month', closedAgo: '6 days ago', outcome: 'Awarded · 14 quotations', outcomeColor: '#164E78', outcomeBorder: 'rgba(22,78,120,0.35)' }
+      ],
+      noop: () => {}
+    };
+  }
+}
+</script>
+</body>
+</html>

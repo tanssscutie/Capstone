@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #FBFAF9; }
+  a { color: #164E78; text-decoration: none; }
+  a:hover { color: #103A5A; }
+  ::selection { background: #0F0F0E; color: #FBFAF9; }
+</style>
+</helmet>
+<div style="background:#FBFAF9;color:#0F0F0E;font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;padding:0 clamp(20px,4vw,56px) 120px">
+
+  <header style="max-width:1080px;margin:0 auto;padding:clamp(40px,6vw,76px) 0 0">
+    <div style="display:flex;align-items:center;gap:9px">
+      <svg viewBox="0 0 24 24" fill="none" style="width:21px;height:21px" aria-hidden="true"><circle cx="12" cy="12" r="10.2" stroke="#164E78" stroke-width="1.2"></circle><path d="M7.6 12.3l3 3 5.8-6.3" stroke="#164E78" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:500;font-size:17px;letter-spacing:-0.03em">Trustlink</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45);margin-left:6px">Flow specification</span>
+    </div>
+
+    <h1 style="margin:26px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(34px,4.6vw,54px);font-weight:500;line-height:1.06;letter-spacing:-0.04em;max-width:20ch;text-wrap:pretty">The sealed quotation loop, end to end</h1>
+    <p style="margin:20px 0 0;font-size:16px;line-height:1.6;color:rgba(15,15,14,0.65);max-width:68ch;text-wrap:pretty">Screen-to-screen journeys for both the posting business and the responding business, with the actions, data handoffs, state transitions, and notification triggers that connect them. No screens are designed in this pass. Eight open decisions at the end need your call before layout begins.</p>
+
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:26px">
+      <a href="#rules" style="border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:8px 15px;font-size:13px;font-weight:500;color:rgba(15,15,14,0.7)" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">Design rules</a>
+      <a href="#inventory" style="border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:8px 15px;font-size:13px;font-weight:500;color:rgba(15,15,14,0.7)" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">Screen inventory</a>
+      <a href="#onboarding" style="border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:8px 15px;font-size:13px;font-weight:500;color:rgba(15,15,14,0.7)" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">Onboarding</a>
+      <a href="#respond" style="border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:8px 15px;font-size:13px;font-weight:500;color:rgba(15,15,14,0.7)" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">Responding business</a>
+      <a href="#post" style="border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:8px 15px;font-size:13px;font-weight:500;color:rgba(15,15,14,0.7)" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">Posting business</a>
+      <a href="#states" style="border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:8px 15px;font-size:13px;font-weight:500;color:rgba(15,15,14,0.7)" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">State machines</a>
+      <a href="#alerts" style="border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:8px 15px;font-size:13px;font-weight:500;color:rgba(15,15,14,0.7)" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">Notifications</a>
+      <a href="#decisions" style="border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:8px 15px;font-size:13px;font-weight:500;color:#164E78" style-hover="background:rgba(22,78,120,0.06)">8 open decisions</a>
+    </div>
+  </header>
+
+  <main style="max-width:1080px;margin:0 auto">
+
+    <section id="rules" style="margin-top:clamp(50px,7vw,86px);border-top:1px solid rgba(15,15,14,0.12);padding-top:30px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">01 — Constraints as design rules</div>
+      <h2 style="margin:14px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(24px,2.6vw,32px);font-weight:500;letter-spacing:-0.03em">What every screen must obey</h2>
+      <p style="margin:12px 0 0;font-size:14.5px;line-height:1.6;color:rgba(15,15,14,0.6);max-width:66ch">Restated as the rules I will design against, so a mismatch is caught here rather than in layout.</p>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:22px">
+        <div style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#164E78">Sealed</div>
+          <div style="margin-top:8px;font-size:14.5px;font-weight:600;letter-spacing:-0.01em;line-height:1.35">Contents are invisible to everyone until closing</div>
+          <div style="margin-top:7px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.62)">The respondent sees only their own record. The buyer sees no contents, no identities. At closing, everything releases at once. No screen may preview, rank, or summarise a sealed quotation.</div>
+        </div>
+        <div style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#164E78">Tamper-evident</div>
+          <div style="margin-top:8px;font-size:14.5px;font-weight:600;letter-spacing:-0.01em;line-height:1.35">Every quotation carries its integrity result</div>
+          <div style="margin-top:7px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.62)">Submission writes a hash to an append-only ledger. At release, each quotation displays whether the recorded hash still matches. A mismatch is flagged and stays visible — never hidden, never silently dropped.</div>
+        </div>
+        <div style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#164E78">Append-only</div>
+          <div style="margin-top:8px;font-size:14.5px;font-weight:600;letter-spacing:-0.01em;line-height:1.35">Withdrawal adds a record, it does not erase one</div>
+          <div style="margin-top:7px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.62)">A respondent may withdraw and resubmit before closing. After release the buyer sees the withdrawn entry marked WITHDRAWN alongside the replacement. History is part of the credibility record.</div>
+        </div>
+        <div style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid rgba(15,15,14,0.3);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.5)">No money</div>
+          <div style="margin-top:8px;font-size:14.5px;font-weight:600;letter-spacing:-0.01em;line-height:1.35">The award is the last thing the platform observes</div>
+          <div style="margin-top:7px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.62)">No escrow, invoicing, or payment state. The award screen ends with an explicit handover: the two parties settle directly. Nothing downstream of the award is tracked or displayed.</div>
+        </div>
+        <div style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid rgba(15,15,14,0.3);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.5)">Observed data only</div>
+          <div style="margin-top:8px;font-size:14.5px;font-weight:600;letter-spacing:-0.01em;line-height:1.35">Seven facts, and nothing invented</div>
+          <div style="margin-top:7px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.62)">Verification status and date, trust tier, requirements posted, requirements awarded, quotations submitted, quotation counts, timestamps. No stars, scores, response-time averages, or completion counts anywhere.</div>
+        </div>
+        <div style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid rgba(15,15,14,0.3);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.5)">Not social</div>
+          <div style="margin-top:8px;font-size:14.5px;font-weight:600;letter-spacing:-0.01em;line-height:1.35">Trust is documentary, not reputational</div>
+          <div style="margin-top:7px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.62)">No likes, follows, comments, reactions, or activity feed. The home feed is a filtered index of open requirements — the ordering logic is match and closing time, never popularity.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="inventory" style="margin-top:clamp(50px,7vw,86px);border-top:1px solid rgba(15,15,14,0.12);padding-top:30px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">02 — Screen inventory</div>
+      <h2 style="margin:14px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(24px,2.6vw,32px);font-weight:500;letter-spacing:-0.03em">Required versus optional</h2>
+      <p style="margin:12px 0 0;font-size:14.5px;line-height:1.6;color:rgba(15,15,14,0.6);max-width:66ch">Your list names seven screens. The loop needs three more surfaces, which I recommend building as <em>states of screens you already listed</em> rather than as new screens — noted below.</p>
+
+      <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;overflow:hidden;margin-top:22px">
+        <div style="display:grid;grid-template-columns:1.4fr 0.7fr 2fr;gap:16px;padding:13px 22px;border-bottom:1px solid rgba(15,15,14,0.1);background:rgba(15,15,14,0.022)">
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Screen</div>
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Role</div>
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Why the loop breaks without it</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.4fr 0.7fr 2fr;gap:16px;padding:16px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div><div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Business onboarding</div><div style="margin-top:4px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#164E78">Required</div></div>
+          <div style="font-size:13.5px;color:rgba(15,15,14,0.62)">Both</div>
+          <div style="font-size:13.5px;line-height:1.5;color:rgba(15,15,14,0.65)">Nothing else is reachable. It is the only producer of verification status, tier, category, and service area — the inputs to matching and to every credibility block.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.4fr 0.7fr 2fr;gap:16px;padding:16px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div><div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Business profile</div><div style="margin-top:4px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#164E78">Required</div></div>
+          <div style="font-size:13.5px;color:rgba(15,15,14,0.62)">Both</div>
+          <div style="font-size:13.5px;line-height:1.5;color:rgba(15,15,14,0.65)">"Review buyer credibility" is step two of the core loop. Without a public record the respondent commits a priced quotation to a party they cannot examine. Also the buyer's read on each respondent after release.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.4fr 0.7fr 2fr;gap:16px;padding:16px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div><div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Post a requirement</div><div style="margin-top:4px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#164E78">Required</div></div>
+          <div style="font-size:13.5px;color:rgba(15,15,14,0.62)">Buyer</div>
+          <div style="font-size:13.5px;line-height:1.5;color:rgba(15,15,14,0.65)">Sole origin of every requirement. Sets the closing timestamp, which is the trigger for the platform's central event.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.4fr 0.7fr 2fr;gap:16px;padding:16px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div><div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Requirement detail</div><div style="margin-top:4px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#164E78">Required · 3 states</div></div>
+          <div style="font-size:13.5px;color:rgba(15,15,14,0.62)">Both</div>
+          <div style="font-size:13.5px;line-height:1.5;color:rgba(15,15,14,0.65)">The decision surface. <strong>Respondent view</strong> (scope + buyer credibility), <strong>owner view pre-closing</strong> (sealed count only), <strong>owner view post-closing</strong> (released quotations, compare, shortlist, award). One screen, three states — not three screens.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.4fr 0.7fr 2fr;gap:16px;padding:16px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div><div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Quotation submission</div><div style="margin-top:4px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#164E78">Required · 2 states</div></div>
+          <div style="font-size:13.5px;color:rgba(15,15,14,0.62)">Respondent</div>
+          <div style="font-size:13.5px;line-height:1.5;color:rgba(15,15,14,0.65)">Form, then <strong>sealed receipt</strong> — reference, timestamp, hash, and the closing time it stays sealed until. The receipt is the screen that teaches the mechanism; it should not be a toast.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.4fr 0.7fr 2fr;gap:16px;padding:16px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div><div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">My quotations</div><div style="margin-top:4px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#164E78">Required</div></div>
+          <div style="font-size:13.5px;color:rgba(15,15,14,0.62)">Respondent</div>
+          <div style="font-size:13.5px;line-height:1.5;color:rgba(15,15,14,0.65)">The only place the six lifecycle states are legible at once, and the only route to withdraw-and-resubmit before closing.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.4fr 0.7fr 2fr;gap:16px;padding:16px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div><div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Alerts</div><div style="margin-top:4px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#164E78">Required</div></div>
+          <div style="font-size:13.5px;color:rgba(15,15,14,0.62)">Both</div>
+          <div style="font-size:13.5px;line-height:1.5;color:rgba(15,15,14,0.65)">Release, shortlist, and award are things that happen <em>to</em> a business while it is not looking. Without a durable log, the time-critical half of the loop depends on the user happening to return.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.4fr 0.7fr 2fr;gap:16px;padding:16px 22px;border-bottom:1px solid rgba(15,15,14,0.07);background:rgba(15,15,14,0.018)">
+          <div><div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em;color:rgba(15,15,14,0.7)">Saved requirements</div><div style="margin-top:4px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Optional</div></div>
+          <div style="font-size:13.5px;color:rgba(15,15,14,0.62)">Respondent</div>
+          <div style="font-size:13.5px;line-height:1.5;color:rgba(15,15,14,0.6)">Convenience. The save control already exists in the feed; the list can be a filtered feed rather than a designed screen.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.4fr 0.7fr 2fr;gap:16px;padding:16px 22px;border-bottom:1px solid rgba(15,15,14,0.07);background:rgba(15,15,14,0.018)">
+          <div><div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em;color:rgba(15,15,14,0.7)">Messages, full page</div><div style="margin-top:4px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Optional</div></div>
+          <div style="font-size:13.5px;color:rgba(15,15,14,0.62)">Both</div>
+          <div style="font-size:13.5px;line-height:1.5;color:rgba(15,15,14,0.6)">The docked widget carries the loop. Note the seal constraint: messaging between buyer and respondent before closing risks side-channel price disclosure — see decision 07.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.4fr 0.7fr 2fr;gap:16px;padding:16px 22px;background:rgba(15,15,14,0.018)">
+          <div><div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em;color:rgba(15,15,14,0.7)">Tier upgrade detail</div><div style="margin-top:4px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Optional</div></div>
+          <div style="font-size:13.5px;color:rgba(15,15,14,0.62)">Both</div>
+          <div style="font-size:13.5px;line-height:1.5;color:rgba(15,15,14,0.6)">Can live as a section of business profile. Becomes required only if tier criteria grow beyond the two lines the sidebar already carries.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="onboarding" style="margin-top:clamp(50px,7vw,86px);border-top:1px solid rgba(15,15,14,0.12);padding-top:30px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">03 — Shared entry</div>
+      <h2 style="margin:14px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(24px,2.6vw,32px);font-weight:500;letter-spacing:-0.03em">Onboarding and verification</h2>
+      <p style="margin:12px 0 0;font-size:14.5px;line-height:1.6;color:rgba(15,15,14,0.6);max-width:66ch">One path, run once per business, before either role is available. Both journeys below assume it is complete.</p>
+
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:24px">
+        <article style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">O1</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Signup</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:3px 9px;color:rgba(15,15,14,0.5)">Built</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Account credentials only. Produces an account with no business attached.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">produces →</span> account id, email · business status <strong style="color:#0F0F0E;font-weight:500">UNVERIFIED</strong></div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">O2</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Business onboarding</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:3px 9px;color:#164E78">To design</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Four groups, in this order: <strong>registered identity</strong> (business name, DTI or SEC number, BIR TIN), <strong>where you operate</strong> (primary category, service areas), <strong>what you do</strong> (capabilities — the matching input), <strong>documents</strong> (registration certificates, optional Mayor's permit for Tier&nbsp;2).</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">actions →</span> save draft · submit for verification<br><span style="color:#164E78">produces →</span> business record, category, service areas, capabilities, document set · status <strong style="color:#0F0F0E;font-weight:500">PENDING VERIFICATION</strong></div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">O3</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Pending state</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:3px 9px;color:rgba(15,15,14,0.5)">State of home feed</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Recommendation: the feed is browsable, but <strong>Post a Requirement</strong> and <strong>Submit quotation</strong> are disabled with a single explanatory line. Seeing the market is the argument for finishing verification. See decision 06.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">blocks →</span> requirement creation · quotation submission</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">O4</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Verified</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;background:#164E78;color:#FBFAF9;border-radius:999px;padding:3px 9px">Event</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Records checked. Status becomes <strong>VERIFIED · Tier&nbsp;1</strong>, stamped with the check date and a re-check date twelve months out. Both roles unlock. An alert fires and the profile gains its verification credential.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">produces →</span> verification date, re-check date, tier 1 · <span style="color:#164E78">fires →</span> N1 verification approved</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="respond" style="margin-top:clamp(50px,7vw,86px);border-top:1px solid rgba(15,15,14,0.12);padding-top:30px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">04 — Journey A</div>
+      <h2 style="margin:14px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(24px,2.6vw,32px);font-weight:500;letter-spacing:-0.03em">The responding business</h2>
+      <p style="margin:12px 0 0;font-size:14.5px;line-height:1.6;color:rgba(15,15,14,0.6);max-width:66ch">Santiago Metal Works, verified Tier&nbsp;2, looking for work. Nine steps from discovery to award. Steps A7 to A9 happen while the user is away — they arrive as alerts.</p>
+
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:24px">
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">A1</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Home feed</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:3px 9px;color:rgba(15,15,14,0.5)">Built</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Discovery. Open requirements ranked by match and closing time, filtered by category.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">actions →</span> filter category · save requirement · open requirement · submit quotation (shortcut)<br><span style="color:#164E78">carries →</span> requirement ref (RQ-xxxx) to A2</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">A2</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Requirement detail</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:3px 9px;color:#164E78">To design · respondent view</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Full scope and specifications, quantities, delivery location and terms, attachments, closing timestamp with live countdown, and the buyer credibility block (verification date, tier, requirements posted, requirements awarded). Quotation count is shown; contents are not. If this business already submitted, the card is replaced by its sealed record.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">carries in →</span> RQ ref<br><span style="color:#164E78">actions →</span> save · view buyer profile (A3) · message buyer · <strong style="color:#0F0F0E;font-weight:500">submit quotation</strong> (A4)<br><span style="color:#164E78">carries →</span> RQ ref, scope summary, closing timestamp, buyer id to A4</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:rgba(15,15,14,0.022);padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">A3</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Business profile — the buyer</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:3px 9px;color:rgba(15,15,14,0.5)">Detour · returns to A2</div></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">The credibility check before committing a price. Verification status and date, trust tier with its basis, requirements posted, requirements awarded, currently open requirements, category and service area. No ratings, no reviews.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">carries in →</span> business id<br><span style="color:#164E78">actions →</span> back to requirement · view their other open requirements</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">A4</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Quotation submission</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:3px 9px;color:#164E78">To design</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">The requirement's scope stays visible beside the form. Captures: line items or total price, delivery lead time, payment terms, validity period, notes to buyer, attachments. Final step is an explicit seal confirmation stating that the contents cannot be seen by anyone — including the buyer — until the closing timestamp, and that it can be withdrawn until then.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">carries in →</span> RQ ref, scope, closing timestamp<br><span style="color:#164E78">actions →</span> save draft · seal and submit<br><span style="color:#164E78">produces →</span> quotation payload → hash → ledger entry · QT ref, submission timestamp · status <strong style="color:#0F0F0E;font-weight:500">SUBMITTED</strong> · <span style="color:#164E78">fires →</span> N4 receipt</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">A5</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Sealed receipt</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:3px 9px;color:#164E78">State of A4</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">The screen that teaches the mechanism, so it earns full-page treatment rather than a toast. Quotation reference, exact submission timestamp, truncated hash, ledger entry number, and the closing time it remains sealed until.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">actions →</span> track in My Quotations (A6) · withdraw · back to feed</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">A6</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">My quotations</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:3px 9px;color:#164E78">To design</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Grouped by state, sealed first and ordered by closing time — those are the only ones still actionable. Each row: requirement title, buyer, your figure, submission timestamp, state, and countdown to release. Withdrawn entries stay listed, greyed, with their replacement linked.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">actions →</span> open requirement · <strong style="color:#0F0F0E;font-weight:500">withdraw</strong> (sealed only) · resubmit → returns to A4 prefilled<br><span style="color:#164E78">produces →</span> withdrawal ledger entry · status <strong style="color:#0F0F0E;font-weight:500">WITHDRAWN</strong> · <span style="color:#164E78">fires →</span> N8 to submitter only</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(180,51,31,0.3);border-left:3px solid #B4331F;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(180,51,31,0.6);padding-top:3px">A7</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Closing time reached</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;background:#B4331F;color:#FBFAF9;border-radius:999px;padding:3px 9px">System event · no screen</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Triggered by the clock, not by any person — neither party can accelerate or delay it. Every quotation on the requirement moves <strong>SUBMITTED → RELEASED</strong> simultaneously, each hash is re-checked, and results are stamped VALID or FLAGGED. Withdrawal closes at this instant.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">produces →</span> integrity result per quotation · requirement status <strong style="color:#0F0F0E;font-weight:500">CLOSED</strong><br><span style="color:#164E78">fires →</span> N6 to buyer · N7 to every respondent · N11 to buyer if zero quotations</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">A8</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Shortlisted</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:3px 9px;color:rgba(15,15,14,0.5)">Alert → A6</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Buyer action, arrives as an alert. State becomes SHORTLISTED in My Quotations. The respondent is not told how many others were shortlisted — that is not a fact the platform should disclose.</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">A9</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Awarded or not selected</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:3px 9px;color:rgba(15,15,14,0.5)">Terminal</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Awarded increments the business's awarded count, feeding tier progression and the profile. The award view closes with an explicit statement that Trustlink does not handle payment, delivery, or contracts, and hands off the buyer's contact details. Nothing after this point is observed.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">produces →</span> awarded count +1 · tier re-evaluation · <span style="color:#164E78">fires →</span> N9 winner · N10 all others</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="post" style="margin-top:clamp(50px,7vw,86px);border-top:1px solid rgba(15,15,14,0.12);padding-top:30px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">05 — Journey B</div>
+      <h2 style="margin:14px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(24px,2.6vw,32px);font-weight:500;letter-spacing:-0.03em">The posting business</h2>
+      <p style="margin:12px 0 0;font-size:14.5px;line-height:1.6;color:rgba(15,15,14,0.6);max-width:66ch">The same account, in its buyer role. The defining property: between B4 and B5 the buyer can do nothing but wait, and the design should make that legible rather than apologetic.</p>
+
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:24px">
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">B1</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Home feed</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:3px 9px;color:rgba(15,15,14,0.5)">Built</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Entry via the action bar — <strong>Post a Requirement</strong> or <strong>Use Previous Requirement</strong>. The "Your requirements" section is the standing re-entry point.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">carries →</span> nothing, or a prior RQ as template</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">B2</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Post a requirement</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:3px 9px;color:#164E78">To design</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Category, title, scope and specifications, quantity, budget or indicative range, delivery location, delivery window, attachments, and the <strong>closing date and time</strong>. The closing field needs the most weight on the screen: it is the only input that fires a platform-wide event and, per decision 03, may be unchangeable afterwards.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">actions →</span> save draft · preview<br><span style="color:#164E78">produces →</span> requirement draft · status <strong style="color:#0F0F0E;font-weight:500">DRAFT</strong></div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">B3</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Review and publish</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:3px 9px;color:#164E78">State of B2</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Shows the requirement exactly as respondents will see it, including the buyer's own credibility block — buyers should see how they are being judged. Publishing states plainly what cannot be changed afterwards.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">produces →</span> RQ ref, published timestamp · status <strong style="color:#0F0F0E;font-weight:500">OPEN</strong> · posted count +1<br><span style="color:#164E78">fires →</span> N3 to every business matching category and service area</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">B4</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Requirement detail — owner, sealed</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:3px 9px;color:#164E78">To design · owner state</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">The hardest screen in the product, because its job is to show almost nothing convincingly. A count of sealed quotations, the countdown to release, and an explanation of why the buyer cannot see more. No identities, no figures, no partial hints. Design should treat the wait as the guarantee, not as an absence.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">shows →</span> sealed count only (see decision 01) · countdown<br><span style="color:#164E78">actions →</span> edit non-material fields · cancel requirement (decision 04) · message respondents (decision 07)</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(180,51,31,0.3);border-left:3px solid #B4331F;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(180,51,31,0.6);padding-top:3px">B5</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Release</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;background:#B4331F;color:#FBFAF9;border-radius:999px;padding:3px 9px">System event · no screen</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Same event as A7, seen from the other side. Everything becomes visible at once — this is the platform's climactic moment and the design should mark it, not let it slide in as a list refresh.</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">B6</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Requirement detail — owner, released</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:3px 9px;color:#164E78">To design · owner state</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">Comparison. Every quotation side by side: respondent identity with verification date, tier, requirements posted and awarded; price, lead time, payment terms, validity, attachments, notes; submission timestamp; and integrity status. Flagged records stay in the list, visibly marked — suppressing them would defeat the ledger. Withdrawn entries appear as history.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">actions →</span> sort · open respondent profile · message · <strong style="color:#0F0F0E;font-weight:500">shortlist</strong> · <strong style="color:#0F0F0E;font-weight:500">award</strong> · close without award<br><span style="color:#164E78">produces →</span> status SHORTLISTED · <span style="color:#164E78">fires →</span> N5 to each shortlisted respondent</div>
+          </div>
+        </article>
+
+        <article style="border:1px solid rgba(15,15,14,0.12);border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:20px 22px;display:grid;grid-template-columns:56px 1fr;gap:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(15,15,14,0.35);padding-top:3px">B7</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:500;letter-spacing:-0.025em">Award</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border:1px solid rgba(22,78,120,0.4);border-radius:999px;padding:3px 9px;color:#164E78">Confirmation · state of B6</span></div>
+            <div style="margin-top:9px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.65)">One award per requirement, irreversible, written to the ledger. Confirmation states what happens next in the world rather than in the product: contact details are exchanged and the parties settle directly. Trustlink observes nothing further.</div>
+            <div style="margin-top:11px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.7;color:rgba(15,15,14,0.5)"><span style="color:#164E78">produces →</span> requirement status <strong style="color:#0F0F0E;font-weight:500">AWARDED</strong> · winner AWARDED, all others NOT SELECTED · awarded counts +1 both sides<br><span style="color:#164E78">fires →</span> N9 winner · N10 all others</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="states" style="margin-top:clamp(50px,7vw,86px);border-top:1px solid rgba(15,15,14,0.12);padding-top:30px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">06 — State machines</div>
+      <h2 style="margin:14px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(24px,2.6vw,32px);font-weight:500;letter-spacing:-0.03em">Every status and what moves it</h2>
+      <p style="margin:12px 0 0;font-size:14.5px;line-height:1.6;color:rgba(15,15,14,0.6);max-width:66ch">Three objects carry state. Only two transitions are triggered by a clock rather than a person; both are marked.</p>
+
+      <div style="display:flex;flex-direction:column;gap:14px;margin-top:24px">
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:22px 24px">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Quotation</div>
+          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:14px">
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;background:#164E78;color:#FBFAF9;border-radius:999px;padding:6px 13px">SUBMITTED</span>
+            <span style="color:rgba(15,15,14,0.3)">→</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;background:#164E78;color:#FBFAF9;border-radius:999px;padding:6px 13px">RELEASED</span>
+            <span style="color:rgba(15,15,14,0.3)">→</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;border:1px solid rgba(22,78,120,0.45);color:#164E78;border-radius:999px;padding:6px 13px">SHORTLISTED</span>
+            <span style="color:rgba(15,15,14,0.3)">→</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;background:#0F0F0E;color:#FBFAF9;border-radius:999px;padding:6px 13px">AWARDED</span>
+            <span style="color:rgba(15,15,14,0.3)">|</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;border:1px solid rgba(15,15,14,0.2);color:rgba(15,15,14,0.55);border-radius:999px;padding:6px 13px">NOT SELECTED</span>
+            <span style="color:rgba(15,15,14,0.3)">·</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;border:1px solid rgba(15,15,14,0.2);color:rgba(15,15,14,0.55);border-radius:999px;padding:6px 13px">WITHDRAWN</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:7px;margin-top:16px;padding-top:14px;border-top:1px solid rgba(15,15,14,0.09);font-size:13px;line-height:1.55;color:rgba(15,15,14,0.65)">
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">SUBMITTED</span> — respondent seals and submits. Sole state in which withdrawal is possible.</div>
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">RELEASED</span> — <strong>clock trigger.</strong> Closing timestamp reached. All quotations on the requirement move together; hash re-checked and stamped VALID or FLAGGED.</div>
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">SHORTLISTED</span> — buyer action on B6. Optional stage; see decision 05.</div>
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">AWARDED / NOT SELECTED</span> — buyer award on B7. One awarded; all remaining move to NOT SELECTED in the same transaction, so no respondent is left waiting on a decision already made.</div>
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">WITHDRAWN</span> — respondent action before closing. New ledger entry; original retained and shown to the buyer after release.</div>
+          </div>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:22px 24px">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Requirement</div>
+          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:14px">
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;border:1px solid rgba(15,15,14,0.2);color:rgba(15,15,14,0.55);border-radius:999px;padding:6px 13px">DRAFT</span>
+            <span style="color:rgba(15,15,14,0.3)">→</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;background:#164E78;color:#FBFAF9;border-radius:999px;padding:6px 13px">OPEN</span>
+            <span style="color:rgba(15,15,14,0.3)">→</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;background:#B4331F;color:#FBFAF9;border-radius:999px;padding:6px 13px">CLOSED</span>
+            <span style="color:rgba(15,15,14,0.3)">→</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;background:#0F0F0E;color:#FBFAF9;border-radius:999px;padding:6px 13px">AWARDED</span>
+            <span style="color:rgba(15,15,14,0.3)">|</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;border:1px solid rgba(15,15,14,0.2);color:rgba(15,15,14,0.55);border-radius:999px;padding:6px 13px">CLOSED · NO AWARD</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:7px;margin-top:16px;padding-top:14px;border-top:1px solid rgba(15,15,14,0.09);font-size:13px;line-height:1.55;color:rgba(15,15,14,0.65)">
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">DRAFT → OPEN</span> — buyer publishes on B3. Fires match notifications; posted count increments.</div>
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">OPEN → CLOSED</span> — <strong>clock trigger.</strong> The same event that releases quotations. Not a buyer action.</div>
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">CLOSED → AWARDED</span> — buyer award. Terminal; awarded count increments for both parties.</div>
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">CLOSED · NO AWARD</span> — buyer declines all, or no quotations arrived. Published in "Recently closed", already visible in the feed.</div>
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.45)">CANCELLED</span> — proposed, pending decision 04. Would apply only while OPEN, be ledger-recorded, and notify respondents who submitted.</div>
+          </div>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:22px 24px">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Business</div>
+          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:14px">
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;border:1px solid rgba(15,15,14,0.2);color:rgba(15,15,14,0.55);border-radius:999px;padding:6px 13px">UNVERIFIED</span>
+            <span style="color:rgba(15,15,14,0.3)">→</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;border:1px solid rgba(15,15,14,0.2);color:rgba(15,15,14,0.55);border-radius:999px;padding:6px 13px">PENDING</span>
+            <span style="color:rgba(15,15,14,0.3)">→</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;background:#164E78;color:#FBFAF9;border-radius:999px;padding:6px 13px">VERIFIED · TIER 1</span>
+            <span style="color:rgba(15,15,14,0.3)">→</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;background:#164E78;color:#FBFAF9;border-radius:999px;padding:6px 13px">TIER 2</span>
+            <span style="color:rgba(15,15,14,0.3)">→</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;background:#0F0F0E;color:#FBFAF9;border-radius:999px;padding:6px 13px">TIER 3</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:7px;margin-top:16px;padding-top:14px;border-top:1px solid rgba(15,15,14,0.09);font-size:13px;line-height:1.55;color:rgba(15,15,14,0.65)">
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">PENDING → VERIFIED</span> — DTI and BIR records checked. Stamps a verification date and a re-check date twelve months out. Unlocks posting and quoting.</div>
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">TIER 2 / TIER 3</span> — additional documents plus awarded-requirement count, per the criteria already stated in the feed sidebar. Fires on award, since award is what moves the count.</div>
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.45)">EXPIRED</span> — proposed, pending decision 02. The feed already promises a re-check date, so the state it implies must exist and must degrade access somehow.</div>
+            <div><span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.45)">REJECTED</span> — records did not check out. Needs a re-submission path in onboarding.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="alerts" style="margin-top:clamp(50px,7vw,86px);border-top:1px solid rgba(15,15,14,0.12);padding-top:30px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">07 — Notifications</div>
+      <h2 style="margin:14px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(24px,2.6vw,32px);font-weight:500;letter-spacing:-0.03em">Eleven events, and only eleven</h2>
+      <p style="margin:12px 0 0;font-size:14.5px;line-height:1.6;color:rgba(15,15,14,0.6);max-width:66ch">Every alert traces to a recorded event. Note the deliberate absence: <strong>the buyer is never notified of an individual submission</strong> — arrival timing is information about a sealed quotation.</p>
+
+      <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;overflow:hidden;margin-top:22px">
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:13px 22px;border-bottom:1px solid rgba(15,15,14,0.1);background:rgba(15,15,14,0.022)">
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">#</div>
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Fires from</div>
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Alert</div>
+          <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Goes to</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">N1</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">Verification approved (O4)</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">Your business verification was approved</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">The business</div>
+        </div>
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">N2</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">Tier re-evaluation after award</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">Trust tier increased to Tier&nbsp;N</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">The business</div>
+        </div>
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">N3</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">Requirement published (B3), matched on category and service area</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">New requirement matches your business</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">Matching respondents</div>
+        </div>
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">N4</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">Quotation sealed and recorded (A4)</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">Quotation recorded and sealed until closing</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">Submitter only</div>
+        </div>
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">N5</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">Buyer shortlists (B6)</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">Your quotation was shortlisted</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">Shortlisted respondents</div>
+        </div>
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(15,15,14,0.07);background:rgba(22,78,120,0.035)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">N6</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">Closing time reached (clock)</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">N quotations released for your requirement</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">Requirement owner</div>
+        </div>
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(15,15,14,0.07);background:rgba(22,78,120,0.035)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:#164E78">N7</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">Closing time reached (clock)</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">Your quotation is now with the buyer</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">Every respondent</div>
+        </div>
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">N8</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">Withdrawal recorded (A6)</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">Quotation withdrawn — recorded in the ledger</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">Submitter only</div>
+        </div>
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">N9</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">Award (B7)</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">Your quotation was awarded</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">Winning respondent</div>
+        </div>
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">N10</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">Award (B7), same transaction</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">This requirement was awarded to another business</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">All other respondents</div>
+        </div>
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(15,15,14,0.07)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">N11</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">Closing with zero quotations (clock)</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">Closed with no quotations received</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">Requirement owner</div>
+        </div>
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(15,15,14,0.07);background:rgba(180,51,31,0.04)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:#B4331F">N12</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">Hash mismatch at release</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">Integrity check failed on a released quotation</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">Owner and affected respondent</div>
+        </div>
+        <div style="display:grid;grid-template-columns:52px 1.3fr 1.3fr 1fr;gap:14px;padding:14px 22px;background:rgba(180,51,31,0.04)">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:#B4331F">N13</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.65)">24h and 6h before closing (clock)</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500">Closing soon</div>
+          <div style="font-size:13px;line-height:1.5;color:rgba(15,15,14,0.6)">Owner; respondents who saved but have not submitted</div>
+        </div>
+      </div>
+      <p style="margin:16px 0 0;font-size:13.5px;line-height:1.6;color:rgba(15,15,14,0.55);max-width:70ch">Thirteen, not eleven — the integrity flag and the closing reminder emerged from the constraints as I mapped them. The alerts screen groups these into three bands: <strong>time-critical</strong> (N13, N6), <strong>outcomes</strong> (N5, N9, N10), <strong>record</strong> (N1, N2, N4, N8, N12). That grouping matches what the feed's dropdown already does.</p>
+    </section>
+
+    <section id="decisions" style="margin-top:clamp(50px,7vw,86px);border-top:1px solid rgba(15,15,14,0.12);padding-top:30px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#164E78">08 — Needs your call</div>
+      <h2 style="margin:14px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(24px,2.6vw,32px);font-weight:500;letter-spacing:-0.03em">Eight decisions before layout</h2>
+      <p style="margin:12px 0 0;font-size:14.5px;line-height:1.6;color:rgba(15,15,14,0.6);max-width:66ch">Each one changes a screen. My recommendation is stated; overrule any of them and I will follow yours.</p>
+
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:24px">
+
+        <div style="border:1px solid rgba(180,51,31,0.3);border-left:3px solid #B4331F;border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">01</span><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.025em">The live feed contradicts the seal</span><span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;background:#B4331F;color:#FBFAF9;border-radius:999px;padding:3px 9px">Affects built screens</span></div>
+          <div style="margin-top:10px;font-size:13.5px;line-height:1.6;color:rgba(15,15,14,0.68)">The home feed currently shows "12 quotations · latest 4 min ago". The count is a system fact and arguably fair. The <em>recency</em> is not: it tells respondents how hot a requirement is running and invites last-minute timing games against a sealed process. <strong>Recommendation — keep the count, drop "latest N ago" everywhere.</strong> This is an edit to the built feed and the requirement card.</div>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">02</span><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.025em">What happens when verification expires</span></div>
+          <div style="margin-top:10px;font-size:13.5px;line-height:1.6;color:rgba(15,15,14,0.68)">The sidebar promises a re-check date, so the expiry state must exist. <strong>Recommendation — at expiry the business keeps its profile and history but cannot post or quote until re-verified, with a 30-day warning alert.</strong> Anything softer makes the verification badge meaningless.</div>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">03</span><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.025em">Can a buyer extend the closing time?</span></div>
+          <div style="margin-top:10px;font-size:13.5px;line-height:1.6;color:rgba(15,15,14,0.68)">Extending after quotations are sealed lets a buyer wait out a market they cannot see, which weakens the guarantee even though they learn nothing. <strong>Recommendation — no extension once any quotation is sealed; extension allowed only while the count is zero.</strong> This makes the closing field on B2 a high-weight, confirm-once input.</div>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">04</span><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.025em">Can a buyer cancel an open requirement?</span></div>
+          <div style="margin-top:10px;font-size:13.5px;line-height:1.6;color:rgba(15,15,14,0.68)">Real procurement gets cancelled — budgets are pulled. <strong>Recommendation — yes, while OPEN, recorded to the ledger and shown on the buyer's public profile as a cancelled requirement.</strong> Respondents are notified and their sealed quotations are voided unopened. Visibility on the profile is what keeps it from being abused.</div>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">05</span><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.025em">Is shortlisting required before award?</span></div>
+          <div style="margin-top:10px;font-size:13.5px;line-height:1.6;color:rgba(15,15,14,0.68)">A mandatory stage adds ceremony to a two-quotation requirement. <strong>Recommendation — optional. Award directly from released, shortlist when comparing many.</strong> B6 then needs both paths without making the direct one feel like a shortcut.</div>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">06</span><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.025em">Browsing while verification is pending</span></div>
+          <div style="margin-top:10px;font-size:13.5px;line-height:1.6;color:rgba(15,15,14,0.68)"><strong>Recommendation — full browse, no posting or quoting.</strong> Seeing live requirements in your own category is the strongest argument for completing verification. The alternative, a locked waiting screen, wastes the only moment of high intent.</div>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">07</span><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.025em">Messaging before closing is a side channel</span></div>
+          <div style="margin-top:10px;font-size:13.5px;line-height:1.6;color:rgba(15,15,14,0.68)">If a respondent can message the buyer freely while sealed, price can be disclosed outside the ledger and the guarantee is theatre. <strong>Recommendation — before closing, messages on a requirement are clarification questions only, and the buyer's answers are published to all respondents. Free one-to-one messaging opens at release.</strong> This is how public tenders handle it, and it is a real change to the existing chat widget.</div>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:'DM Mono',monospace;font-size:11px;color:rgba(15,15,14,0.35)">08</span><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:500;letter-spacing:-0.025em">Does the respondent see the other quotations after release?</span></div>
+          <div style="margin-top:10px;font-size:13.5px;line-height:1.6;color:rgba(15,15,14,0.68)">Full transparency would make Trustlink a price-discovery tool and give MSMEs a real read on their market — but it also exposes every business's pricing to its competitors. <strong>Recommendation — after award, respondents see the count and the awarded figure only, never other respondents' identities or figures.</strong> Enough to calibrate, not enough to collude.</div>
+        </div>
+      </div>
+
+      <div style="border:1px solid rgba(22,78,120,0.3);border-radius:16px;background:rgba(22,78,120,0.04);padding:22px 24px;margin-top:20px">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#164E78">On approval</div>
+        <div style="margin-top:10px;font-size:14px;line-height:1.6;color:rgba(15,15,14,0.72);max-width:68ch">Once you have settled these, the build order that de-risks the most is: <strong>requirement detail</strong> (three states — it defines the card treatment everything else inherits), then <strong>quotation submission and its sealed receipt</strong> (the mechanism, and the hardest thing to make feel safe), then <strong>my quotations</strong>, <strong>post a requirement</strong>, <strong>business profile</strong>, <strong>onboarding</strong>, and <strong>alerts</strong> last, since it is a view onto events the other screens define.</div>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+</body>
+</html>

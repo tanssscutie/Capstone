@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #FBFAF9; }
+  a { color: #0F0F0E; text-decoration: none; }
+  a:hover { color: #55524D; }
+  ::selection { background: #0F0F0E; color: #FBFAF9; }
+  @keyframes tl-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
+  input, button, textarea, select { font-family: 'DM Sans', sans-serif; }
+  input:focus, textarea:focus { outline: none; border-color: rgba(22,78,120,0.55) !important; }
+  input::placeholder, textarea::placeholder { color: rgba(15,15,14,0.32); }
+</style>
+</helmet>
+<div style="background:#FBFAF9;color:#0F0F0E;font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;padding-bottom:90px">
+
+  <header style="position:sticky;top:0;z-index:50;background:rgba(251,250,249,0.92);backdrop-filter:blur(10px);border-bottom:1px solid rgba(15,15,14,0.1)">
+    <div style="max-width:1720px;margin:0 auto;padding:0 clamp(16px,3vw,56px);height:66px;display:flex;align-items:center;gap:clamp(10px,2vw,32px);min-width:0">
+      <a href="#home" style="display:flex;align-items:center;gap:9px;flex:none">
+        <svg viewBox="0 0 24 24" fill="none" style="width:21px;height:21px" aria-hidden="true"><circle cx="12" cy="12" r="10.2" stroke="#164E78" stroke-width="1.2"></circle><path d="M7.6 12.3l3 3 5.8-6.3" stroke="#164E78" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:500;font-size:17px;letter-spacing:-0.03em">Trustlink</span>
+      </a>
+
+      <label style="flex:1 1 120px;min-width:0;max-width:340px;display:flex;align-items:center;gap:9px;background:rgba(15,15,14,0.05);border:1px solid transparent;border-radius:999px;padding:9px 14px">
+        <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;flex:none;color:rgba(15,15,14,0.45)"><circle cx="7.2" cy="7.2" r="4.6" stroke="currentColor" stroke-width="1.3"></circle><path d="M10.6 10.6L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path></svg>
+        <input type="text" placeholder="Search requirements or businesses" style="flex:1;min-width:0;background:transparent;border:none;outline:none;font-size:13.5px;color:#0F0F0E">
+      </label>
+
+      <div style="flex:1"></div>
+
+      <nav style="display:flex;align-items:center;gap:2px;min-width:0;flex:0 1 auto">
+        <a href="#home" title="Home" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 clamp(7px,1.1vw,14px);color:rgba(15,15,14,0.55)" style-hover="color:#0F0F0E">
+          <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><path d="M4 10.4 12 4l8 6.4V19a1 1 0 0 1-1 1h-4v-5.4H9V20H5a1 1 0 0 1-1-1v-8.6Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+          <span style="font-size:11.5px;white-space:nowrap">Home</span>
+        </a>
+        <a href="#quotations" title="My Quotations" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 clamp(7px,1.1vw,14px);color:{{ navQuoteColor }}" style-hover="color:#0F0F0E">
+          <span style="position:relative;display:flex">
+            <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><path d="M6 3.5h8.5L19 8v12.5H6a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path><path d="M8.5 12h7M8.5 15.5h4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path></svg>
+            <span style="position:absolute;top:-5px;left:12px;font-family:'DM Mono',monospace;font-size:9.5px;line-height:1;background:#164E78;color:#FBFAF9;border:1.5px solid #FBFAF9;border-radius:999px;padding:2px 4px">{{ quoteBadge }}</span>
+          </span>
+          <span style="font-size:11.5px;white-space:nowrap">My Quotations</span>
+        </a>
+        <a href="#requirements" title="My Requirements" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 clamp(7px,1.1vw,14px);color:rgba(15,15,14,0.55)" style-hover="color:#0F0F0E">
+          <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><path d="M4.5 5.5h15v13.5a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V5.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path><path d="M8 3v4.5M16 3v4.5M4.5 10h15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path></svg>
+          <span style="font-size:11.5px;white-space:nowrap">My Requirements</span>
+        </a>
+        <a href="#alerts" title="Alerts" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 clamp(7px,1.1vw,14px);color:rgba(15,15,14,0.55)" style-hover="color:#0F0F0E">
+          <span style="position:relative;display:flex">
+            <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px"><path d="M6.2 9.6a5.8 5.8 0 0 1 11.6 0c0 4 1.3 5.6 1.9 6.2.3.3.1.9-.4.9H4.7c-.5 0-.7-.6-.4-.9.6-.6 1.9-2.2 1.9-6.2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path><path d="M9.8 20a2.4 2.4 0 0 0 4.4 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path></svg>
+            <span style="position:absolute;top:-5px;left:12px;font-family:'DM Mono',monospace;font-size:9.5px;line-height:1;background:#B4331F;color:#FBFAF9;border:1.5px solid #FBFAF9;border-radius:999px;padding:2px 4px">2</span>
+          </span>
+          <span style="font-size:11.5px;white-space:nowrap">Alerts</span>
+        </a>
+
+        <span style="width:1px;height:26px;background:rgba(15,15,14,0.12);margin:0 clamp(6px,1vw,14px)"></span>
+
+        <a href="#profile" style="display:flex;align-items:center;gap:9px;min-width:0;overflow:hidden">
+          <div style="width:32px;height:32px;border-radius:999px;background:#0F0F0E;color:#FBFAF9;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-size:13px;font-weight:500;flex:none">SM</div>
+          <div style="line-height:1.25;min-width:0">
+            <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Santiago Metal Works</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:#164E78">Verified · Tier 2</div>
+          </div>
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <div style="border-bottom:1px solid rgba(15,15,14,0.1);background:rgba(15,15,14,0.025)">
+    <div style="max-width:1720px;margin:0 auto;padding:11px clamp(16px,3vw,56px);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Prototype · view state</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <sc-for list="{{ stateTabs }}" as="t" hint-placeholder-count="2">
+          <button onClick="{{ t.pick }}" style="background:{{ t.bg }};color:{{ t.fg }};border:1px solid {{ t.border }};border-radius:999px;padding:6px 13px;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">{{ t.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <main style="max-width:1720px;margin:0 auto;padding:22px clamp(16px,3vw,56px) 0">
+
+    <sc-if value="{{ isForm }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(15,15,14,0.5);flex-wrap:wrap">
+          <a href="#feed" style="color:rgba(15,15,14,0.5)" style-hover="color:#0F0F0E">Business Opportunities</a>
+          <span>/</span>
+          <a href="#requirement" style="color:rgba(15,15,14,0.5)" style-hover="color:#0F0F0E">RQ-2026-0418</a>
+          <span>/</span>
+          <span style="color:rgba(15,15,14,0.75)">Submit quotation</span>
+        </div>
+
+        <div style="margin-top:14px">
+          <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(25px,3vw,36px);font-weight:500;line-height:1.1;letter-spacing:-0.035em;max-width:22ch;text-wrap:pretty">Your quotation for the steel mezzanine platform</h1>
+          <div style="margin-top:11px;font-size:13.5px;color:rgba(15,15,14,0.55)">Bayan Logistics Corp. · Calamba, Laguna · Draft saved 2 minutes ago</div>
+        </div>
+
+        <div style="display:flex;flex-wrap:wrap;gap:clamp(18px,2vw,28px);align-items:flex-start;margin-top:26px">
+
+          <div style="flex:3 1 520px;min-width:0;display:flex;flex-direction:column;gap:16px">
+
+            <div style="border:1px solid rgba(22,78,120,0.28);border-radius:16px;background:rgba(22,78,120,0.035);padding:18px 22px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+              <div style="min-width:186px">
+                <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Closes in</div>
+                <div style="display:inline-flex;align-items:center;gap:9px;margin-top:7px;color:{{ clockColor }}">
+                  <span style="width:7px;height:7px;border-radius:999px;background:currentColor;animation:{{ clockDot }}"></span>
+                  <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:500;letter-spacing:-0.03em;white-space:nowrap">{{ countdown }}</span>
+                </div>
+                <div style="margin-top:6px;font-size:12.5px;color:rgba(15,15,14,0.55)">Closes 14 Aug 2026, 5:00 PM</div>
+              </div>
+              <span style="width:1px;align-self:stretch;background:rgba(15,15,14,0.1)"></span>
+              <div style="flex:1 1 260px;min-width:0;display:flex;align-items:flex-start;gap:9px">
+                <svg viewBox="0 0 24 24" fill="none" style="width:15px;height:15px;flex:none;margin-top:2px;color:#164E78"><rect x="5" y="10.5" width="14" height="9.5" rx="1.6" stroke="currentColor" stroke-width="1.5"></rect><path d="M8.4 10.5V7.8a3.6 3.6 0 0 1 7.2 0v2.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+                <div style="font-size:13px;line-height:1.55;color:rgba(15,15,14,0.62)">Nothing you enter here is visible to the buyer or to any other business until closing. You can withdraw and resubmit until then.</div>
+              </div>
+            </div>
+
+            <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:24px 26px">
+              <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">01 — Your price</div>
+                <span style="flex:1;min-width:8px"></span>
+                <div style="display:flex;gap:6px">
+                  <sc-for list="{{ priceModes }}" as="m" hint-placeholder-count="2">
+                    <button onClick="{{ m.pick }}" style="background:{{ m.bg }};color:{{ m.fg }};border:1px solid {{ m.border }};border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">{{ m.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+
+              <sc-if value="{{ isLineItems }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:20px">
+                  <div style="border:1px solid rgba(15,15,14,0.1);border-radius:12px;overflow:hidden">
+                    <div style="display:grid;grid-template-columns:2.4fr 0.7fr 1fr 1fr 34px;gap:12px;padding:11px 15px;background:rgba(15,15,14,0.022);border-bottom:1px solid rgba(15,15,14,0.09)">
+                      <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Description</div>
+                      <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Qty</div>
+                      <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Unit price</div>
+                      <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45);text-align:right">Amount</div>
+                      <div></div>
+                    </div>
+                    <sc-for list="{{ lineItems }}" as="it" hint-placeholder-count="3">
+                      <div style="display:grid;grid-template-columns:2.4fr 0.7fr 1fr 1fr 34px;gap:12px;align-items:center;padding:9px 15px;border-bottom:1px solid rgba(15,15,14,0.07)">
+                        <input type="text" value="{{ it.desc }}" onChange="{{ it.onDesc }}" placeholder="Item description" style="width:100%;min-width:0;background:transparent;border:1px solid transparent;border-radius:8px;padding:8px 9px;font-size:13.5px;color:#0F0F0E">
+                        <input type="text" value="{{ it.qty }}" onChange="{{ it.onQty }}" placeholder="1" style="width:100%;min-width:0;background:transparent;border:1px solid transparent;border-radius:8px;padding:8px 9px;font-family:'DM Mono',monospace;font-size:13px;color:#0F0F0E">
+                        <input type="text" value="{{ it.unit }}" onChange="{{ it.onUnit }}" placeholder="0" style="width:100%;min-width:0;background:transparent;border:1px solid transparent;border-radius:8px;padding:8px 9px;font-family:'DM Mono',monospace;font-size:13px;color:#0F0F0E">
+                        <div style="font-family:'DM Mono',monospace;font-size:13.5px;text-align:right;white-space:nowrap">{{ it.amount }}</div>
+                        <button onClick="{{ it.remove }}" title="Remove line" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;border-radius:8px;color:rgba(15,15,14,0.35);cursor:pointer" style-hover="background:rgba(15,15,14,0.05);color:#B4331F">
+                          <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+                        </button>
+                      </div>
+                    </sc-for>
+                    <div style="padding:11px 15px">
+                      <button onClick="{{ addLine }}" style="display:inline-flex;align-items:center;gap:7px;background:transparent;border:1px dashed rgba(15,15,14,0.22);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:500;color:rgba(15,15,14,0.62);cursor:pointer" style-hover="border-color:rgba(15,15,14,0.4);color:#0F0F0E">
+                        <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+                        <span>Add line item</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isTotalOnly }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:20px;max-width:340px">
+                  <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Total price, all-in</div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-top:9px;border:1px solid rgba(15,15,14,0.16);border-radius:12px;padding:12px 15px">
+                    <span style="font-family:'DM Mono',monospace;font-size:17px;color:rgba(15,15,14,0.45)">₱</span>
+                    <input type="text" value="{{ totalOnly }}" onChange="{{ onTotalOnly }}" placeholder="0" style="flex:1;min-width:0;background:transparent;border:none;font-family:'DM Mono',monospace;font-size:19px;color:#0F0F0E">
+                  </div>
+                </div>
+              </sc-if>
+
+              <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:16px;margin-top:20px;padding-top:17px;border-top:1px solid rgba(15,15,14,0.09)">
+                <span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Quotation total</span>
+                <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:27px;font-weight:500;letter-spacing:-0.03em">{{ grandTotal }}</span>
+              </div>
+              <div style="text-align:right;margin-top:5px;font-size:12.5px;color:rgba(15,15,14,0.5)">{{ budgetNote }}</div>
+            </div>
+
+            <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:24px 26px">
+              <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">02 — Terms</div>
+
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px;margin-top:20px">
+                <div>
+                  <label style="display:block;font-size:13.5px;font-weight:500">Lead time to completion</label>
+                  <div style="margin-top:5px;font-size:12.5px;color:rgba(15,15,14,0.5)">From award to handover on site.</div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-top:10px;border:1px solid rgba(15,15,14,0.16);border-radius:12px;padding:11px 14px">
+                    <input type="text" value="{{ lead }}" onChange="{{ onLead }}" placeholder="6" style="flex:1;min-width:0;background:transparent;border:none;font-family:'DM Mono',monospace;font-size:15px;color:#0F0F0E">
+                    <span style="font-size:13.5px;color:rgba(15,15,14,0.5);white-space:nowrap">weeks</span>
+                  </div>
+                  <div style="margin-top:8px;font-size:12.5px;color:{{ leadNoteColor }}">{{ leadNote }}</div>
+                </div>
+
+                <div>
+                  <label style="display:block;font-size:13.5px;font-weight:500">Validity period</label>
+                  <div style="margin-top:5px;font-size:12.5px;color:rgba(15,15,14,0.5)">How long this price holds.</div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+                    <sc-for list="{{ validities }}" as="v" hint-placeholder-count="4">
+                      <button onClick="{{ v.pick }}" style="background:{{ v.bg }};color:{{ v.fg }};border:1px solid {{ v.border }};border-radius:999px;padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap">{{ v.label }}</button>
+                    </sc-for>
+                  </div>
+                  <div style="margin-top:8px;font-size:12.5px;color:rgba(15,15,14,0.5)">{{ validUntil }}</div>
+                </div>
+              </div>
+
+              <div style="margin-top:22px;padding-top:20px;border-top:1px solid rgba(15,15,14,0.09)">
+                <label style="display:block;font-size:13.5px;font-weight:500">Payment terms</label>
+                <div style="margin-top:5px;font-size:12.5px;color:rgba(15,15,14,0.5)">Settled directly with the buyer — Trustlink does not process payment.</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:11px">
+                  <sc-for list="{{ terms }}" as="t" hint-placeholder-count="4">
+                    <button onClick="{{ t.pick }}" style="background:{{ t.bg }};color:{{ t.fg }};border:1px solid {{ t.border }};border-radius:999px;padding:9px 15px;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap">{{ t.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+
+            <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:24px 26px">
+              <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">03 — Notes and attachments</div>
+
+              <label style="display:block;margin-top:20px;font-size:13.5px;font-weight:500">Notes to the buyer</label>
+              <div style="margin-top:5px;font-size:12.5px;color:rgba(15,15,14,0.5)">Inclusions, exclusions, assumptions, or anything that explains your price. Read only after closing.</div>
+              <textarea value="{{ note }}" onChange="{{ onNote }}" rows="5" placeholder="e.g. Shop fabrication at our Cabuyao plant, erection sequenced in two phases so the east racking bay stays live. Includes epoxy primer and enamel finish." style="width:100%;box-sizing:border-box;margin-top:11px;background:transparent;border:1px solid rgba(15,15,14,0.16);border-radius:12px;padding:13px 15px;font-size:14px;line-height:1.6;color:#0F0F0E;resize:vertical"></textarea>
+              <div style="margin-top:7px;font-size:12px;color:rgba(15,15,14,0.45);text-align:right">{{ noteCount }}</div>
+
+              <div style="margin-top:22px;padding-top:20px;border-top:1px solid rgba(15,15,14,0.09)">
+                <label style="display:block;font-size:13.5px;font-weight:500">Attachments</label>
+                <div style="margin-top:5px;font-size:12.5px;color:rgba(15,15,14,0.5)">Method statements, bills of quantities, certificates, past work. Sealed with the rest of your quotation.</div>
+                <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px">
+                  <sc-for list="{{ files }}" as="f" hint-placeholder-count="2">
+                    <div style="display:inline-flex;align-items:center;gap:10px;border:1px solid rgba(15,15,14,0.14);border-radius:12px;padding:10px 13px">
+                      <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;flex:none;color:rgba(15,15,14,0.5)"><path d="M4 2.4h5L12 5.6v8H4v-11Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path><path d="M9 2.4v3.2h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path></svg>
+                      <span style="min-width:0">
+                        <span style="display:block;font-size:13.5px;font-weight:500">{{ f.name }}</span>
+                        <span style="display:block;margin-top:2px;font-family:'DM Mono',monospace;font-size:10.5px;color:rgba(15,15,14,0.45)">{{ f.meta }}</span>
+                      </span>
+                      <button onClick="{{ f.remove }}" title="Remove" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;border-radius:8px;color:rgba(15,15,14,0.35);cursor:pointer" style-hover="background:rgba(15,15,14,0.05);color:#B4331F">
+                        <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+                      </button>
+                    </div>
+                  </sc-for>
+                  <button onClick="{{ addFile }}" style="display:inline-flex;align-items:center;gap:8px;background:transparent;border:1px dashed rgba(15,15,14,0.22);border-radius:12px;padding:12px 15px;font-size:13px;font-weight:500;color:rgba(15,15,14,0.62);cursor:pointer" style-hover="border-color:rgba(15,15,14,0.4);color:#0F0F0E">
+                    <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+                    <span>Add file</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style="border:1px solid {{ sealBorder }};border-left:3px solid #164E78;border-radius:16px;background:#FFFFFF;padding:24px 26px">
+              <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#164E78">04 — Seal and submit</div>
+
+              <div style="margin-top:16px;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(18px,1.9vw,22px);font-weight:500;letter-spacing:-0.03em;line-height:1.25;max-width:34ch;text-wrap:pretty">This is a commitment, not a saved draft.</div>
+
+              <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px">
+                <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer">
+                  <input type="checkbox" checked="{{ ack1 }}" onChange="{{ onAck1 }}" style="width:17px;height:17px;margin:2px 0 0;flex:none;accent-color:#164E78;cursor:pointer">
+                  <span style="font-size:14px;line-height:1.55;color:rgba(15,15,14,0.75)">I understand that once sealed, nobody — not the buyer, not any other business quoting, and not Trustlink staff — can read this quotation until <strong style="font-weight:600">14 Aug 2026, 5:00 PM</strong>, when every quotation opens at the same moment.</span>
+                </label>
+                <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer">
+                  <input type="checkbox" checked="{{ ack2 }}" onChange="{{ onAck2 }}" style="width:17px;height:17px;margin:2px 0 0;flex:none;accent-color:#164E78;cursor:pointer">
+                  <span style="font-size:14px;line-height:1.55;color:rgba(15,15,14,0.75)">I may withdraw this quotation at any time before closing, and the withdrawal will be recorded. After closing it cannot be withdrawn, changed, or priced again.</span>
+                </label>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:24px;padding-top:20px;border-top:1px solid rgba(15,15,14,0.09)">
+                <button onClick="{{ noop }}" style="background:transparent;border:1px solid rgba(15,15,14,0.16);color:rgba(15,15,14,0.7);border-radius:999px;padding:12px 20px;font-size:14px;font-weight:500;cursor:pointer" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">Save draft</button>
+                <span style="flex:1;min-width:8px"></span>
+                <div style="font-size:12.5px;color:rgba(15,15,14,0.5);max-width:26ch">{{ sealHint }}</div>
+                <button onClick="{{ seal }}" disabled="{{ sealDisabled }}" style="display:inline-flex;align-items:center;gap:10px;background:{{ sealBg }};color:{{ sealFg }};border:none;border-radius:999px;padding:13px 24px;font-size:14.5px;font-weight:500;cursor:{{ sealCursor }};white-space:nowrap">
+                  <svg viewBox="0 0 24 24" fill="none" style="width:15px;height:15px"><rect x="5" y="10.5" width="14" height="9.5" rx="1.6" stroke="currentColor" stroke-width="1.6"></rect><path d="M8.4 10.5V7.8a3.6 3.6 0 0 1 7.2 0v2.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+                  <span>Seal and submit</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <aside style="flex:1 1 300px;min-width:270px;display:flex;flex-direction:column;gap:14px;position:sticky;top:82px">
+            <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:20px 22px;max-height:calc(100vh - 120px);overflow-y:auto">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">What you are pricing</div>
+                <span style="flex:1"></span>
+                <a href="#requirement" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#164E78">Full detail</a>
+              </div>
+
+              <div style="margin-top:14px;font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:500;letter-spacing:-0.02em;line-height:1.3">Fabrication and installation of steel mezzanine platform, 240 sqm</div>
+
+              <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
+                <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px;font-weight:500">Bayan Logistics Corp.</span>
+                <span title="DTI and BIR records checked on 3 March 2025." style="display:inline-flex;align-items:center;gap:5px;color:#164E78;cursor:default">
+                  <svg viewBox="0 0 24 24" fill="none" style="width:12px;height:12px;flex:none"><circle cx="12" cy="12" r="10.2" stroke="currentColor" stroke-width="1.6"></circle><path d="M7.6 12.3l3 3 5.8-6.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase">Verified · Tier 3</span>
+                </span>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:11px;margin-top:16px;padding-top:15px;border-top:1px solid rgba(15,15,14,0.09)">
+                <div>
+                  <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Indicative budget</div>
+                  <div style="margin-top:4px;font-size:13.5px;font-weight:500">₱ 450,000 — 700,000</div>
+                </div>
+                <div>
+                  <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Needed by</div>
+                  <div style="margin-top:4px;font-size:13.5px;font-weight:500">15 Sep — 30 Oct 2026</div>
+                </div>
+                <div>
+                  <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Location</div>
+                  <div style="margin-top:4px;font-size:13.5px;font-weight:500">Bayan Logistics Hub 3, Calamba</div>
+                </div>
+              </div>
+
+              <div style="margin-top:16px;padding-top:15px;border-top:1px solid rgba(15,15,14,0.09)">
+                <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Specification</div>
+                <div style="margin-top:11px;border:1px solid rgba(15,15,14,0.1);border-radius:12px;overflow:hidden">
+                  <sc-for list="{{ specs }}" as="sp" hint-placeholder-count="7">
+                    <div style="padding:10px 13px;border-bottom:1px solid rgba(15,15,14,0.07);background:{{ sp.bg }}">
+                      <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(15,15,14,0.5)">{{ sp.k }}</div>
+                      <div style="margin-top:4px;font-size:12.5px;line-height:1.45;color:rgba(15,15,14,0.75)">{{ sp.v }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="margin-top:16px;padding-top:15px;border-top:1px solid rgba(15,15,14,0.09)">
+                <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Buyer attachments</div>
+                <div style="display:flex;flex-direction:column;gap:7px;margin-top:11px">
+                  <sc-for list="{{ buyerFiles }}" as="bf" hint-placeholder-count="3">
+                    <a href="#file" style="display:flex;align-items:center;gap:9px;font-size:13px;color:rgba(15,15,14,0.68)" style-hover="color:#0F0F0E">
+                      <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px;flex:none;color:rgba(15,15,14,0.4)"><path d="M4 2.4h5L12 5.6v8H4v-11Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path></svg>
+                      <span>{{ bf.name }}</span>
+                    </a>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isReceipt }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:880px;margin:0 auto;padding-top:clamp(14px,3vw,40px)">
+
+        <div style="display:flex;flex-direction:column;align-items:center;text-align:center">
+          <div style="width:66px;height:66px;border-radius:999px;background:rgba(22,78,120,0.07);display:flex;align-items:center;justify-content:center;color:#164E78">
+            <svg viewBox="0 0 24 24" fill="none" style="width:29px;height:29px"><rect x="4.5" y="10.2" width="15" height="10" rx="1.8" stroke="currentColor" stroke-width="1.5"></rect><path d="M8 10.2V7.6a4 4 0 0 1 8 0v2.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path><circle cx="12" cy="15.2" r="1.5" fill="currentColor"></circle></svg>
+          </div>
+          <span style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;background:#164E78;color:#FBFAF9;border-radius:999px;padding:5px 12px;margin-top:18px">Submitted · sealed</span>
+          <h1 style="margin:18px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(26px,3.2vw,38px);font-weight:500;line-height:1.1;letter-spacing:-0.035em;max-width:20ch;text-wrap:pretty">Your quotation is locked away until closing</h1>
+          <p style="margin:15px 0 0;font-size:15.5px;line-height:1.6;color:rgba(15,15,14,0.65);max-width:54ch;text-wrap:pretty">Bayan Logistics Corp. cannot see your price. Neither can any other business quoting for this job. Everything opens together on <strong style="font-weight:600;color:#0F0F0E">14 Aug 2026 at 5:00 PM</strong>.</p>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:24px 26px;margin-top:30px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Your receipt</div>
+            <span style="flex:1;min-width:8px"></span>
+            <button onClick="{{ noop }}" style="display:inline-flex;align-items:center;gap:7px;background:transparent;border:1px solid rgba(15,15,14,0.16);color:rgba(15,15,14,0.68);border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:500;cursor:pointer" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">
+              <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M8 2.5v8M5 7.5l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span>Download</span>
+            </button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:20px;margin-top:20px">
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Quotation reference</div>
+              <div style="margin-top:7px;font-family:'DM Mono',monospace;font-size:17px">QT-2026-0407</div>
+              <div style="margin-top:4px;font-size:12.5px;color:rgba(15,15,14,0.5)">Quote this in any conversation with the buyer.</div>
+            </div>
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Submitted</div>
+              <div style="margin-top:7px;font-family:'DM Mono',monospace;font-size:17px">12 Aug 2026, 2:41:07 PM</div>
+              <div style="margin-top:4px;font-size:12.5px;color:rgba(15,15,14,0.5)">The exact second your quotation was recorded.</div>
+            </div>
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Sealed until</div>
+              <div style="margin-top:7px;font-family:'DM Mono',monospace;font-size:17px">14 Aug 2026, 5:00 PM</div>
+              <div style="margin-top:4px;font-size:12.5px;color:rgba(15,15,14,0.5)">Opens in {{ countdown }}.</div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:20px;margin-top:22px;padding-top:20px;border-top:1px solid rgba(15,15,14,0.09)">
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Record number</div>
+              <div style="margin-top:7px;font-family:'DM Mono',monospace;font-size:15px">#48,213</div>
+            </div>
+            <div style="grid-column:span 2">
+              <div style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">Fingerprint</div>
+              <div style="margin-top:7px;font-family:'DM Mono',monospace;font-size:15px;word-break:break-all">8f3a4b91…c19d</div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:22px;padding-top:20px;border-top:1px solid rgba(15,15,14,0.09)">
+            <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(15,15,14,0.45)">What you submitted</div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:500;letter-spacing:-0.03em">{{ grandTotal }}</div>
+          </div>
+          <div style="margin-top:8px;font-size:13.5px;color:rgba(15,15,14,0.6)">{{ receiptSummary }}</div>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:26px 28px;margin-top:16px">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(19px,2.1vw,24px);font-weight:500;letter-spacing:-0.03em;line-height:1.25;max-width:30ch;text-wrap:pretty">Why your price is safe</div>
+
+          <div style="display:flex;flex-direction:column;gap:20px;margin-top:22px">
+            <div style="display:flex;align-items:flex-start;gap:16px">
+              <div style="width:30px;height:30px;border-radius:999px;background:rgba(22,78,120,0.08);color:#164E78;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:12px;flex:none">1</div>
+              <div style="min-width:0">
+                <div style="font-size:15px;font-weight:600;letter-spacing:-0.01em">Nobody can open it early</div>
+                <div style="margin-top:6px;font-size:14px;line-height:1.6;color:rgba(15,15,14,0.65);max-width:66ch;text-wrap:pretty">Your quotation is locked the moment you submit it. The buyer cannot peek at your price and quietly tell a competitor to come in lower — because the buyer cannot see it either. Every quotation on this requirement opens at the same second.</div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:flex-start;gap:16px">
+              <div style="width:30px;height:30px;border-radius:999px;background:rgba(22,78,120,0.08);color:#164E78;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:12px;flex:none">2</div>
+              <div style="min-width:0">
+                <div style="font-size:15px;font-weight:600;letter-spacing:-0.01em">Nobody can change it — including us</div>
+                <div style="margin-top:6px;font-size:14px;line-height:1.6;color:rgba(15,15,14,0.65);max-width:66ch;text-wrap:pretty">When you submitted, Trustlink took a fingerprint of your quotation — the code above — and wrote it into a permanent record that cannot be edited or erased. At closing your quotation is checked against that fingerprint. If a single figure had been altered, it would open with a warning attached, visible to the buyer.</div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:flex-start;gap:16px">
+              <div style="width:30px;height:30px;border-radius:999px;background:rgba(22,78,120,0.08);color:#164E78;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:12px;flex:none">3</div>
+              <div style="min-width:0">
+                <div style="font-size:15px;font-weight:600;letter-spacing:-0.01em">You can still change your mind, until 5:00 PM Friday</div>
+                <div style="margin-top:6px;font-size:14px;line-height:1.6;color:rgba(15,15,14,0.65);max-width:66ch;text-wrap:pretty">Withdraw and submit a new price any time before closing. The withdrawal is written into the record too — the buyer will see that you revised, though never what the first price was. After closing, nothing can be changed by anyone.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="border:1px solid rgba(15,15,14,0.12);border-radius:16px;background:#FFFFFF;padding:24px 26px;margin-top:16px">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(15,15,14,0.45)">What happens next</div>
+          <div style="display:flex;flex-direction:column;gap:0;margin-top:18px">
+            <sc-for list="{{ timeline }}" as="tl" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:24px 1fr;gap:16px">
+                <div style="display:flex;flex-direction:column;align-items:center">
+                  <span style="width:11px;height:11px;border-radius:999px;background:{{ tl.dotBg }};border:2px solid {{ tl.dotBorder }};flex:none;margin-top:4px"></span>
+                  <span style="flex:1;width:1.5px;background:{{ tl.lineBg }};min-height:{{ tl.lineH }}"></span>
+                </div>
+                <div style="padding-bottom:{{ tl.pad }}">
+                  <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                    <span style="font-size:14.5px;font-weight:{{ tl.weight }};color:{{ tl.color }}">{{ tl.title }}</span>
+                    <span style="font-family:'DM Mono',monospace;font-size:11.5px;color:rgba(15,15,14,0.45)">{{ tl.when }}</span>
+                  </div>
+                  <div style="margin-top:5px;font-size:13.5px;line-height:1.55;color:rgba(15,15,14,0.6);max-width:64ch">{{ tl.body }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:22px">
+          <a href="#quotations" style="display:inline-flex;align-items:center;gap:9px;background:#164E78;color:#FBFAF9;border-radius:999px;padding:13px 22px;font-size:14.5px;font-weight:500" style-hover="background:#103A5A">
+            <span>Track in My Quotations</span>
+            <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px"><path d="M2.5 8h10.5M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </a>
+          <a href="#feed" style="border:1px solid rgba(15,15,14,0.16);border-radius:999px;padding:13px 20px;font-size:14px;font-weight:500;color:rgba(15,15,14,0.7)" style-hover="background:rgba(15,15,14,0.04);color:#0F0F0E">Back to opportunities</a>
+          <span style="flex:1;min-width:8px"></span>
+          <button onClick="{{ noop }}" style="background:transparent;border:1px solid rgba(180,51,31,0.35);color:#B4331F;border-radius:999px;padding:13px 20px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap" style-hover="background:rgba(180,51,31,0.05)">Withdraw quotation</button>
+        </div>
+        <div style="margin-top:11px;font-size:12.5px;line-height:1.55;color:rgba(15,15,14,0.5);max-width:70ch">Withdrawing removes your quotation from this requirement. The record of it stays, and you may submit a new price until closing.</div>
+      </div>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1024}}">
+const PESO = "\u20B1 ";
+const money = (n) => PESO + Math.round(n).toLocaleString("en-PH");
+const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : n; };
+
+class Component extends DCLogic {
+  state = {
+    view: "form",
+    priceMode: "lines",
+    totalOnly: "486000",
+    lead: "6",
+    validity: "30 days",
+    term: "30 / 60 / 10",
+    note: "Shop fabrication at our Cabuyao plant, erection sequenced in two phases so the east racking bay stays live. Includes epoxy primer and enamel finish, and one flight of stairs with handrails both sides.",
+    ack1: false,
+    ack2: false,
+    left: 0,
+    items: [
+      { id: 1, desc: "Structural steel members, ASTM A36 wide-flange", qty: "18.5", unit: "12800" },
+      { id: 2, desc: "6mm checkered plate decking, supplied and welded", qty: "240", unit: "620" },
+      { id: 3, desc: "Erection, welding, and finishing on site", qty: "1", unit: "98000" }
+    ],
+    files: [
+      { id: 1, name: "Method statement.pdf", meta: "PDF · 1.8 MB" },
+      { id: 2, name: "Bill of quantities.xlsx", meta: "XLSX · 240 KB" }
+    ]
+  };
+
+  componentDidMount() {
+    this.target = Date.now() + ((2 * 24 + 2) * 60 + 19) * 60000;
+    this.tick();
+    this.timer = setInterval(() => this.tick(), 1000);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+  tick() { this.setState({ left: Math.max(0, this.target - Date.now()) }); }
+
+  fmtCountdown(ms) {
+    const t = Math.floor(ms / 1000);
+    const d = Math.floor(t / 86400), h = Math.floor((t % 86400) / 3600), m = Math.floor((t % 3600) / 60);
+    const unit = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+    if (d > 0) return unit(d, "day") + ", " + unit(h, "hour");
+    if (h > 0) return unit(h, "hour") + ", " + unit(m, "minute");
+    return unit(m, "minute");
+  }
+
+  patch(id, key, val) {
+    this.setState((s) => ({ items: s.items.map((i) => (i.id === id ? Object.assign({}, i, { [key]: val }) : i)) }));
+  }
+
+  renderVals() {
+    const s = this.state;
+    const isForm = s.view === "form";
+    const lines = s.priceMode === "lines";
+
+    const total = lines
+      ? s.items.reduce((a, i) => a + num(i.qty) * num(i.unit), 0)
+      : num(s.totalOnly);
+
+    const overBudget = total > 700000;
+    const leadWeeks = num(s.lead);
+
+    const pill = (on) => ({
+      bg: on ? "rgba(22,78,120,0.08)" : "transparent",
+      fg: on ? "#164E78" : "rgba(15,15,14,0.62)",
+      border: on ? "rgba(22,78,120,0.45)" : "rgba(15,15,14,0.16)"
+    });
+
+    const ready = s.ack1 && s.ack2 && total > 0;
+
+    return {
+      isForm, isReceipt: !isForm,
+      countdown: this.fmtCountdown(s.left),
+      clockColor: s.left < 24 * 3600000 ? "#B4331F" : "#0F0F0E",
+      clockDot: s.left < 24 * 3600000 ? "tl-pulse 1.6s ease-in-out infinite" : "none",
+      navQuoteColor: isForm ? "rgba(15,15,14,0.55)" : "#0F0F0E",
+      quoteBadge: isForm ? "3" : "4",
+      noop: () => {},
+
+      stateTabs: [
+        { key: "form", label: "1 · Quotation form" },
+        { key: "receipt", label: "2 · Sealed receipt" }
+      ].map((t) => {
+        const on = s.view === t.key;
+        return {
+          label: t.label,
+          bg: on ? "#0F0F0E" : "transparent",
+          fg: on ? "#FBFAF9" : "rgba(15,15,14,0.6)",
+          border: on ? "#0F0F0E" : "rgba(15,15,14,0.18)",
+          pick: () => this.setState({ view: t.key })
+        };
+      }),
+
+      priceModes: [
+        { key: "lines", label: "Line items" },
+        { key: "total", label: "Total price only" }
+      ].map((m) => {
+        const on = s.priceMode === m.key;
+        return Object.assign({ label: m.label, pick: () => this.setState({ priceMode: m.key }) }, pill(on));
+      }),
+
+      isLineItems: lines,
+      isTotalOnly: !lines,
+      totalOnly: s.totalOnly,
+      onTotalOnly: (e) => this.setState({ totalOnly: e.target.value }),
+
+      lineItems: s.items.map((i) => ({
+        desc: i.desc, qty: i.qty, unit: i.unit,
+        amount: money(num(i.qty) * num(i.unit)),
+        onDesc: (e) => this.patch(i.id, "desc", e.target.value),
+        onQty: (e) => this.patch(i.id, "qty", e.target.value),
+        onUnit: (e) => this.patch(i.id, "unit", e.target.value),
+        remove: () => this.setState((st) => ({ items: st.items.filter((x) => x.id !== i.id) }))
+      })),
+      addLine: () => this.setState((st) => ({ items: st.items.concat([{ id: Date.now(), desc: "", qty: "1", unit: "0" }]) })),
+
+      grandTotal: money(total),
+      receiptSummary: s.lead + " weeks lead time · " + s.term + " payment terms · valid " + s.validity + " · " + s.files.length + (s.files.length === 1 ? " attachment" : " attachments"),
+      budgetNote: total === 0
+        ? "Enter your price to continue."
+        : (overBudget
+          ? "Above the buyer's indicative range of ₱ 450,000 — 700,000."
+          : "Within the buyer's indicative range of ₱ 450,000 — 700,000."),
+
+      lead: s.lead,
+      onLead: (e) => this.setState({ lead: e.target.value }),
+      leadNote: leadWeeks > 0 && leadWeeks <= 6
+        ? "Completes inside the buyer's installation window."
+        : "The buyer needs installation between 15 Sep and 30 Oct.",
+      leadNoteColor: leadWeeks > 0 && leadWeeks <= 6 ? "rgba(15,15,14,0.5)" : "#B4331F",
+
+      validities: ["15 days", "30 days", "60 days", "90 days"].map((v) =>
+        Object.assign({ label: v, pick: () => this.setState({ validity: v }) }, pill(s.validity === v))),
+      validUntil: "This price holds until " + ({ "15 days": "27 Aug 2026", "30 days": "11 Sep 2026", "60 days": "11 Oct 2026", "90 days": "10 Nov 2026" })[s.validity] + ".",
+
+      terms: ["50 / 50", "30 / 60 / 10", "20 / 70 / 10", "100% on completion"].map((t) =>
+        Object.assign({ label: t, pick: () => this.setState({ term: t }) }, pill(s.term === t))),
+
+      note: s.note,
+      onNote: (e) => this.setState({ note: e.target.value }),
+      noteCount: s.note.length + " characters",
+
+      files: s.files.map((f) => ({
+        name: f.name, meta: f.meta,
+        remove: () => this.setState((st) => ({ files: st.files.filter((x) => x.id !== f.id) }))
+      })),
+      addFile: () => this.setState((st) => ({
+        files: st.files.concat([{ id: Date.now(), name: "New attachment.pdf", meta: "PDF · 0.9 MB" }])
+      })),
+
+      ack1: s.ack1, ack2: s.ack2,
+      onAck1: () => this.setState({ ack1: !s.ack1 }),
+      onAck2: () => this.setState({ ack2: !s.ack2 }),
+      sealBorder: ready ? "rgba(22,78,120,0.4)" : "rgba(15,15,14,0.12)",
+      sealDisabled: !ready,
+      sealBg: ready ? "#164E78" : "rgba(15,15,14,0.09)",
+      sealFg: ready ? "#FBFAF9" : "rgba(15,15,14,0.35)",
+      sealCursor: ready ? "pointer" : "not-allowed",
+      sealHint: ready ? "Your quotation seals immediately." : "Confirm both statements above to submit.",
+      seal: () => { if (ready) { this.setState({ view: "receipt" }); window.scrollTo(0, 0); } },
+
+      specs: [
+        ["Platform area", "240 sqm (20.0 m × 12.0 m), clear height 3.2 m beneath"],
+        ["Design load", "500 kg/sqm uniformly distributed, per NSCP 2015"],
+        ["Structure", "ASTM A36 wide-flange beams and columns, fully welded"],
+        ["Decking", "6 mm checkered steel plate, continuously welded"],
+        ["Finish", "Epoxy primer plus two coats industrial enamel, mid-grey"],
+        ["Access", "One flight of steel stairs, 1.2 m width, handrail both sides"],
+        ["Quantity", "One platform, complete and installed"]
+      ].map((r, i) => ({ k: r[0], v: r[1], bg: i % 2 ? "rgba(15,15,14,0.018)" : "#FFFFFF" })),
+
+      buyerFiles: [
+        { name: "Structural drawings.pdf" },
+        { name: "Site photographs.pdf" },
+        { name: "Load specification.pdf" }
+      ],
+
+      timeline: [
+        { title: "Quotation sealed", when: "Today, 2:41 PM", done: true,
+          body: "Recorded and locked. You will find it under My Quotations, marked Sealed." },
+        { title: "Quotations open", when: "14 Aug, 5:00 PM", done: false,
+          body: "Every quotation on this requirement opens at once. Yours goes to the buyer with its fingerprint checked. We will alert you." },
+        { title: "Buyer reviews", when: "After closing", done: false,
+          body: "The buyer compares price, lead time, terms, and trust tier. You may be shortlisted — you will be alerted either way." },
+        { title: "Award", when: "Buyer's decision", done: false, last: true,
+          body: "If you win, contact details are exchanged and you deal with the buyer directly. Trustlink does not handle payment or contracts." }
+      ].map((t) => ({
+        title: t.title, when: t.when, body: t.body,
+        weight: t.done ? "600" : "500",
+        color: t.done ? "#0F0F0E" : "rgba(15,15,14,0.72)",
+        dotBg: t.done ? "#164E78" : "#FBFAF9",
+        dotBorder: t.done ? "#164E78" : "rgba(15,15,14,0.22)",
+        lineBg: t.last ? "transparent" : "rgba(15,15,14,0.12)",
+        lineH: t.last ? "0px" : "8px",
+        pad: t.last ? "0px" : "22px"
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

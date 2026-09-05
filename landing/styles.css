@@ -1,0 +1,67 @@
+body { margin: 0; background: #FBFAF9; overflow-x: hidden; }
+a { color: #0F0F0E; text-decoration: none; }
+a:hover { color: #55524D; }
+::selection { background: #0F0F0E; color: #FBFAF9; }
+
+@keyframes tl-up   { from { transform: translate3d(0,0,0); }    to { transform: translate3d(0,-50%,0); } }
+@keyframes tl-down { from { transform: translate3d(0,-50%,0); } to { transform: translate3d(0,0,0); } }
+.tl-col:hover > div { animation-play-state: paused; }
+
+@keyframes tl-dots {
+  from { background-position: 1px 0.5px; }
+  to   { background-position: 25px 24.5px; }
+}
+
+@keyframes tl-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes tl-slide-right {
+  from { opacity: 0; transform: translateX(-28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Hover interactions (were style-hover in the source design) */
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 20px 36px -22px rgba(15,15,14,0.85); }
+.btn-primary:hover .btn-arrow { transform: translateX(4px); }
+
+.card-hover { transition: transform .45s cubic-bezier(.32,.72,0,1), box-shadow .45s ease; }
+.card-hover:hover { transform: translateY(-4px); box-shadow: 0 30px 60px -50px rgba(15,15,14,0.8); }
+
+.faq-row:hover { opacity: 0.62; }
+
+.footer-cta:hover { box-shadow: 0 22px 40px -24px rgba(251,250,249,0.6); }
+.footer-cta:hover .btn-arrow-dark { transform: translateX(5px); }
+
+.footer-link { transition: color .3s ease, transform .3s cubic-bezier(.32,.72,0,1); display: inline-block; }
+.footer-link:hover { color: #FBFAF9; transform: translateX(4px); }
+
+/* Nav pill link hover indicator */
+.nav-link { transition: color .3s ease; }
+
+/* Header logo mark — opacity driven by scroll position in main.js */
+#headerMark { opacity: 1; }
+
+/* Section reveal-on-scroll: sections stay visible until main.js has ticked
+   a couple of times, then take over via inline opacity/transform, so a
+   slow/blocked script never leaves content invisible. */
+[data-fade] {
+  transition: opacity .8s ease, transform .8s cubic-bezier(.32,.72,0,1);
+}
+
+/* FAQ accordion */
+.faq-icon { transition: transform .45s cubic-bezier(.32,.72,0,1); }
+.faq-answer {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height .5s cubic-bezier(.32,.72,0,1), opacity .4s ease;
+}
+.faq-item.open .faq-answer { max-height: 240px; opacity: 1; }
+.faq-item.open .faq-icon { transform: rotate(45deg); }
+
+/* Footer CTA + wordmark reveal-on-scroll (starts hidden, footer.in-view reveals it) */
+.cta-reveal { opacity: 0; transform: translateY(26px); }
+.wordmark-letter { opacity: 0; transform: translateY(110%); }
+#siteFooter.in-view .cta-reveal { opacity: 1; transform: translateY(0); }
+#siteFooter.in-view .wordmark-letter { opacity: 1; transform: translateY(0); }
