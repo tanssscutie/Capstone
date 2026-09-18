@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.clock import now_ph
 from typing import Optional
 
 from sqlmodel import SQLModel, Field
@@ -15,4 +16,4 @@ class ClarificationQuestion(SQLModel, table=True):
     question: str
     answer: Optional[str] = None
     answered_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=now_ph)

@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import AddPermit from '../features/add-permit/AddPermit';
 import { getVerificationStatus, uploadDocument } from '../lib/api/business';
 import { color, font, fontSize, space } from '../components/ui/tokens';
+import { errorMessage } from '../lib/api/client';
 
 export default function AddPermitRoute() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function AddPermitRoute() {
       setOwnerName(status.contact_person ?? '');
       setBusinessName(status.registered_name ?? '');
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not load your business details.');
+      setError(errorMessage(e, 'Could not load your business details.'));
     } finally {
       setLoading(false);
     }

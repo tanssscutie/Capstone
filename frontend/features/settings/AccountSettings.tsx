@@ -4,7 +4,8 @@
 // (breadcrumb, hero, bordered cards) so the two feel like one settings area.
 
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, TextInput, StyleSheet, useWindowDimensions } from 'react-native';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
   color,
   font,
@@ -17,6 +18,7 @@ import {
   layout,
   breakpoint,
 } from '../../components/ui/tokens';
+import { errorMessage } from '../../lib/api/client';
 
 export interface AccountSettingsProps {
   mobileNumber: string;
@@ -81,7 +83,7 @@ function FieldError({ children }: { children: string | null }) {
 }
 
 function toMessage(e: any, fallback: string): string {
-  return typeof e?.detail === 'string' ? e.detail : typeof e?.message === 'string' ? e.message : fallback;
+  return errorMessage(e, fallback);
 }
 
 function MobileNumberCard({ mobileNumber, onChangeMobileNumber }: Pick<AccountSettingsProps, 'mobileNumber' | 'onChangeMobileNumber'>) {
@@ -341,7 +343,7 @@ export default function AccountSettings({
   const isWide = width >= breakpoint.desktop;
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={isWide ? styles.pageWide : styles.page}>
         <View style={styles.breadcrumbRow}>
           <Pressable onPress={onBack} hitSlop={6}>
@@ -368,7 +370,7 @@ export default function AccountSettings({
           <ActionButton label="Back to home" variant="outline" onPress={onBack} />
         </View>
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 

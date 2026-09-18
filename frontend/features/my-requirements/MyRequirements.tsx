@@ -6,7 +6,7 @@
 // display title, grouped sections) — no new colours, no new patterns.
 
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import {
   color,
   font,
@@ -19,6 +19,7 @@ import {
   breakpoint,
 } from '../../components/ui/tokens';
 import type { ISODateTime, Requirement, RequirementStatus } from '../../lib/types';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 
 /* ─── Props ─────────────────────────────────────────── */
 
@@ -65,6 +66,7 @@ function requirementStatusLabel(status: RequirementStatus): string {
     case 'DRAFT': return 'Draft';
     case 'OPEN': return 'Open';
     case 'CLOSED': return 'Closed';
+    case 'AWARD_PENDING': return 'Award pending';
     case 'AWARDED': return 'Awarded';
     case 'CLOSED_NO_AWARD': return 'Closed — No Award';
     case 'CANCELLED': return 'Cancelled';
@@ -83,9 +85,12 @@ function hoursUntil(closingAt: ISODateTime, now: number): number {
   return (new Date(closingAt).getTime() - now) / 3_600_000;
 }
 
-/** Open first — the only state still counting down — then the rest of the lifecycle
- *  in narrative order. */
-const GROUP_ORDER: RequirementStatus[] = ['OPEN', 'AWARDED', 'CLOSED_NO_AWARD', 'CLOSED', 'CANCELLED', 'DRAFT'];
+/** Open first — the only state still counting down toward closing — then
+ *  award_pending — the only state counting down toward a response deadline,
+ *  similarly urgent — then the rest of the lifecycle in narrative order.
+ *  Missing a status here doesn't just mis-sort it: filter() below drops
+ *  anything that matches no group, so it silently vanishes from the list. */
+const GROUP_ORDER: RequirementStatus[] = ['OPEN', 'AWARD_PENDING', 'AWARDED', 'CLOSED_NO_AWARD', 'CLOSED', 'CANCELLED', 'DRAFT'];
 
 /* ─── Small building blocks ─────────────────────────── */
 
@@ -130,6 +135,13 @@ function RequirementRow({
   const posted = requirement.publishedAt ? `Posted ${timeAgoWords(requirement.publishedAt, now)}` : 'Not yet published';
   const meta = `${posted} · ${requirement.category} · ${requirement.deliverySite.address} · ${formatBudget(requirement.budgetMin, requirement.budgetMax)}`;
 
+  // No forcing function makes a buyer decide after release — this nudge is
+  // computed live from releasedAt (matches RequirementDetail.tsx's
+  // DecisionReminderBanner), not a stored alert, since the Alerts inbox is a
+  // fixed 11-event list that "still no decision" doesn't belong in.
+  const daysSinceRelease = requirement.releasedAt ? Math.floor((now - new Date(requirement.releasedAt).getTime()) / (24 * 60 * 60 * 1000)) : 0;
+  const needsDecision = requirement.status === 'CLOSED' && daysSinceRelease >= 3;
+
   return (
     <View style={styles.row}>
       <View style={{ flex: 1, minWidth: 200, gap: space.xs }}>
@@ -140,6 +152,11 @@ function RequirementRow({
         </View>
         <Text style={styles.rowTitle} numberOfLines={2}>{requirement.title}</Text>
         <Text style={styles.mutedSmall}>{meta}</Text>
+        {needsDecision && (
+          <Text style={[styles.mutedSmall, { color: color.danger }]}>
+            Released {daysSinceRelease} day{daysSinceRelease === 1 ? '' : 's'} ago — still no decision
+          </Text>
+        )}
       </View>
       <View style={styles.rowRight}>
         <View style={{ alignItems: 'flex-end' }}>
@@ -208,7 +225,7 @@ export default function MyRequirements(props: MyRequirementsProps) {
   const isWide = width >= breakpoint.desktop;
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={isWide ? styles.pageWide : styles.page}>
         <View style={styles.breadcrumbRow}>
           <Pressable onPress={onBack} hitSlop={6}>
@@ -240,7 +257,7 @@ export default function MyRequirements(props: MyRequirementsProps) {
           </View>
         )}
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 

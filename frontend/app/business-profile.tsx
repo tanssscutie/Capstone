@@ -8,6 +8,7 @@ import BusinessProfile from '../features/business-profile/BusinessProfile';
 import { getPublicProfile } from '../lib/api/business';
 import { mapPublicBusinessProfile, type PublicBusinessProfile } from '../lib/api/mappers';
 import { color, font, fontSize, space } from '../components/ui/tokens';
+import { errorMessage } from '../lib/api/client';
 
 export default function BusinessProfileRoute() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function BusinessProfileRoute() {
       const raw = await getPublicProfile(Number(id));
       setProfile(mapPublicBusinessProfile(raw));
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not load this business profile.');
+      setError(errorMessage(e, 'Could not load this business profile.'));
     } finally {
       setLoading(false);
     }

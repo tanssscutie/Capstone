@@ -11,6 +11,7 @@ import { checkAdminAccess, listAllBusinesses, reviewBusiness, openAdminDocumentF
 import type { AdminBusinessOut } from '../lib/api/admin';
 import type { DocumentUploadOut } from '../lib/api/business';
 import { logout } from '../lib/api/auth';
+import { errorMessage } from '../lib/api/client';
 
 type Access = 'CHECKING' | 'GRANTED' | 'DENIED';
 
@@ -102,7 +103,7 @@ export default function AdminBusinessesRoute() {
     try {
       setBusinesses(await listAllBusinesses());
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not load businesses.');
+      setError(errorMessage(e, 'Could not load businesses.'));
     } finally {
       setLoading(false);
     }
@@ -136,7 +137,7 @@ export default function AdminBusinessesRoute() {
       // under_review even after this one decision).
       await load();
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not record that decision.');
+      setError(errorMessage(e, 'Could not record that decision.'));
     } finally {
       setActingOn(null);
     }
@@ -217,7 +218,7 @@ export default function AdminBusinessesRoute() {
                     </View>
                   )}
 
-                  {b.verification_status === 'under_review' && (
+                  {(b.verification_status === 'under_review' || b.verification_status === 'submitted') && (
                     <View style={styles.reviewSection}>
                       <TextInput
                         style={styles.notesInput}

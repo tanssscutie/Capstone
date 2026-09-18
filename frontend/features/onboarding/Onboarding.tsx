@@ -18,7 +18,8 @@
 // `QuotationDraftInput` on submit.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Image, StyleSheet } from 'react-native';
+import { View, Text, Pressable, TextInput, Image, StyleSheet } from 'react-native';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import type { LayoutChangeEvent, ViewStyle } from 'react-native';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import {
@@ -34,6 +35,7 @@ import {
 } from '../../components/ui/tokens';
 import type { Business, BusinessType, SignupIntent, OnboardingStep, Attachment } from '../../lib/types';
 import { isRecognizedCity, isRecognizedProvince } from '../../lib/data/philippines';
+import { CATEGORIES as SHARED_CATEGORIES } from '../../lib/data/categories';
 
 /* ─── Draft shapes ──────────────────────────────────────
  * Local to onboarding — not shared types. Assembled into a real `Business` by the route
@@ -42,6 +44,10 @@ import { isRecognizedCity, isRecognizedProvince } from '../../lib/data/philippin
 export interface IdentityDraft {
   signupIntent: SignupIntent;
   registeredName: string;
+  /** Optional trading name shown instead of registeredName wherever this
+   *  business's name appears to someone else. Blank means registeredName
+   *  is used everywhere, same as before this field existed. */
+  displayName: string;
   businessType: BusinessType;
   category: string;
   city: string;
@@ -53,6 +59,10 @@ export interface IdentityDraft {
 export interface OperationsDraft {
   capabilities: string[];
   serviceAreas: string[];
+  /** Optional public-facing bio — blank is completely normal, same as
+   *  before this field existed. Can be typed by hand or drafted with the AI
+   *  profile assistant (see onSuggestDescription on OperationsProps). */
+  businessDescription: string;
 }
 
 export interface DocumentsDraft {
@@ -85,6 +95,11 @@ interface OperationsProps {
   initial?: Partial<OperationsDraft>;
   onContinue: (draft: OperationsDraft) => void;
   onBack: () => void;
+  /** AI profile assistant — drafts a short bio from what's already known
+   *  (type, category, capabilities, service areas, location). Optional:
+   *  the bio field is always a normal editable textarea whether or not
+   *  this is wired up, and null (nothing suggested) is a normal result. */
+  onSuggestDescription?: (capabilities: string[], serviceAreas: string[]) => Promise<string | null>;
   /** True when an already-verified business reached this screen from "Update
    *  profile" rather than fresh onboarding — onContinue here saves and exits
    *  straight away instead of moving on to DOCUMENTS, since editing your name
@@ -99,6 +114,13 @@ interface DocumentsProps {
   operations: OperationsDraft;
   onSubmit: (draft: DocumentsDraft) => void;
   onBack: () => void;
+  /** Assistive Document Extraction (thesis Innovation & Technology) — reads
+   *  the picked file and suggests the certificate/ID number. Purely a
+   *  convenience: null (no suggestion) is a completely normal result, and
+   *  the returned value only ever pre-fills an ordinary editable field,
+   *  never submitted without the business seeing it first. Optional so this
+   *  screen still works exactly as before if the route doesn't wire it up. */
+  onExtractDocument?: (docType: string, file: File) => Promise<string | null>;
 }
 
 interface ArrivalProps {
@@ -112,9 +134,13 @@ export type OnboardingProps = IdentityProps | OperationsProps | DocumentsProps |
 
 /* ─── Constants ─────────────────────────────────────── */
 
+// Verb-phrase labels ("Find suppliers"), not identity statements ("I'm buying") —
+// this decides feed ORDER only (see requirement_service.list_open's wants_work),
+// never what a business is allowed to do. Every verified business can post
+// requirements and submit quotations either way; this only ranks yours.
 const SIGNUP_INTENTS: { value: SignupIntent; label: string }[] = [
-  { value: 'FIND_SUPPLIERS', label: "I'm buying" },
-  { value: 'FIND_WORK', label: "I'm supplying" },
+  { value: 'FIND_SUPPLIERS', label: 'Find suppliers' },
+  { value: 'FIND_WORK', label: 'Find opportunities' },
   { value: 'BOTH', label: 'Both' },
 ];
 
@@ -129,15 +155,21 @@ function businessTypeLabel(type: BusinessType): string {
   return BUSINESS_TYPES.find((t) => t.value === type)?.label ?? type;
 }
 
+/** Capability suggestions per category — keys must match the shared CATEGORIES
+ *  list (see lib/data/categories.ts) so the two never drift apart again. */
 const CAPABILITIES_BY_CATEGORY: Record<string, string[]> = {
-  'Construction': ['Steel fabrication', 'Welding', 'Metal supply', 'Installation', 'Roofing', 'Concrete works', 'Masonry', 'Carpentry', 'Painting & finishing', 'Scaffolding', 'Cement & aggregates supply', 'Hardware supply'],
-  'Food Retail': ['Bulk grains supply', 'Fresh produce', 'Cold storage', 'Meat & poultry', 'Food processing', 'Packaging supply', 'Catering', 'Distribution'],
-  'Printing & Packaging': ['Offset printing', 'Digital printing', 'Large format', 'Corrugated boxes', 'Labels & stickers', 'Bookbinding', 'Signage', 'Packaging design'],
-  'Logistics and Warehousing': ['Trucking', 'Warehousing', 'Courier', 'Freight forwarding', 'Heavy equipment hauling', 'Cold chain', 'Last-mile delivery'],
-  'Professional Services': ['Bookkeeping', 'Audit', 'Legal services', 'Architectural design', 'Structural engineering', 'Surveying', 'IT services', 'Permit processing'],
-  'Electrical & Electronics': ['Electrical installation', 'Panel fabrication', 'Generator supply', 'Lighting supply', 'CCTV & security', 'Network cabling', 'Aircon installation', 'Equipment repair'],
+  'Printing': ['Offset printing', 'Digital printing', 'Large format printing', 'Bookbinding', 'Signage & banners', 'Screen printing'],
+  'Construction Supply': ['Cement & aggregates', 'Steel & rebar supply', 'Hardware supply', 'Lumber & plywood', 'Roofing materials', 'Plumbing supplies', 'Electrical supplies'],
+  'Fabrication & Manufacturing': ['Steel fabrication', 'Welding', 'Metal works', 'CNC machining', 'Sheet metal works', 'Custom manufacturing', 'Injection molding'],
+  'Industrial Services': ['Equipment repair & maintenance', 'Industrial cleaning', 'Calibration services', 'Installation services', 'Industrial painting', 'Scaffolding'],
+  'Food Supply & Catering': ['Bulk grains supply', 'Fresh produce', 'Meat & poultry', 'Cold storage', 'Catering services', 'Food processing', 'Beverage supply'],
+  'Medical & Clinic Supplies': ['Medical equipment', 'Pharmaceutical supply', 'PPE & consumables', 'Laboratory supplies', 'Dental supplies', 'Clinic furniture'],
+  'IT Equipment & Hardware': ['Computer hardware', 'Networking equipment', 'Printers & peripherals', 'Server equipment', 'CCTV & security systems', 'POS systems'],
+  'Vehicle Parts & Services': ['Auto parts supply', 'Tires & batteries', 'Vehicle maintenance', 'Fleet servicing', 'Heavy equipment parts', 'Towing services'],
+  'Packaging & Labeling': ['Corrugated boxes', 'Labels & stickers', 'Shrink wrap & film', 'Packaging design', 'Custom packaging', 'Pallets & crates'],
+  'Office & Janitorial Supplies': ['Office supplies', 'Cleaning supplies', 'Janitorial services', 'Furniture supply', 'Pest control', 'Waste management'],
 };
-const CATEGORIES = Object.keys(CAPABILITIES_BY_CATEGORY);
+const CATEGORIES = SHARED_CATEGORIES;
 const CATEGORY_VISIBLE_COUNT = 4;
 
 const CAPABILITY_MIN = 3;
@@ -197,6 +229,17 @@ const ID_FORMAT_PATTERNS: Record<'DTI' | 'SEC' | 'BIR' | 'MAYORS_PERMIT', RegExp
 
 function isValidIdNumber(docType: keyof typeof ID_FORMAT_PATTERNS, value: string): boolean {
   return ID_FORMAT_PATTERNS[docType].test(value.trim());
+}
+
+/** Strips emoji from a free-text name field as it's typed — a business's
+ *  registered name, display name, or contact person has no legitimate use
+ *  for one, and it doesn't belong on a DTI/SEC/BIR-facing profile. Accented
+ *  Latin letters (José, Café, Ñoño) are untouched — only pictographs, flags,
+ *  and the joiner/variation-selector marks that build up combined emoji. */
+function stripEmoji(text: string): string {
+  return text
+    .replace(/\p{Extended_Pictographic}|\p{Emoji_Presentation}|[\u{200D}\u{FE0F}\u{20E3}\u{1F1E6}-\u{1F1FF}]/gu, '')
+    .replace(/ {2,}/g, ' ');
 }
 
 function formatMobileDisplay(rawDigits: string): string {
@@ -425,6 +468,7 @@ function CategoryChips({ category, onSelect }: { category: string; onSelect: (c:
 function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps & { reportContinue: (fn: () => void) => void }) {
   const [signupIntent, setSignupIntent] = useState<SignupIntent>(initial?.signupIntent ?? 'BOTH');
   const [registeredName, setRegisteredName] = useState(initial?.registeredName ?? '');
+  const [displayName, setDisplayName] = useState(initial?.displayName ?? '');
   const [businessType, setBusinessType] = useState<BusinessType | ''>(initial?.businessType ?? '');
   const [category, setCategory] = useState(initial?.category ?? '');
   const [city, setCity] = useState(initial?.city ?? '');
@@ -463,6 +507,7 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
     onContinue({
       signupIntent,
       registeredName: registeredName.trim(),
+      displayName: displayName.trim(),
       businessType,
       category,
       city: city.trim(),
@@ -481,9 +526,10 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
       <ScreenTitle title="Tell us about your business" />
       {attempted && missing.length > 0 && <SummaryBanner message={`Still needed before you continue: ${listOut(missing)}.`} />}
       <View style={styles.intentBlock}>
-        <Text style={styles.fieldLabel}>What brought you here?</Text>
+        <Text style={styles.fieldLabel}>What are you here to do first?</Text>
         <Text style={styles.fieldCaption}>
-          This just orders what shows up in your first feed — you can look for both any time, and it is never shown on your profile.
+          A feed preference, not an account type — it only orders what shows up first in your feed. Every verified
+          business can post requirements and submit quotations either way, any time. Never shown on your profile.
         </Text>
         <View style={styles.segmentGroup}>
           {SIGNUP_INTENTS.map((opt) => {
@@ -504,12 +550,24 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
             <Text style={styles.fieldCaption}>Exactly as it appears on your DTI or SEC certificate. We check the two against each other.</Text>
             <TextInput
               value={registeredName}
-              onChangeText={setRegisteredName}
+              onChangeText={(v) => setRegisteredName(stripEmoji(v))}
               placeholder="Santiago Metal Works and General Merchandise"
               placeholderTextColor={color.inkFaint}
               style={[styles.input, nameBad ? styles.inputError : null]}
             />
             {nameBad && <Text style={styles.errorText}>That looks short for a registered name — check it against the certificate.</Text>}
+          </View>
+
+          <View>
+            <Text style={styles.fieldLabel}>Display name <Text style={styles.fieldOptional}>(optional)</Text></Text>
+            <Text style={styles.fieldCaption}>A shorter trading name, shown instead of your registered name wherever businesses see you — requirement cards, your profile. Leave blank to just use your registered name everywhere.</Text>
+            <TextInput
+              value={displayName}
+              onChangeText={(v) => setDisplayName(stripEmoji(v))}
+              placeholder="Santiago Metal Works"
+              placeholderTextColor={color.inkFaint}
+              style={styles.input}
+            />
           </View>
 
           <View style={styles.twoColRow}>
@@ -574,7 +632,7 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
             <Text style={styles.fieldLabel}>Contact person</Text>
             <TextInput
               value={contactPerson}
-              onChangeText={setContactPerson}
+              onChangeText={(v) => setContactPerson(stripEmoji(v))}
               placeholder="Maria Santiago"
               placeholderTextColor={color.inkFaint}
               style={[styles.input, attempted && contactPersonBad ? styles.inputError : null]}
@@ -612,17 +670,46 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
 
 /* ─── OPERATIONS ────────────────────────────────────── */
 
-function OperationsScreen({ identity, initial, onContinue, reportContinue }: OperationsProps & { reportContinue: (fn: () => void) => void }) {
+function OperationsScreen({ identity, initial, onContinue, onSuggestDescription, reportContinue }: OperationsProps & { reportContinue: (fn: () => void) => void }) {
   const [capabilities, setCapabilities] = useState<string[]>(initial?.capabilities ?? []);
   const [capQuery, setCapQuery] = useState('');
   const [serviceAreas, setServiceAreas] = useState<string[]>(initial?.serviceAreas ?? (identity.province ? [identity.province] : []));
   const [areaInput, setAreaInput] = useState('');
+  const [businessDescription, setBusinessDescription] = useState(initial?.businessDescription ?? '');
+  const [descStatus, setDescStatus] = useState<'idle' | 'checking' | 'not_found'>('idle');
   const [attempted, setAttempted] = useState(false);
+
+  async function handleSuggestDescription() {
+    if (!onSuggestDescription) return;
+    setDescStatus('checking');
+    try {
+      const suggestion = await onSuggestDescription(capabilities, serviceAreas);
+      if (suggestion) {
+        setBusinessDescription(suggestion);
+        setDescStatus('idle');
+      } else {
+        setDescStatus('not_found');
+      }
+    } catch {
+      setDescStatus('not_found');
+    }
+  }
 
   const pool = CAPABILITIES_BY_CATEGORY[identity.category] ?? [];
   const q = capQuery.trim().toLowerCase();
   const shownCaps = q ? pool.filter((c) => c.toLowerCase().includes(q)) : pool;
   const atCap = capabilities.length >= CAPABILITY_MAX;
+  // Anything selected that isn't one of the preset pills — typed in below.
+  // Keeping the preset list as the primary path (rather than going pure
+  // free text) matters for matching: the study's own preliminary survey
+  // found businesses describe themselves in inconsistent terms, which is
+  // exactly what makes a plain keyword/category match miss — a shared
+  // vocabulary from the presets is what keeps that matching working today.
+  // Free text still earns its place for whatever a business's specialty
+  // genuinely isn't on the list (e.g. "Cement manufacturing" specifically,
+  // not just "Cement & aggregates").
+  const customCapabilities = capabilities.filter((c) => !pool.includes(c));
+  const [customCapInput, setCustomCapInput] = useState('');
 
   function toggleCapability(c: string) {
     setCapabilities((prev) => {
@@ -630,6 +717,14 @@ function OperationsScreen({ identity, initial, onContinue, reportContinue }: Ope
       if (!has && prev.length >= CAPABILITY_MAX) return prev;
       return has ? prev.filter((x) => x !== c) : [...prev, c];
     });
+  }
+
+  function addCustomCapability() {
+    const v = customCapInput.trim();
+    if (!v || atCap) return;
+    if (capabilities.some((c) => c.toLowerCase() === v.toLowerCase())) return;
+    setCapabilities((prev) => [...prev, v]);
+    setCustomCapInput('');
   }
 
   function addArea() {
@@ -652,7 +747,7 @@ function OperationsScreen({ identity, initial, onContinue, reportContinue }: Ope
       setAttempted(true);
       return;
     }
-    onContinue({ capabilities, serviceAreas });
+    onContinue({ capabilities, serviceAreas, businessDescription });
   };
 
   reportContinue(handleContinue);
@@ -696,6 +791,32 @@ function OperationsScreen({ identity, initial, onContinue, reportContinue }: Ope
         {q.length > 0 && shownCaps.length === 0 && (
           <Text style={styles.fieldNote}>Nothing in {identity.category} matches "{capQuery}". Try a broader word.</Text>
         )}
+
+        {customCapabilities.length > 0 && (
+          <View style={[styles.pillGroupWrap, { marginTop: space.sm }]}>
+            {customCapabilities.map((c) => (
+              <Pressable key={c} onPress={() => toggleCapability(c)} style={[styles.pill, styles.pillActive]}>
+                <View style={styles.pillContentRow}>
+                  <CheckGlyph tone={color.primary} />
+                  <Text style={[styles.pillLabel, styles.pillLabelActive]}>{c}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        <Text style={[styles.fieldCaption, { marginTop: space.sm }]}>Specialty not on the list? Type your own.</Text>
+        <View style={styles.addAreaRow}>
+          <TextInput
+            value={customCapInput}
+            onChangeText={(v) => setCustomCapInput(stripEmoji(v))}
+            onSubmitEditing={addCustomCapability}
+            editable={!atCap}
+            placeholder={atCap ? `${CAPABILITY_MAX} selected already` : 'e.g. Cement manufacturing'}
+            placeholderTextColor={color.inkFaint}
+            style={[styles.input, { flex: 1, marginTop: 0 }]}
+          />
+          <ActionButton label="Add" variant="outline" onPress={addCustomCapability} />
+        </View>
       </FormSection>
 
       <FormDivider />
@@ -718,7 +839,7 @@ function OperationsScreen({ identity, initial, onContinue, reportContinue }: Ope
         <View style={styles.addAreaRow}>
           <TextInput
             value={areaInput}
-            onChangeText={setAreaInput}
+            onChangeText={(v) => setAreaInput(stripEmoji(v))}
             onSubmitEditing={addArea}
             placeholder="Add a city or province"
             placeholderTextColor={color.inkFaint}
@@ -726,6 +847,46 @@ function OperationsScreen({ identity, initial, onContinue, reportContinue }: Ope
           />
           <ActionButton label="Add" variant="outline" onPress={addArea} />
         </View>
+      </FormSection>
+
+      <FormDivider />
+
+      <FormSection heading="About your business">
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.fieldLabel}>Bio</Text>
+          <View style={{ flex: 1 }} />
+          <View style={[styles.tag, styles.tagOptional]}>
+            <Text style={[styles.tagLabel, styles.tagLabelOptional]}>Optional</Text>
+          </View>
+        </View>
+        <Text style={styles.fieldCaption}>Shown on your public profile. Write your own, or let the AI profile assistant draft one from what you picked above — you can edit or clear it either way.</Text>
+        <TextInput
+          value={businessDescription}
+          onChangeText={setBusinessDescription}
+          multiline
+          numberOfLines={3}
+          maxLength={500}
+          placeholder="e.g. Tarpaulin and large-format printing serving Calamba and nearby Laguna towns."
+          placeholderTextColor={color.inkFaint}
+          style={styles.textareaLarge}
+        />
+        {onSuggestDescription && (
+          <Pressable
+            onPress={handleSuggestDescription}
+            disabled={descStatus === 'checking' || capabilities.length < CAPABILITY_MIN}
+            style={styles.docAddButton}
+          >
+            <Text style={styles.docAddButtonLabel}>
+              {descStatus === 'checking' ? 'Drafting…' : businessDescription ? 'Redo with AI' : 'Suggest with AI'}
+            </Text>
+          </Pressable>
+        )}
+        {capabilities.length < CAPABILITY_MIN && (
+          <Text style={styles.fieldCaption}>Pick your capabilities above first — the assistant drafts from those.</Text>
+        )}
+        {descStatus === 'not_found' && (
+          <Text style={styles.fieldCaption}>Couldn't draft one right now — write your own, or try again in a moment.</Text>
+        )}
       </FormSection>
     </View>
   );
@@ -754,6 +915,7 @@ function DocumentUploadRow({
   onIdNumberChange,
   idNumberBad,
   attempted,
+  extractionStatus,
 }: {
   name: string;
   help: string;
@@ -767,6 +929,10 @@ function DocumentUploadRow({
   onIdNumberChange: (value: string) => void;
   idNumberBad: boolean;
   attempted: boolean;
+  /** Assistive Document Extraction's outcome for this document, if any —
+   *  purely informational, the field itself is always a normal editable
+   *  TextInput regardless of what this says. */
+  extractionStatus?: 'reading' | 'found' | 'not_found';
 }) {
   return (
     <View>
@@ -806,6 +972,13 @@ function DocumentUploadRow({
             autoCapitalize="characters"
             style={[styles.input, attempted && idNumberBad ? styles.inputError : null]}
           />
+          {extractionStatus === 'reading' && <Text style={styles.fieldCaption}>Reading your document…</Text>}
+          {extractionStatus === 'found' && (
+            <Text style={styles.fieldCaption}>Suggested from your document — check it against the original.</Text>
+          )}
+          {extractionStatus === 'not_found' && (
+            <Text style={styles.fieldCaption}>Couldn't find a number on that document — enter it yourself below.</Text>
+          )}
           {attempted && idNumberBad && (
             <Text style={styles.errorText}>That doesn't look like a valid {idNumberLabel.toLowerCase()} — check it against the document.</Text>
           )}
@@ -815,7 +988,7 @@ function DocumentUploadRow({
   );
 }
 
-function DocumentsScreen({ identity, onSubmit, reportContinue }: DocumentsProps & { reportContinue: (fn: () => void) => void }) {
+function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument }: DocumentsProps & { reportContinue: (fn: () => void) => void }) {
   const regSpec = registrationDocSpec(identity.businessType);
   const [registrationDoc, setRegistrationDoc] = useState<Attachment | null>(null);
   const [registrationIdNumber, setRegistrationIdNumber] = useState('');
@@ -825,14 +998,60 @@ function DocumentsScreen({ identity, onSubmit, reportContinue }: DocumentsProps 
   const [mayorsPermitIdNumber, setMayorsPermitIdNumber] = useState('');
   const [attempted, setAttempted] = useState(false);
 
+  // Assistive Document Extraction UI state — what happened the last time each
+  // slot was read, purely for the caption under that field; doesn't gate
+  // anything, the fields stay normal editable TextInputs regardless.
+  type DocKind = 'registration' | 'bir' | 'permit';
+  type ExtractionStatus = 'reading' | 'found' | 'not_found';
+  const [extractionStatus, setExtractionStatus] = useState<Partial<Record<DocKind, ExtractionStatus>>>({});
+
   function applyPicked(kind: 'registration' | 'bir' | 'permit', file: Attachment) {
     if (kind === 'registration') setRegistrationDoc(file);
     else if (kind === 'bir') setBirDoc(file);
     else setMayorsPermit(file);
   }
 
+  async function runExtraction(kind: DocKind, docType: string, picked: File) {
+    if (!onExtractDocument) return;
+    setExtractionStatus((prev) => ({ ...prev, [kind]: 'reading' }));
+    try {
+      const suggestion = await onExtractDocument(docType, picked);
+      if (!suggestion) {
+        setExtractionStatus((prev) => ({ ...prev, [kind]: 'not_found' }));
+        return;
+      }
+      const setValue = kind === 'registration' ? setRegistrationIdNumber : kind === 'bir' ? setBirIdNumber : setMayorsPermitIdNumber;
+      // Functional form, not a closed-over value — the extraction request can
+      // take a couple seconds, and if the business typed something into the
+      // field themselves while it was in flight, this must see THAT, not a
+      // stale snapshot from when the request started. Only ever fills a field
+      // that's still blank by the time the suggestion actually lands.
+      let applied = false;
+      setValue((current) => {
+        if (current.trim()) return current;
+        applied = true;
+        return suggestion;
+      });
+      // If the field already had text by the time the suggestion landed, the
+      // business typed it themselves — leave their caption alone rather than
+      // reporting an outcome about a value they didn't ask for.
+      if (applied) {
+        setExtractionStatus((prev) => ({ ...prev, [kind]: 'found' }));
+      } else {
+        setExtractionStatus((prev) => {
+          const next = { ...prev };
+          delete next[kind];
+          return next;
+        });
+      }
+    } catch {
+      setExtractionStatus((prev) => ({ ...prev, [kind]: 'not_found' }));
+    }
+  }
+
   function capture(kind: 'registration' | 'bir' | 'permit') {
     const tag = kind === 'registration' ? regSpec.key : kind === 'bir' ? 'BIR' : 'PERMIT';
+    const docType = kind === 'registration' ? regSpec.key : kind === 'bir' ? 'BIR' : 'MAYORS_PERMIT';
 
     // Web: open a real file picker so there's an actual Blob to upload later.
     if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
@@ -850,7 +1069,9 @@ function DocumentsScreen({ identity, onSubmit, reportContinue }: DocumentsProps 
           sizeBytes: picked.size,
           mimeType: picked.type,
           uri: '',
+          documentLabel: null,
         });
+        void runExtraction(kind, docType, picked);
       };
       input.click();
       return;
@@ -864,6 +1085,7 @@ function DocumentsScreen({ identity, onSubmit, reportContinue }: DocumentsProps 
       sizeBytes: 2_400_000,
       mimeType: 'image/jpeg',
       uri: '',
+      documentLabel: null,
     });
   }
 
@@ -908,6 +1130,7 @@ function DocumentsScreen({ identity, onSubmit, reportContinue }: DocumentsProps 
             onIdNumberChange={setRegistrationIdNumber}
             idNumberBad={registrationIdBad}
             attempted={attempted}
+            extractionStatus={extractionStatus.registration}
           />
           <FormDivider />
           <DocumentUploadRow
@@ -923,6 +1146,7 @@ function DocumentsScreen({ identity, onSubmit, reportContinue }: DocumentsProps 
             onIdNumberChange={setBirIdNumber}
             idNumberBad={birIdBad}
             attempted={attempted}
+            extractionStatus={extractionStatus.bir}
           />
           <FormDivider />
           <DocumentUploadRow
@@ -938,6 +1162,7 @@ function DocumentsScreen({ identity, onSubmit, reportContinue }: DocumentsProps 
             onIdNumberChange={setMayorsPermitIdNumber}
             idNumberBad={mayorsPermitIdBad}
             attempted={attempted}
+            extractionStatus={extractionStatus.permit}
           />
         </View>
       </FormSection>
@@ -980,7 +1205,7 @@ function ArrivalScreen({ business, documents, onEnterApp }: ArrivalProps) {
   ];
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.arrivalScrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.arrivalScrollContent}>
       <View style={styles.arrivalPage}>
         <View style={styles.arrivalHero}>
           <View style={styles.arrivalIconCircle}>
@@ -1073,7 +1298,7 @@ function ArrivalScreen({ business, documents, onEnterApp }: ArrivalProps) {
           <ActionButton label="See requirements for you" variant="primary" onPress={onEnterApp} />
         </View>
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 
@@ -1195,11 +1420,11 @@ export default function Onboarding(props: OnboardingProps) {
         <BrandMark />
       </View>
 
-      <ScrollView style={styles.shellScroll} contentContainerStyle={styles.shellScrollContent}>
+      <ScreenScroll style={styles.shellScroll} contentContainerStyle={styles.shellScrollContent}>
         <View style={styles.shellInner}>
           <StepTransition step={props.step}>{content}</StepTransition>
         </View>
-      </ScrollView>
+      </ScreenScroll>
 
       <BottomBar
         step={props.step}
@@ -1303,11 +1528,13 @@ const styles = StyleSheet.create({
   cardHeaderRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm, flexWrap: 'wrap' },
   fieldLabel: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
   fieldCaption: { marginTop: 2, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
+  fieldOptional: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkFaint },
   fieldNote: { marginTop: space.xs, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
   errorText: { marginTop: space.xs, fontFamily: font.body, fontSize: fontSize.sm, color: color.danger },
   quietNote: { marginTop: space.xs, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkFaint },
 
   input: { marginTop: space.xs, backgroundColor: color.canvas, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm, fontFamily: font.body, fontSize: fontSize.base, color: color.ink },
+  textareaLarge: { marginTop: space.xs, backgroundColor: color.canvas, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm, fontFamily: font.body, fontSize: fontSize.base, color: color.ink, minHeight: 80, textAlignVertical: 'top' },
   inputError: { borderColor: color.dangerBorder },
 
   twoColRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.lg },

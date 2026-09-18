@@ -9,6 +9,7 @@ import VerificationStatus from '../features/verification/VerificationStatus';
 import { getVerificationStatus } from '../lib/api/business';
 import type { VerificationStatusOut } from '../lib/api/business';
 import { color, font, fontSize, space } from '../components/ui/tokens';
+import { errorMessage } from '../lib/api/client';
 
 export default function VerificationStatusRoute() {
   const router = useRouter();
@@ -22,7 +23,7 @@ export default function VerificationStatusRoute() {
     try {
       setStatus(await getVerificationStatus());
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Failed to load your verification status.');
+      setError(errorMessage(e, 'Failed to load your verification status.'));
     } finally {
       setLoading(false);
     }

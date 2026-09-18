@@ -10,6 +10,7 @@ import { getVerificationStatus, getDashboardStats } from '../lib/api/business';
 import { mapViewerBusiness } from '../lib/api/mappers';
 import type { Business } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
+import { errorMessage } from '../lib/api/client';
 
 export default function AccountRoute() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function AccountRoute() {
       const [user, verification, stats] = await Promise.all([me(), getVerificationStatus(), getDashboardStats()]);
       setViewer(mapViewerBusiness(user, verification, stats));
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not load your profile.');
+      setError(errorMessage(e, 'Could not load your profile.'));
     } finally {
       setLoading(false);
     }

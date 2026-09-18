@@ -9,7 +9,8 @@
 // no natural grouping the way quotations/requirements group by status.
 
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
   color,
   font,
@@ -51,8 +52,13 @@ function pluralUnit(n: number, w: string): string {
 function alertTypeLabel(type: AlertType): string {
   switch (type) {
     case 'REQUIREMENT_CLOSING': return 'Closing';
+    case 'REQUIREMENT_RELEASED': return 'Released';
+    case 'REQUIREMENT_CANCELLED': return 'Cancelled';
     case 'DECISION': return 'Decision';
+    case 'CLOSED_NO_AWARD': return 'Closed';
     case 'VERIFICATION': return 'Verification';
+    case 'TIER_UPGRADE': return 'Tier';
+    case 'DOCUMENT_FLAGGED': return 'Document';
     case 'MESSAGE_RECEIVED': return 'Message';
     case 'QUESTION_ASKED': return 'Question';
     case 'QUESTION_ANSWERED': return 'Answer';
@@ -87,7 +93,7 @@ export default function Alerts(props: AlertsProps) {
   const unreadCount = alerts.filter((a) => !a.read).length;
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={isWide ? styles.pageWide : styles.page}>
         <View style={styles.breadcrumbRow}>
           <Pressable onPress={onBack} hitSlop={6}>
@@ -123,7 +129,7 @@ export default function Alerts(props: AlertsProps) {
           </View>
         )}
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 

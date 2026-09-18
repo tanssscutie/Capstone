@@ -1,12 +1,14 @@
 // lib/api/requirementsCache.ts
 //
-// The backend has no `GET /requirements/{id}` — only list endpoints
-// (`/requirements`, `/requirements/mine`) and action endpoints that take an id.
-// Screens that need a single requirement's full detail (app/requirement.tsx,
-// app/submit-quotation.tsx) read it from this cache instead, which is filled in
-// whenever a list is fetched (home feed) or a requirement is just created
-// (post-requirement). If a screen is opened directly with an id that was never
-// listed in this session, `ensure()` refetches the lists once to try to fill it.
+// A lightweight memoization layer in front of GET /requirements/{id} — list
+// screens (Home, My Requirements) already have a requirement's full detail
+// the moment they fetch their list, so `put`/`putMany` lets a click straight
+// into Requirement Detail render instantly instead of waiting on a redundant
+// network round trip. `ensure()` falls back to the real single-requirement
+// endpoint for anything not already cached (e.g. the route was opened
+// directly, or the requirement was never open/theirs, and so was never in
+// any list this session — closed/awarded requirements owned by someone else
+// are now reachable too, which the old list-refetch workaround could never do).
 import type { RequirementOut } from './requirements';
 import { requirementsApi } from './requirements';
 
@@ -22,17 +24,13 @@ export const requirementsCache = {
   get(id: number): RequirementOut | undefined {
     return cache.get(id);
   },
-  /** Returns the cached requirement, refetching the open + mine lists once if
-   *  it isn't there yet (e.g. the app was opened directly on this route). */
+  /** Returns the cached requirement, fetching it directly if it isn't there yet. */
   async ensure(id: number): Promise<RequirementOut | undefined> {
     const hit = cache.get(id);
     if (hit) return hit;
     try {
-      const [open, mine] = await Promise.all([requirementsApi.listOpen(), requirementsApi.listMine()]);
-      // /requirements/mine returns the lighter MyRequirementOut shape, not
-      // RequirementOut, so only `open` can actually refill this cache.
-      requirementsCache.putMany(open);
-      void mine;
+      const fresh = await requirementsApi.getById(id);
+      requirementsCache.put(fresh);
     } catch {
       // swallow — caller decides how to handle a still-missing requirement
     }

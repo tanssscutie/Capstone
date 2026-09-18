@@ -7,7 +7,7 @@
 // requirement needs (it isn't the viewer's own, unlike MyRequirements' rows).
 
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import {
   color,
   font,
@@ -20,6 +20,7 @@ import {
   breakpoint,
 } from '../../components/ui/tokens';
 import { AvatarChip, initials } from '../../components/ui/AvatarChip';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import type { Business, BusinessId, ISODateTime, Requirement, RequirementStatus } from '../../lib/types';
 
 /* ─── Props ─────────────────────────────────────────── */
@@ -60,6 +61,7 @@ function requirementStatusLabel(status: RequirementStatus): string {
     case 'DRAFT': return 'Draft';
     case 'OPEN': return 'Open';
     case 'CLOSED': return 'Closed';
+    case 'AWARD_PENDING': return 'Award pending';
     case 'AWARDED': return 'Awarded';
     case 'CLOSED_NO_AWARD': return 'Closed — No Award';
     case 'CANCELLED': return 'Cancelled';
@@ -175,7 +177,7 @@ export default function Saved(props: SavedProps) {
   const isWide = width >= breakpoint.desktop;
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={isWide ? styles.pageWide : styles.page}>
         <View style={styles.breadcrumbRow}>
           <Pressable onPress={onBack} hitSlop={6}>
@@ -211,7 +213,7 @@ export default function Saved(props: SavedProps) {
           </View>
         )}
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 

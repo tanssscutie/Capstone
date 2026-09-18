@@ -13,7 +13,6 @@ import { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   Pressable,
   StyleSheet,
   useWindowDimensions,
@@ -30,6 +29,7 @@ import {
   breakpoint,
 } from '../../components/ui/tokens';
 import { AvatarChip, initials } from '../../components/ui/AvatarChip';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import type {
   Business,
   BusinessId,
@@ -120,6 +120,7 @@ function quotationStatusLabel(status: QuotationStatus): string {
     case 'SUBMITTED': return 'Sealed';
     case 'RELEASED': return 'Released';
     case 'SHORTLISTED': return 'Shortlisted';
+    case 'AWARD_PENDING': return 'Notice of Award — respond';
     case 'AWARDED': return 'Awarded';
     case 'NOT_SELECTED': return 'Not selected';
     case 'WITHDRAWN': return 'Withdrawn';
@@ -132,6 +133,7 @@ function quotationStatusTone(status: QuotationStatus): 'primary' | 'neutral' {
   switch (status) {
     case 'SUBMITTED':
     case 'SHORTLISTED':
+    case 'AWARD_PENDING':
     case 'AWARDED':
       return 'primary';
     default:
@@ -139,9 +141,12 @@ function quotationStatusTone(status: QuotationStatus): 'primary' | 'neutral' {
   }
 }
 
-/** Sealed first — the only ones still actionable — then the rest of the lifecycle in
- *  narrative order, withdrawn last. */
-const GROUP_ORDER: QuotationStatus[] = ['SUBMITTED', 'SHORTLISTED', 'RELEASED', 'AWARDED', 'NOT_SELECTED', 'WITHDRAWN'];
+/** AWARD_PENDING first — a Notice of Award needs a response before its deadline,
+ *  more urgent than anything else on this list. Then sealed — the only other
+ *  still-actionable state — then the rest of the lifecycle in narrative order,
+ *  withdrawn last. Missing a status here doesn't just mis-sort it: filter() below
+ *  drops anything that matches no group, so it silently vanishes from the list. */
+const GROUP_ORDER: QuotationStatus[] = ['AWARD_PENDING', 'SUBMITTED', 'SHORTLISTED', 'RELEASED', 'AWARDED', 'NOT_SELECTED', 'WITHDRAWN'];
 
 /* ─── Small building blocks ─────────────────────────── */
 
@@ -349,7 +354,7 @@ export default function MyQuotations(props: MyQuotationsProps) {
   const isWide = width >= breakpoint.desktop;
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={isWide ? styles.pageWide : styles.page}>
         <View style={styles.breadcrumbRow}>
           <Pressable onPress={onBack} hitSlop={6}>
@@ -389,7 +394,7 @@ export default function MyQuotations(props: MyQuotationsProps) {
           </View>
         )}
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 

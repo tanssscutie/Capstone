@@ -2,9 +2,14 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import logging
+
 from app.core.database import create_db_and_tables
 from app.api.api import api_router
 from app.services.release_scheduler import start_scheduler, stop_scheduler
+from app.services import matching_service
+
+logger = logging.getLogger("trustlink.startup")
 
 app = FastAPI(title="TrustLink Backend")
 
@@ -39,6 +44,20 @@ def on_startup():
     # than by any person" — nothing in the API can flip a requirement from
     # open to closed; only this background job can, once closes_at passes.
     start_scheduler(interval_seconds=15)
+
+    # Pay the embedding model's one-time load cost (a few seconds — longer
+    # on the very first run ever, which also downloads it) here at boot,
+    # not on whichever request happens to hit semantic matching first. A
+    # failure here is never fatal — matching_service's own functions all
+    # degrade to "no semantic boost" on their own, same contract as every
+    # other AI feature in this codebase — this is purely so a real user's
+    # first Home feed load isn't the one paying that cost.
+    try:
+        matching_service._get_model()
+        matching_service._get_qdrant()
+        logger.info("Semantic matching model + vector store preloaded.")
+    except Exception:
+        logger.exception("Semantic matching preload failed — matching will fall back to closing-time-only ordering.")
 
 
 @app.on_event("shutdown")

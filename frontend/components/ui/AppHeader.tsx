@@ -38,6 +38,7 @@ import type { Business, TrustTier } from '../../lib/types';
 import { useHeaderScroll, HEADER_CONDENSE_AT } from './HeaderScrollContext';
 import { useViewer } from '../../lib/api/viewer';
 import AccountDropdown from './AccountDropdown';
+import MobileNavMenu from './MobileNavMenu';
 
 function tierLabel(tier: TrustTier | null): string {
   return tier === null ? 'Unrated' : `Tier ${tier}`;
@@ -91,6 +92,18 @@ function BellIcon({ tone }: IconProps) {
       <View style={[styles.bellDome, { borderColor: tone }]} />
       <View style={[styles.bellBase, { backgroundColor: tone }]} />
       <View style={[styles.bellClapper, { backgroundColor: tone }]} />
+    </View>
+  );
+}
+
+/** Below breakpoint.desktop, the full nav row (Home/My Quotations/My
+ *  Requirements/Saved) has nowhere to go — this opens MobileNavMenu instead. */
+function HamburgerIcon({ tone }: IconProps) {
+  return (
+    <View style={styles.hamburgerStack}>
+      <View style={[styles.hamburgerBar, { backgroundColor: tone }]} />
+      <View style={[styles.hamburgerBar, { backgroundColor: tone }]} />
+      <View style={[styles.hamburgerBar, { backgroundColor: tone }]} />
     </View>
   );
 }
@@ -224,6 +237,24 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0 }: Ap
     });
   };
 
+  // Mobile nav menu: same measure-fresh-on-open approach as the account
+  // menu above, anchored to the hamburger button's own position instead.
+  const hamburgerRef = useRef<View>(null);
+  const [navMenuOpen, setNavMenuOpen] = useState(false);
+  const [hamburgerLayout, setHamburgerLayout] = useState<{ top: number; left: number } | null>(null);
+
+  const openNavMenu = () => {
+    const node = hamburgerRef.current;
+    if (!node) {
+      setNavMenuOpen(true);
+      return;
+    }
+    node.measureInWindow((x, y, _hamburgerWidth, hamburgerHeight) => {
+      setHamburgerLayout({ top: Math.round(y + hamburgerHeight), left: Math.round(x) });
+      setNavMenuOpen(true);
+    });
+  };
+
   const renderNavItem = (item: NavItem) => {
     const active = pathname === item.href;
     const tone = active ? color.ink : color.inkMuted;
@@ -249,7 +280,7 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0 }: Ap
     return null;
   }
 
-  const name = viewer.registeredName || 'Your business';
+  const name = viewer.displayName || viewer.registeredName || 'Your business';
 
   // Translucent floating header: position absolute so it floats over content,
   // and add a top inset equal to the header's expanded height so content isn't
@@ -304,7 +335,13 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0 }: Ap
         </Animated.View>
 
         <View style={styles.headerRight}>
-          {isWide && <View style={styles.navRow}>{primaryNav.map(renderNavItem)}</View>}
+          {isWide ? (
+            <View style={styles.navRow}>{primaryNav.map(renderNavItem)}</View>
+          ) : (
+            <Pressable ref={hamburgerRef} style={styles.hamburgerButton} onPress={openNavMenu} accessibilityLabel="Open navigation menu">
+              <HamburgerIcon tone={color.ink} />
+            </Pressable>
+          )}
 
           {renderNavItem(alertsNav)}
 
@@ -329,6 +366,16 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0 }: Ap
           onDismiss={() => setAccountMenuOpen(false)}
           anchorTop={chipLayout.top}
           anchorRight={chipLayout.right}
+        />
+      )}
+
+      {navMenuOpen && hamburgerLayout && (
+        <MobileNavMenu
+          items={primaryNav}
+          activeHref={pathname}
+          onDismiss={() => setNavMenuOpen(false)}
+          anchorTop={hamburgerLayout.top}
+          anchorLeft={hamburgerLayout.left}
         />
       )}
     </Animated.View>
@@ -388,6 +435,11 @@ const styles = StyleSheet.create({
   navLabelActive: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
   navBadge: { position: 'absolute', top: -5, right: -7, minWidth: 14, height: 14, borderRadius: radius.pill, backgroundColor: color.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   navBadgeLabel: { fontFamily: font.mono, fontSize: 9, lineHeight: 10, color: color.onPrimary },
+
+  /* mobile nav trigger — stands in for navRow below breakpoint.desktop */
+  hamburgerButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  hamburgerStack: { width: 16, height: 11, justifyContent: 'space-between' },
+  hamburgerBar: { width: 16, height: 1.6, borderRadius: 1 },
 
   /* icon glyphs */
   iconStack: { alignItems: 'center' },

@@ -21,6 +21,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import type { ViewStyle } from 'react-native';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
   color,
   font,
@@ -167,6 +168,7 @@ function requirementStatusLabel(status: RequirementStatus): string {
     case 'DRAFT': return 'Draft';
     case 'OPEN': return 'Open';
     case 'CLOSED': return 'Closed';
+    case 'AWARD_PENDING': return 'Award pending';
     case 'AWARDED': return 'Awarded';
     case 'CLOSED_NO_AWARD': return 'Closed — No Award';
     case 'CANCELLED': return 'Cancelled';
@@ -1178,7 +1180,7 @@ function PhoneHomeFeed(props: HomeFeedProps) {
 
   return (
     <View style={styles.root}>
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={styles.page}>
         <CategoryPills categories={st.categories} active={st.categoryFilter} onSelect={st.setCategoryFilter} />
         <ProfileCard viewer={viewer} onAddMayorsPermit={props.onAddMayorsPermit} />
@@ -1258,7 +1260,7 @@ function PhoneHomeFeed(props: HomeFeedProps) {
 
         <HowMatchingWorksCard onUpdateCapabilities={props.onUpdateCapabilities} />
       </View>
-    </ScrollView>
+    </ScreenScroll>
     <ChatWidget
       threads={messageThreads}
       messagesByThread={messagesByThread}
@@ -1307,7 +1309,7 @@ function WideHomeFeed(props: HomeFeedProps) {
 
   return (
     <View style={styles.root}>
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContentWide}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContentWide}>
       <View
         style={[styles.categorySticky, stickyOnWeb]}
         onLayout={(e) => setCategoryHeight(e.nativeEvent.layout.height)}
@@ -1403,7 +1405,7 @@ function WideHomeFeed(props: HomeFeedProps) {
           </View>
         </View>
       </View>
-    </ScrollView>
+    </ScreenScroll>
     <ChatWidget
       threads={messageThreads}
       messagesByThread={messagesByThread}

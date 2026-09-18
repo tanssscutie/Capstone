@@ -20,6 +20,7 @@ backend/__pycache__/
 # Real uploaded documents — private data, and machine-local paths besides
 backend/uploads/*
 !backend/uploads/.gitkeep
+backend/qdrant_data/
 
 # Claude Code session/process metadata — not project source
 /.claude/scheduled_tasks.lock

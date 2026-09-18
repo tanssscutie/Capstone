@@ -26,7 +26,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, StyleSheet } from 'react-native';
+import { View, Text, Pressable, TextInput, StyleSheet } from 'react-native';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import type { LayoutChangeEvent } from 'react-native';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import {
@@ -57,6 +58,7 @@ export interface RequirementDetailsDraft {
   quantity: string;
   budgetMin: number | null;
   budgetMax: number | null;
+  requiredDocuments: string[];
 }
 
 export interface RequirementDeliveryDraft {
@@ -81,6 +83,7 @@ export interface RequirementDraftInput {
   quantity: string;
   budgetMin: number | null;
   budgetMax: number | null;
+  requiredDocuments: string[];
   deliveryCity: string;
   deliveryAddress: string;
   deliveryWindowFrom: string;
@@ -94,6 +97,10 @@ interface DetailsProps {
   poster: Business;
   initial?: Partial<RequirementDetailsDraft>;
   onContinue: (draft: RequirementDetailsDraft) => void;
+  /** Assistive category suggestion — reads title + scope, returns one of the
+   *  fixed categories or null. Optional: the pill list below works exactly
+   *  the same with or without it wired up. */
+  onSuggestCategory?: (title: string, scope: string) => Promise<string | null>;
 }
 
 interface DeliveryProps {
@@ -134,6 +141,22 @@ export type PostRequirementProps = DetailsProps | DeliveryProps | ClosingProps |
 /* ─── Constants ─────────────────────────────────────────
  * Categories mirror the six onboarding offers — see mock.ts. Time and preset options are
  * screen-local UI sugar, not domain data, so they live here rather than in mock.ts. */
+
+/** Mirrors RequirementCreate's Field(min_length=..., max_length=...) in
+ *  backend/app/schemas/requirement.py exactly — a mismatch here means a
+ *  requirement can clear every DETAILS-step check and still 422 at publish,
+ *  the bug this file's fields used to have (scope only checked non-empty,
+ *  backend required 10+ characters). */
+const TITLE_MIN = 5;
+const TITLE_MAX = 200;
+const SCOPE_MIN = 10;
+const SCOPE_MAX = 3000;
+const QUANTITY_MAX = 200;
+const SPEC_LABEL_MIN = 2;
+const SPEC_LABEL_MAX = 100;
+const SPEC_VALUE_MIN = 2;
+const SPEC_VALUE_MAX = 200;
+const SITE_ADDRESS_MAX = 300;
 
 const TIME_OPTIONS: { value: string; label: string }[] = [
   { value: '09:00', label: '9:00 AM' },
@@ -218,6 +241,19 @@ function sanitizeNumeric(v: string): string {
   return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
 }
 
+/** Catches placeholder-mashing that clears a plain "is it empty" check but isn't a
+ *  real specification: the same character repeated ("aaaa", "......"), or a string
+ *  with no letter or digit in it at all (only symbols/whitespace). Doesn't try to
+ *  detect every kind of gibberish — just the two shapes someone idly typing into a
+ *  form actually produces. */
+function isLikelyJunk(v: string): boolean {
+  const t = v.trim();
+  if (!t) return false; // emptiness is its own, separate check
+  if (!/[a-zA-Z0-9]/.test(t)) return true;
+  if (/^(.)\1*$/.test(t)) return true;
+  return false;
+}
+
 function pluralUnit(n: number, w: string): string {
   return `${n} ${w}${n === 1 ? '' : 's'}`;
 }
@@ -269,6 +305,7 @@ function buildDraftInput(details: RequirementDetailsDraft, delivery: Requirement
     quantity: details.quantity,
     budgetMin: details.budgetMin,
     budgetMax: details.budgetMax,
+    requiredDocuments: details.requiredDocuments,
     deliveryCity: delivery.city,
     deliveryAddress: delivery.address,
     deliveryWindowFrom: delivery.windowFrom,
@@ -378,34 +415,45 @@ interface SpecRowDraft {
 
 function SpecificationEditRow({
   row,
+  invalid,
   onChangeLabel,
   onChangeValue,
   onRemove,
 }: {
   row: SpecRowDraft;
+  invalid?: boolean;
   onChangeLabel: (v: string) => void;
   onChangeValue: (v: string) => void;
   onRemove: () => void;
 }) {
   return (
-    <View style={styles.specEditRow}>
-      <TextInput
-        value={row.label}
-        onChangeText={onChangeLabel}
-        placeholder="e.g. Platform area"
-        placeholderTextColor={color.inkFaint}
-        style={[styles.input, styles.specEditLabelInput]}
-      />
-      <TextInput
-        value={row.value}
-        onChangeText={onChangeValue}
-        placeholder="e.g. 240 sqm (20.0 m × 12.0 m)"
-        placeholderTextColor={color.inkFaint}
-        style={[styles.input, styles.specEditValueInput]}
-      />
-      <Pressable onPress={onRemove} style={styles.specEditRemove} hitSlop={8}>
-        <XGlyph tone={color.inkFaint} />
-      </Pressable>
+    <View>
+      <View style={styles.specEditRow}>
+        <TextInput
+          value={row.label}
+          onChangeText={onChangeLabel}
+          maxLength={SPEC_LABEL_MAX}
+          placeholder="e.g. Platform area"
+          placeholderTextColor={color.inkFaint}
+          style={[styles.input, styles.specEditLabelInput, invalid ? styles.inputError : null]}
+        />
+        <TextInput
+          value={row.value}
+          onChangeText={onChangeValue}
+          maxLength={SPEC_VALUE_MAX}
+          placeholder="e.g. 240 sqm (20.0 m × 12.0 m)"
+          placeholderTextColor={color.inkFaint}
+          style={[styles.input, styles.specEditValueInput, invalid ? styles.inputError : null]}
+        />
+        <Pressable onPress={onRemove} style={styles.specEditRemove} hitSlop={8}>
+          <XGlyph tone={color.inkFaint} />
+        </Pressable>
+      </View>
+      {invalid && (
+        <Text style={styles.errorText}>
+          Needs at least {SPEC_LABEL_MIN} real characters on each side — not just symbols or a repeated letter.
+        </Text>
+      )}
     </View>
   );
 }
@@ -545,12 +593,14 @@ function BottomBar({
   leftLabel,
   onPrimary,
   primaryLabel,
+  primaryDisabled = false,
 }: {
   step: PostRequirementState;
   onLeft?: () => void;
   leftLabel: string;
   onPrimary: () => void;
   primaryLabel: string;
+  primaryDisabled?: boolean;
 }) {
   return (
     <View style={styles.bottomBar}>
@@ -566,7 +616,7 @@ function BottomBar({
           <SegmentedSteps step={step} />
         </View>
         <View style={[styles.bottomBarSide, styles.bottomBarSideRight]}>
-          <ActionButton label={primaryLabel} variant="primary" onPress={onPrimary} />
+          <ActionButton label={primaryLabel} variant="primary" onPress={onPrimary} disabled={primaryDisabled} />
         </View>
       </View>
     </View>
@@ -577,17 +627,44 @@ function BottomBar({
  * Category, title, scope, specifications, quantity, indicative budget. Nothing about
  * location, dates, attachments, or closing. */
 
-function DetailsScreen({ poster, initial, onContinue, reportContinue }: DetailsProps & { reportContinue: (fn: () => void) => void }) {
+function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestCategory }: DetailsProps & { reportContinue: (fn: () => void) => void }) {
   const [category, setCategory] = useState(initial?.category ?? '');
   const [title, setTitle] = useState(initial?.title ?? '');
   const [scope, setScope] = useState(initial?.scope ?? '');
+  // Auto-tag suggestion — checked once the buyer has written enough of the
+  // title and scope to classify, purely a hint under the Category pills.
+  // Never overrides a category the buyer already picked themselves.
+  const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null);
+  const suggestionCheckedFor = useRef<string | null>(null);
+
+  async function checkCategorySuggestion(currentTitle: string, currentScope: string) {
+    if (!onSuggestCategory || category) return;
+    if (currentTitle.trim().length < TITLE_MIN || currentScope.trim().length < SCOPE_MIN) return;
+    const key = `${currentTitle.trim()}|${currentScope.trim()}`;
+    if (suggestionCheckedFor.current === key) return;
+    suggestionCheckedFor.current = key;
+    const result = await onSuggestCategory(currentTitle.trim(), currentScope.trim());
+    if (suggestionCheckedFor.current === key) setSuggestedCategory(result);
+  }
   const [specRows, setSpecRows] = useState<SpecRowDraft[]>(
     () => (initial?.specifications ?? []).map((s, i) => ({ id: `spec-init-${i}`, label: s.label, value: s.value })),
   );
   const [quantity, setQuantity] = useState(initial?.quantity ?? '');
   const [budgetMinText, setBudgetMinText] = useState(initial?.budgetMin != null ? String(initial.budgetMin) : '');
   const [budgetMaxText, setBudgetMaxText] = useState(initial?.budgetMax != null ? String(initial.budgetMax) : '');
+  const [requiredDocuments, setRequiredDocuments] = useState<string[]>(initial?.requiredDocuments ?? []);
+  const [docInput, setDocInput] = useState('');
   const [attempted, setAttempted] = useState(false);
+
+  function addRequiredDoc() {
+    const v = docInput.trim();
+    if (!v) return;
+    setRequiredDocuments((prev) => (prev.includes(v) ? prev : [...prev, v]));
+    setDocInput('');
+  }
+  function removeRequiredDoc(v: string) {
+    setRequiredDocuments((prev) => prev.filter((x) => x !== v));
+  }
 
   const budgetMin = num(budgetMinText);
   const budgetMax = num(budgetMaxText);
@@ -600,11 +677,30 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue }: DetailsP
 
   const filledSpecRows = specRows.filter((r) => r.label.trim() && r.value.trim());
 
+  /** A row only counts once BOTH sides clear length and look like real content —
+   *  not just non-empty (a single stray character used to be enough to pass). */
+  function isSpecRowValid(r: SpecRowDraft): boolean {
+    const label = r.label.trim();
+    const value = r.value.trim();
+    return (
+      label.length >= SPEC_LABEL_MIN && value.length >= SPEC_VALUE_MIN &&
+      !isLikelyJunk(label) && !isLikelyJunk(value)
+    );
+  }
+  const validSpecRows = specRows.filter(isSpecRowValid);
+  const badSpecRows = filledSpecRows.filter((r) => !isSpecRowValid(r));
+
+  const titleTooShort = title.trim().length > 0 && title.trim().length < TITLE_MIN;
+  const scopeTooShort = scope.trim().length > 0 && scope.trim().length < SCOPE_MIN;
+
   const missing: string[] = [];
   if (!category) missing.push('a category');
   if (!title.trim()) missing.push('a title');
+  else if (titleTooShort) missing.push(`a title of at least ${TITLE_MIN} characters`);
   if (!scope.trim()) missing.push('scope');
-  if (filledSpecRows.length === 0) missing.push('at least one specification');
+  else if (scopeTooShort) missing.push(`scope of at least ${SCOPE_MIN} characters`);
+  if (validSpecRows.length === 0) missing.push('at least one real specification');
+  else if (badSpecRows.length > 0) missing.push('a fix to the specification row marked below');
   if (!quantity.trim()) missing.push('quantity');
 
   const ready = missing.length === 0 && !budgetReversed;
@@ -618,10 +714,11 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue }: DetailsP
       category,
       title: title.trim(),
       scope: scope.trim(),
-      specifications: filledSpecRows.map((r) => ({ label: r.label.trim(), value: r.value.trim() })),
+      specifications: validSpecRows.map((r) => ({ label: r.label.trim(), value: r.value.trim() })),
       quantity: quantity.trim(),
       budgetMin,
       budgetMax,
+      requiredDocuments,
     });
   };
   reportContinue(handleContinue);
@@ -642,6 +739,11 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue }: DetailsP
               <Pill key={c} label={c} active={category === c} onPress={() => setCategory(c)} />
             ))}
           </View>
+          {!category && suggestedCategory && (
+            <Pressable onPress={() => setCategory(suggestedCategory)}>
+              <Text style={styles.fieldCaption}>Based on your title and scope, this looks like "{suggestedCategory}" — tap to use it.</Text>
+            </Pressable>
+          )}
         </View>
 
         <View>
@@ -649,10 +751,15 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue }: DetailsP
           <TextInput
             value={title}
             onChangeText={setTitle}
+            onBlur={() => void checkCategorySuggestion(title, scope)}
+            maxLength={TITLE_MAX}
             placeholder="e.g. Fabrication and installation of steel mezzanine platform"
             placeholderTextColor={color.inkFaint}
-            style={styles.input}
+            style={[styles.input, attempted && titleTooShort ? styles.inputError : null]}
           />
+          {attempted && titleTooShort && (
+            <Text style={styles.errorText}>Needs at least {TITLE_MIN} characters ({title.trim().length}/{TITLE_MIN}).</Text>
+          )}
         </View>
 
         <View>
@@ -660,13 +767,19 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue }: DetailsP
           <TextInput
             value={scope}
             onChangeText={setScope}
+            onBlur={() => void checkCategorySuggestion(title, scope)}
             multiline
             numberOfLines={6}
+            maxLength={SCOPE_MAX}
             placeholder="What is included and what is not — the boundaries of the work."
             placeholderTextColor={color.inkFaint}
-            style={styles.textareaLarge}
+            style={[styles.textareaLarge, attempted && scopeTooShort ? styles.inputError : null]}
           />
-          <Text style={styles.fieldCaption}>Vague scope produces quotations you cannot compare.</Text>
+          {attempted && scopeTooShort ? (
+            <Text style={styles.errorText}>Needs at least {SCOPE_MIN} characters ({scope.trim().length}/{SCOPE_MIN}).</Text>
+          ) : (
+            <Text style={styles.fieldCaption}>Vague scope produces quotations you cannot compare.</Text>
+          )}
         </View>
 
         <View>
@@ -677,6 +790,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue }: DetailsP
               <SpecificationEditRow
                 key={row.id}
                 row={row}
+                invalid={attempted && row.label.trim() !== '' && row.value.trim() !== '' && !isSpecRowValid(row)}
                 onChangeLabel={(v) => updateSpecRow(row.id, 'label', v)}
                 onChangeValue={(v) => updateSpecRow(row.id, 'value', v)}
                 onRemove={() => removeSpecRow(row.id)}
@@ -688,6 +802,29 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue }: DetailsP
           </View>
         </View>
 
+        <View>
+          <FieldLabel optional>Required documents</FieldLabel>
+          <Text style={styles.fieldCaption}>Qualifying documents each respondent should attach to their quotation — e.g. PCAB License, Sanitary Permit. Shown on submission, not a hard block.</Text>
+          <View style={styles.pillGroupWrap}>
+            {requiredDocuments.map((d) => (
+              <Pressable key={d} onPress={() => removeRequiredDoc(d)} style={[styles.pill, styles.pillActive]}>
+                <Text style={[styles.pillLabel, styles.pillLabelActive]}>{d} ×</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.addDocRow}>
+            <TextInput
+              value={docInput}
+              onChangeText={setDocInput}
+              onSubmitEditing={addRequiredDoc}
+              placeholder="e.g. PCAB License"
+              placeholderTextColor={color.inkFaint}
+              style={[styles.input, { flex: 1, marginTop: 0 }]}
+            />
+            <ActionButton label="Add" variant="outline" onPress={addRequiredDoc} />
+          </View>
+        </View>
+
         <FormDivider />
 
         <View style={styles.twoColRow}>
@@ -696,6 +833,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue }: DetailsP
             <TextInput
               value={quantity}
               onChangeText={setQuantity}
+              maxLength={QUANTITY_MAX}
               placeholder="e.g. One platform, 240 sqm"
               placeholderTextColor={color.inkFaint}
               style={styles.input}
@@ -781,7 +919,7 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
         pickedRequirementFiles.set(id, picked);
         setAttachments((prev) => [
           ...prev,
-          { id, filename: picked.name, sizeBytes: picked.size, mimeType: picked.type, uri: '' },
+          { id, filename: picked.name, sizeBytes: picked.size, mimeType: picked.type, uri: '', documentLabel: null },
         ]);
       };
       input.click();
@@ -792,7 +930,7 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
     // Onboarding.tsx's capture(); a native file picker is a separate follow-up.
     setAttachments((prev) => [
       ...prev,
-      { id: `f${Date.now()}`, filename: 'New attachment.pdf', sizeBytes: 640_000, mimeType: 'application/pdf', uri: '' },
+      { id: `f${Date.now()}`, filename: 'New attachment.pdf', sizeBytes: 640_000, mimeType: 'application/pdf', uri: '', documentLabel: null },
     ]);
   };
   const removeFile = (id: string) => {
@@ -834,6 +972,7 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
             <TextInput
               value={address}
               onChangeText={setAddress}
+              maxLength={SITE_ADDRESS_MAX}
               placeholder="Barangay Canlubang, Calamba, Laguna"
               placeholderTextColor={color.inkFaint}
               style={styles.input}
@@ -952,7 +1091,7 @@ function ClosingScreen({ initial, onContinue, reportContinue }: ClosingProps & {
 
         <View style={styles.closingStampRow}>
           <View style={{ minWidth: 0 }}>
-            <SectionLabel>Quotations open</SectionLabel>
+            <SectionLabel>Quotations close</SectionLabel>
             <Text style={styles.closingStampValue}>{closeDate ? formatDateTime(closingAt) : 'Not set'}</Text>
           </View>
           <View style={styles.closingStampDivider} />
@@ -1049,7 +1188,8 @@ function ReviewScreen({
   onPublish,
   publishError,
   reportContinue,
-}: ReviewProps & { reportContinue: (fn: () => void) => void }) {
+  reportPrimaryEnabled,
+}: ReviewProps & { reportContinue: (fn: () => void) => void; reportPrimaryEnabled?: (enabled: boolean) => void }) {
   const [ack, setAck] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const draft = buildDraftInput(details, delivery, closing);
@@ -1062,6 +1202,15 @@ function ReviewScreen({
     onPublish(draft);
   };
   reportContinue(handlePublish);
+
+  // Belt-and-suspenders alongside the ack check inside handlePublish above:
+  // the bottom bar's "Publish requirement" button is disabled outright while
+  // unchecked, so there's no click-then-blocked round trip to notice — and no
+  // way for a stale reportContinue registration (see the ghost-mount comment
+  // on StepTransition) to slip a publish through with the button still live.
+  useEffect(() => {
+    reportPrimaryEnabled?.(ack);
+  }, [ack, reportPrimaryEnabled]);
 
   const specText = draft.specifications.length > 0
     ? draft.specifications.map((s) => `${s.label}: ${s.value}`).join('\n')
@@ -1081,6 +1230,7 @@ function ReviewScreen({
           {!!specText && <SummaryBlock label="Specifications" value={specText} />}
           <SummaryLine label="Quantity" value={draft.quantity} />
           <SummaryLine label="Indicative budget" value={formatBudget(draft.budgetMin, draft.budgetMax)} />
+          <SummaryLine label="Required documents" value={draft.requiredDocuments.length > 0 ? draft.requiredDocuments.join(', ') : 'None'} />
         </SummaryGroup>
 
         <FormDivider />
@@ -1177,6 +1327,11 @@ function StepTransition({ step, children }: { step: PostRequirementState; childr
 
 export default function PostRequirement(props: PostRequirementProps) {
   const primaryRef = useRef<() => void>(() => {});
+  // REVIEW-only: whether "Publish requirement" is allowed to be pressed at all,
+  // reported up from ReviewScreen's ack checkbox (see reportPrimaryEnabled
+  // below). Ignored on every other step — those already gate on click via the
+  // same attempted/missing pattern as everywhere else in this file.
+  const [primaryEnabled, setPrimaryEnabled] = useState(true);
   // StepTransition keeps the departing screen mounted briefly as a "ghost" for its slide-
   // out animation (see StepTransition above). That ghost is a fresh mount of the same
   // screen component, so it re-runs reportContinue(handleContinue) too — with stale props
@@ -1218,7 +1373,13 @@ export default function PostRequirement(props: PostRequirementProps) {
       primaryLabel = 'Review requirement';
       break;
     case 'REVIEW':
-      content = <ReviewScreen {...props} reportContinue={makeReportContinue('REVIEW')} />;
+      content = (
+        <ReviewScreen
+          {...props}
+          reportContinue={makeReportContinue('REVIEW')}
+          reportPrimaryEnabled={setPrimaryEnabled}
+        />
+      );
       leftLabel = 'Back to edit';
       onLeft = props.onBack;
       primaryLabel = 'Publish requirement';
@@ -1229,17 +1390,18 @@ export default function PostRequirement(props: PostRequirementProps) {
   return (
     <View style={styles.root}>
       <ShellHeader step={props.state} onExit={onExit} />
-      <ScrollView style={styles.shellScroll} contentContainerStyle={styles.shellScrollContent}>
+      <ScreenScroll style={styles.shellScroll} contentContainerStyle={styles.shellScrollContent}>
         <View style={styles.shellInner}>
           <StepTransition step={props.state}>{content}</StepTransition>
         </View>
-      </ScrollView>
+      </ScreenScroll>
       <BottomBar
         step={props.state}
         onLeft={onLeft}
         leftLabel={leftLabel}
         onPrimary={() => primaryRef.current()}
         primaryLabel={primaryLabel}
+        primaryDisabled={props.state === 'REVIEW' && !primaryEnabled}
       />
     </View>
   );
@@ -1290,6 +1452,7 @@ const styles = StyleSheet.create({
   fieldLabelOptional: { fontFamily: font.body, color: color.inkFaint },
   fieldCaption: { marginTop: space.xs, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
   errorText: { marginTop: space.xs, fontFamily: font.body, fontSize: fontSize.sm, color: color.danger },
+  addDocRow: { flexDirection: 'row', gap: space.sm, marginTop: space.sm, alignItems: 'center' },
 
   formDivider: { height: 1, backgroundColor: color.borderFaint },
 

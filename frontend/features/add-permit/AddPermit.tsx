@@ -6,7 +6,8 @@
 // just the file, its permit number, and a submit.
 
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, TextInput, StyleSheet, useWindowDimensions } from 'react-native';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
   color,
   font,
@@ -19,6 +20,7 @@ import {
   layout,
   breakpoint,
 } from '../../components/ui/tokens';
+import { errorMessage } from '../../lib/api/client';
 
 /** Mirrors the backend's ID_FORMAT_PATTERNS["MAYORS_PERMIT"] (business_service.py). */
 const PERMIT_NUMBER_PATTERN = /^[A-Za-z0-9\-/]{4,30}$/;
@@ -75,7 +77,7 @@ export default function AddPermit({ onBack, onSubmit }: AddPermitProps) {
       await onSubmit(picked.file, picked.filename, permitNumber.trim());
       setDone(true);
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not upload your permit. Please try again.');
+      setError(errorMessage(e, 'Could not upload your permit. Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -99,7 +101,7 @@ export default function AddPermit({ onBack, onSubmit }: AddPermitProps) {
   }
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={isWide ? styles.pageWide : styles.page}>
         <View style={styles.breadcrumbRow}>
           <Pressable onPress={onBack} hitSlop={6}>
@@ -173,7 +175,7 @@ export default function AddPermit({ onBack, onSubmit }: AddPermitProps) {
           </Pressable>
         </View>
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 

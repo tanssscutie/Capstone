@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from app.core.clock import now_ph
 from typing import List, Optional
 
 from sqlmodel import Session, select, func
@@ -22,11 +23,23 @@ def list_open_requirements(session: Session, limit: int = 50) -> List[Requiremen
     return list(session.exec(statement).all())
 
 
+def list_award_pending_requirements_past_deadline(session: Session) -> List[Requirement]:
+    """Notices of Award nobody responded to in time — the auto-decline
+    scheduler's candidate set. Award never finalizes on its own; letting the
+    deadline lapse is treated exactly like the candidate declining."""
+    statement = (
+        select(Requirement)
+        .where(Requirement.status == "award_pending")
+        .where(Requirement.award_response_deadline <= now_ph())
+    )
+    return list(session.exec(statement).all())
+
+
 def list_closing_soon(session: Session, limit: int = 5) -> List[Requirement]:
     statement = (
         select(Requirement)
         .where(Requirement.status == "open")
-        .where(Requirement.closes_at >= datetime.utcnow())
+        .where(Requirement.closes_at >= now_ph())
         .order_by(Requirement.closes_at.asc())
         .limit(limit)
     )
@@ -38,7 +51,7 @@ def list_open_requirements_past_closing(session: Session) -> List[Requirement]:
     statement = (
         select(Requirement)
         .where(Requirement.status == "open")
-        .where(Requirement.closes_at <= datetime.utcnow())
+        .where(Requirement.closes_at <= now_ph())
     )
     return list(session.exec(statement).all())
 
@@ -159,13 +172,18 @@ def latest_quotation_at(session: Session, requirement_id: int):
 def count_awarded_quotations_for_business(session: Session, business_id: int) -> int:
     """How many times this business WON an award as a supplier — the
     correct signal for trust tier, as opposed to how many of their own
-    posted requirements (as a buyer) reached an award."""
+    posted requirements (as a buyer) reached an award. Requires status ==
+    'awarded' specifically, not just a matching awarded_quotation_id — that
+    column is also set while a Notice of Award is merely 'award_pending'
+    (proposed, not yet accepted), which must not count as a win yet since
+    the candidate can still decline or let it expire."""
     statement = (
         select(func.count())
         .select_from(Quotation)
         .join(Requirement, Quotation.requirement_id == Requirement.id)
         .where(Quotation.business_id == business_id)
         .where(Requirement.awarded_quotation_id == Quotation.id)
+        .where(Requirement.status == "awarded")
     )
     return session.exec(statement).one()
 
@@ -261,7 +279,7 @@ def list_all_requirements(session: Session) -> List[Requirement]:
 def list_open_requirements_closing_within(session: Session, hours: int) -> List[Requirement]:
     """Open requirements whose closing time falls inside the next `hours` —
     the closing-soon scheduler's candidate set for a REQUIREMENT_CLOSING alert."""
-    now = datetime.utcnow()
+    now = now_ph()
     threshold = now + timedelta(hours=hours)
     statement = (
         select(Requirement)
@@ -338,7 +356,7 @@ def list_questions(session: Session, requirement_id: int) -> List[ClarificationQ
 
 def answer_question(session: Session, question: ClarificationQuestion, answer: str) -> ClarificationQuestion:
     question.answer = answer
-    question.answered_at = datetime.utcnow()
+    question.answered_at = now_ph()
     session.add(question)
     session.commit()
     session.refresh(question)

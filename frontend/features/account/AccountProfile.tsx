@@ -5,7 +5,8 @@
 // on its own persistent, revisitable page. Same page shell as
 // VerificationStatus.tsx (breadcrumb, hero, bordered cards).
 
-import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
   color,
   font,
@@ -122,7 +123,7 @@ export default function AccountProfile({ viewer, onBack, onEditProfile }: Accoun
   ];
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={isWide ? styles.pageWide : styles.page}>
         <View style={styles.breadcrumbRow}>
           <Pressable onPress={onBack} hitSlop={6}>
@@ -200,7 +201,7 @@ export default function AccountProfile({ viewer, onBack, onEditProfile }: Accoun
           <ActionButton label="Back to home" variant="outline" onPress={onBack} />
         </View>
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 

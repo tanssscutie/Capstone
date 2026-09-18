@@ -1,12 +1,15 @@
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
 from app.core.security import get_current_user, require_admin, require_verified
 from app.models.user import User
 from app.services import requirement_service as req_service_module
 from app.services.requirement_service import requirement_service
+from app.services import category_suggestion_service
 from app.schemas.requirement import (
+    CategorySuggestionRequest,
+    CategorySuggestionOut,
     RequirementCreate,
     RequirementOut,
     QuotationCreate,
@@ -40,8 +43,25 @@ def _handle_service_errors(exc: Exception):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Quotations haven't released yet")
     if isinstance(exc, E.NoActiveQuotation):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="You have no active quotation to withdraw")
+    if isinstance(exc, E.AlreadyQuoted):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already have a submitted quotation on this requirement — withdraw it first before submitting a new one",
+        )
+    if isinstance(exc, E.CannotQuoteOwnRequirement):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can't submit a quotation on your own requirement",
+        )
     if isinstance(exc, E.AlreadyAwarded):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This requirement has already been awarded")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This requirement already has an award decided or pending",
+        )
+    if isinstance(exc, E.NoAwardPending):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="There's no Notice of Award to respond to")
+    if isinstance(exc, E.NotAwardCandidate):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This Notice of Award wasn't sent to you")
     if isinstance(exc, E.AlreadyDecided):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This requirement has already reached a final decision")
     if isinstance(exc, E.InvalidQuotation):
@@ -86,6 +106,14 @@ def list_saved(current_user=Depends(get_current_user)):
     return requirement_service.list_saved(current_user.id)
 
 
+@router.get("/{requirement_id}", response_model=RequirementOut)
+def get_requirement(requirement_id: int, current_user=Depends(get_current_user)):
+    try:
+        return requirement_service.get_by_id(requirement_id, current_user.id)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
 @router.post("/{requirement_id}/save", status_code=status.HTTP_204_NO_CONTENT)
 def save_requirement(requirement_id: int, current_user=Depends(get_current_user)):
     try:
@@ -100,6 +128,12 @@ def unsave_requirement(requirement_id: int, current_user=Depends(get_current_use
         requirement_service.unsave(requirement_id, current_user.id)
     except Exception as exc:
         _handle_service_errors(exc)
+
+
+@router.post("/suggest-category", response_model=CategorySuggestionOut)
+def suggest_category(payload: CategorySuggestionRequest, current_user: User = Depends(get_current_user)):
+    category = category_suggestion_service.suggest_category(payload.title, payload.scope)
+    return CategorySuggestionOut(category=category)
 
 
 @router.post("", response_model=RequirementOut, status_code=status.HTTP_201_CREATED)
@@ -151,10 +185,16 @@ def submit_quotation(requirement_id: int, payload: QuotationCreate, current_user
 
 @router.post("/{requirement_id}/quotations/{quotation_id}/attachments", response_model=AttachmentOut, status_code=status.HTTP_201_CREATED)
 async def upload_quotation_attachment(
-    requirement_id: int, quotation_id: int, file: UploadFile = File(...), current_user=Depends(require_verified)
+    requirement_id: int,
+    quotation_id: int,
+    file: UploadFile = File(...),
+    document_label: Optional[str] = Form(default=None),
+    current_user=Depends(require_verified),
 ):
     try:
-        return await requirement_service.upload_quotation_attachment(requirement_id, quotation_id, current_user.id, file)
+        return await requirement_service.upload_quotation_attachment(
+            requirement_id, quotation_id, current_user.id, file, document_label,
+        )
     except Exception as exc:
         _handle_service_errors(exc)
 
@@ -185,8 +225,26 @@ def get_ledger(requirement_id: int, current_user=Depends(get_current_user)):
 
 @router.post("/{requirement_id}/award", response_model=RequirementOut)
 def award(requirement_id: int, payload: AwardRequest, current_user=Depends(require_verified)):
+    """Sends a Notice of Award — proposes a winner, doesn't confirm one. See
+    requirement_service.award."""
     try:
         return requirement_service.award(requirement_id, current_user.id, payload.quotation_id)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/award/accept", response_model=RequirementOut)
+def accept_award(requirement_id: int, current_user=Depends(require_verified)):
+    try:
+        return requirement_service.accept_award(requirement_id, current_user.id)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/award/decline", response_model=RequirementOut)
+def decline_award(requirement_id: int, current_user=Depends(require_verified)):
+    try:
+        return requirement_service.decline_award(requirement_id, current_user.id)
     except Exception as exc:
         _handle_service_errors(exc)
 

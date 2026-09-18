@@ -14,6 +14,7 @@ import { getVerificationStatus, getDashboardStats } from '../lib/api/business';
 import { mapViewerBusiness } from '../lib/api/mappers';
 import { requirementsApi } from '../lib/api/requirements';
 import { requirementsCache } from '../lib/api/requirementsCache';
+import { errorMessage } from '../lib/api/client';
 import { postRequirementClone } from '../lib/postRequirementClone';
 
 export default function PostRequirementRoute() {
@@ -38,10 +39,11 @@ export default function PostRequirementRoute() {
       // to hit that wall at the very end. Never sets `poster`, so the loading
       // spinner below just keeps showing until the redirect lands.
       if (business.credibility.status !== 'VERIFIED') {
-        // Already submitted (pending/under review/rejected) -> the status page, so
-        // they see *why* they can't post yet instead of being dropped back into a
-        // blank onboarding form as if they'd never started.
-        router.replace(verification.has_submitted ? '/verification-status' : '/onboarding');
+        // Always the status page — even a brand-new account that never started
+        // verification sees an explanation and an explicit "Start verification"
+        // button there (VerificationStatus.tsx's "not started" state), instead
+        // of being dropped straight into the onboarding wizard with no context.
+        router.replace('/verification-status');
         return;
       }
       setPoster(business);
@@ -130,6 +132,7 @@ export default function PostRequirementRoute() {
               site_address: input.deliveryAddress || null,
               delivery_start: input.deliveryWindowFrom ? new Date(input.deliveryWindowFrom).toISOString() : null,
               delivery_end: input.deliveryWindowTo ? new Date(input.deliveryWindowTo).toISOString() : null,
+              required_documents: input.requiredDocuments,
               closes_at: input.closingAt,
             });
             requirementsCache.put(created);
@@ -151,7 +154,7 @@ export default function PostRequirementRoute() {
             setStep('DETAILS');
             router.push({ pathname: '/requirement', params: { id: String(created.id) } });
           } catch (e: any) {
-            const message = typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not publish this requirement.';
+            const message = errorMessage(e, 'Could not publish this requirement.');
             setPublishError(message);
             // eslint-disable-next-line no-console
             console.error('[post-requirement] publish failed:', message);
@@ -171,6 +174,14 @@ export default function PostRequirementRoute() {
       onContinue={(draft) => {
         setDetails(draft);
         setStep('DELIVERY');
+      }}
+      onSuggestCategory={async (title, scope) => {
+        try {
+          const result = await requirementsApi.suggestCategory(title, scope);
+          return result.category;
+        } catch {
+          return null;
+        }
       }}
     />
   );

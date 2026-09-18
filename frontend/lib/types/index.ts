@@ -42,6 +42,10 @@ export interface Business {
   displayName: string | null;
   businessType: BusinessType;
   category: string;
+  /** Optional public-facing bio, written by the business or drafted by the
+   *  AI profile assistant — null means nothing set, same as before this
+   *  field existed. */
+  description: string | null;
   city: string;
   province: string;
   contactPerson: string;
@@ -59,6 +63,12 @@ export type RequirementStatus =
   | 'DRAFT'
   | 'OPEN'
   | 'CLOSED'          // clock trigger, never a person
+  /** A Notice of Award went out but the proposed winner hasn't accepted or
+   *  declined it yet — nothing is final. Every other released respondent
+   *  still reads as an ordinary released quotation; only the proposed one
+   *  shows a pending state. Reverts to CLOSED on decline or on the response
+   *  window lapsing, so the buyer can propose someone else. */
+  | 'AWARD_PENDING'
   | 'AWARDED'
   | 'CLOSED_NO_AWARD'
   | 'CANCELLED';      // proposed, pending decision 04
@@ -81,6 +91,10 @@ export interface Attachment {
   sizeBytes: number;
   mimeType: string;
   uri: string;
+  /** Which of the requirement's requiredDocuments this satisfies (a quotation
+   *  attachment only) — null for a requirement's own attachments, and for a
+   *  quotation's general/unlabeled ones. */
+  documentLabel: string | null;
 }
 
 export interface Requirement {
@@ -98,11 +112,22 @@ export interface Requirement {
   deliverySite: DeliverySite;
   deliveryWindow: string;
   attachments: Attachment[];
+  /** Qualifying documents the buyer wants each respondent to attach to their
+   *  quotation, e.g. ["PCAB License", "Sanitary Permit"] — surfaced on
+   *  submission, never a hard backend gate on it. */
+  requiredDocuments: string[];
   closingAt: ISODateTime;     // the only field that fires a platform event
+  /** Set once the closing clock has actually fired and quotations released —
+   *  null while still OPEN. Drives the "released N days ago, no decision
+   *  yet" reminder banner while status === 'CLOSED'. */
+  releasedAt: ISODateTime | null;
   publishedAt: ISODateTime | null;
   quotationCount: number;     // count only while sealed — never contents
   lastQuotationAt: ISODateTime | null; // timing only, never contents — recency signal for feed cards
   awardedQuotationId: string | null;
+  /** Set only while status === 'AWARD_PENDING' — when the proposed winner's
+   *  response window closes. Null once accepted, declined, or expired. */
+  awardResponseDeadline: ISODateTime | null;
   isSaved: boolean;           // personal bookmark, viewer-scoped
 }
 
@@ -112,11 +137,21 @@ export type QuotationStatus =
   | 'SUBMITTED'      // only state where withdrawal is possible
   | 'RELEASED'       // clock trigger, all move together
   | 'SHORTLISTED'
+  /** This quotation is the proposed winner of a Notice of Award, awaiting
+   *  its business's accept/decline — every other released quotation on the
+   *  same requirement stays RELEASED until this resolves. */
+  | 'AWARD_PENDING'
   | 'AWARDED'
   | 'NOT_SELECTED'
   | 'WITHDRAWN';
 
 export type IntegrityResult = 'VALID' | 'FLAGGED';
+
+export interface QuotationLineItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;   // PHP
+}
 
 export interface Quotation {
   id: string;
@@ -124,7 +159,11 @@ export interface Quotation {
   requirementId: string;
   respondentId: BusinessId;
   status: QuotationStatus;
-  totalPrice: number;         // PHP
+  totalPrice: number;         // PHP — always the authoritative grand total
+  /** Itemized breakdown behind totalPrice — empty when the respondent chose
+   *  "Total price only" instead of line items. Sealed with the rest of the
+   *  quotation, same visibility rules as totalPrice itself. */
+  lineItems: QuotationLineItem[];
   leadTimeDays: number;
   paymentTerms: string;
   validityDays: number;
@@ -146,13 +185,19 @@ export type LedgerEntryType =
   | 'QUOTATION_WITHDRAWN'
   | 'REQUIREMENT_CLOSED'
   | 'REQUIREMENT_CANCELLED'
-  | 'AWARD_RECORDED';
+  | 'AWARD_NOTICE_SENT'
+  | 'AWARD_DECLINED'
+  | 'AWARD_RECORDED'
+  | 'CLOSED_NO_AWARD_RECORDED';
 
 export interface LedgerEntry {
   id: string;
   sequence: number;
   type: LedgerEntryType;
   subjectId: string;
+  /** Who caused this entry — a business name, or null for a system-triggered
+   *  one (RELEASED fires off the closing clock, not a person). */
+  actorName: string | null;
   hash: string;
   previousHash: string | null;
   createdAt: ISODateTime;
@@ -163,10 +208,18 @@ export interface LedgerEntry {
 /** No QUOTATION_RECEIVED here, deliberately — the buyer is never notified of an
  *  individual submission, not even that one arrived. See requirement_service.py's
  *  submit_quotation for why. */
+/** 11 system events (thesis Coverage of the Study — Alerts), each traceable to
+ *  a recorded action. The buyer is never alerted about an individual
+ *  quotation submission — only the sealed count, on demand. */
 export type AlertType =
   | 'REQUIREMENT_CLOSING'
+  | 'REQUIREMENT_RELEASED'
+  | 'REQUIREMENT_CANCELLED'
   | 'DECISION'
+  | 'CLOSED_NO_AWARD'
   | 'VERIFICATION'
+  | 'TIER_UPGRADE'
+  | 'DOCUMENT_FLAGGED'
   | 'MESSAGE_RECEIVED'
   | 'QUESTION_ASKED'
   | 'QUESTION_ANSWERED';

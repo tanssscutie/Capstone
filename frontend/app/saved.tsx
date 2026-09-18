@@ -10,6 +10,7 @@ import { requirementsApi } from '../lib/api/requirements';
 import { mapRequirement, mapPosterToFeedBuyer } from '../lib/api/mappers';
 import type { Requirement, BusinessId } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
+import { errorMessage } from '../lib/api/client';
 
 export default function SavedRoute() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export default function SavedRoute() {
       setBuyers(buyerMap);
       setRequirements(rows.map(mapRequirement));
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Failed to load your saved requirements.');
+      setError(errorMessage(e, 'Failed to load your saved requirements.'));
     } finally {
       setLoading(false);
     }

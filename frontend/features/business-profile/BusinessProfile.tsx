@@ -6,7 +6,8 @@
 // no edit actions, no contact info (that stays private; see
 // PublicBusinessProfile in lib/api/mappers.ts for what's deliberately left out).
 
-import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
   color,
   font,
@@ -105,7 +106,7 @@ export default function BusinessProfile({ profile, onBack }: BusinessProfileProp
   ];
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={isWide ? styles.pageWide : styles.page}>
         <View style={styles.breadcrumbRow}>
           <Pressable onPress={onBack} hitSlop={6}>
@@ -129,6 +130,7 @@ export default function BusinessProfile({ profile, onBack }: BusinessProfileProp
           {verified && c.verifiedAt && (
             <Text style={styles.mutedSmall}>Verified {formatMonthYear(c.verifiedAt)}</Text>
           )}
+          {!!profile.description && <Text style={styles.heroBio}>{profile.description}</Text>}
         </View>
 
         <View style={styles.card}>
@@ -175,7 +177,7 @@ export default function BusinessProfile({ profile, onBack }: BusinessProfileProp
           </Pressable>
         </View>
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 
@@ -216,6 +218,7 @@ const styles = StyleSheet.create({
   factValue: { flexShrink: 1, textAlign: 'right', fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
 
   mutedSmall: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
+  heroBio: { fontFamily: font.body, fontSize: fontSize.base, lineHeight: lineHeight.base, color: color.ink, marginTop: space.xs },
 
   tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   tag: { borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs },

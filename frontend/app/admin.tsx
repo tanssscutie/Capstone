@@ -12,6 +12,7 @@ import { AdminSidebar } from '../components/ui/AdminSidebar';
 import { checkAdminAccess, listFlagged, reviewBusiness, getAdminStats } from '../lib/api/admin';
 import type { AdminFlaggedBusinessOut, AdminStatsOut } from '../lib/api/admin';
 import { logout } from '../lib/api/auth';
+import { errorMessage } from '../lib/api/client';
 
 type Access = 'CHECKING' | 'GRANTED' | 'DENIED';
 
@@ -69,7 +70,7 @@ export default function AdminRoute() {
       setBusinesses(rows);
       setStats(statsOut);
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not load the admin dashboard.');
+      setError(errorMessage(e, 'Could not load the admin dashboard.'));
     } finally {
       setLoading(false);
     }
@@ -96,7 +97,7 @@ export default function AdminRoute() {
       setBusinesses((prev) => prev.filter((b) => b.user_id !== userId));
       setStats((prev) => (prev ? { ...prev, pending_review_count: Math.max(0, prev.pending_review_count - 1) } : prev));
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not record that decision.');
+      setError(errorMessage(e, 'Could not record that decision.'));
     } finally {
       setActingOn(null);
     }

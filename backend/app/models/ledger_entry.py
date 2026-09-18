@@ -1,6 +1,8 @@
 from datetime import datetime
+from app.core.clock import now_ph
 from typing import Optional
 
+from sqlalchemy import Text
 from sqlmodel import SQLModel, Field
 
 
@@ -29,6 +31,9 @@ class LedgerEntry(SQLModel, table=True):
 
     prev_hash: str
     entry_hash: str
-    payload_json: str  # canonical JSON of what was hashed, kept for audit
+    # Canonical JSON of what was hashed, kept for audit. TEXT rather than the
+    # default VARCHAR(255) — a quotation's line-item breakdown alone can
+    # exceed that once there are more than a couple of items.
+    payload_json: str = Field(sa_type=Text)
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=now_ph)

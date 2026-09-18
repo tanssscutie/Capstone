@@ -2,15 +2,16 @@
 // "My requirements" — every requirement this business has posted, grouped by state.
 // This is what HomeFeed.tsx's "Manage all" link (next to "Your requirements") now
 // points to, instead of being a no-op.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import MyRequirements from '../features/my-requirements/MyRequirements';
 import { me } from '../lib/api/auth';
 import { requirementsApi } from '../lib/api/requirements';
 import { mapMyRequirement } from '../lib/api/mappers';
 import type { Requirement } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
+import { errorMessage } from '../lib/api/client';
 
 export default function MyRequirementsRoute() {
   const router = useRouter();
@@ -26,15 +27,21 @@ export default function MyRequirementsRoute() {
       const ownerId = String(user.id);
       setRequirements(rows.map((r) => mapMyRequirement(r, ownerId)));
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Failed to load your requirements.');
+      setError(errorMessage(e, 'Failed to load your requirements.'));
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // useFocusEffect fires on initial mount too (no separate plain useEffect
+  // needed), then again every time this screen regains focus — e.g. back from
+  // Post a Requirement right after publishing — so a management list never
+  // shows stale data. Worth the brief re-show of the spinner each time.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   if (loading) {
     return (

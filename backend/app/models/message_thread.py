@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.clock import now_ph
 from typing import Optional
 
 from sqlalchemy import UniqueConstraint
@@ -19,4 +20,4 @@ class MessageThread(SQLModel, table=True):
     requirement_id: int = Field(foreign_key="requirement.id", index=True)
     buyer_id: int = Field(foreign_key="user.id", index=True)
     business_id: int = Field(foreign_key="user.id", index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=now_ph)

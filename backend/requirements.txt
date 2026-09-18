@@ -8,3 +8,7 @@ pymysql
 pydantic-settings
 python-multipart
 apscheduler
+httpx
+google-genai
+fastembed
+qdrant-client

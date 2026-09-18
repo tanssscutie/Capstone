@@ -10,6 +10,7 @@ import { AdminSidebar } from '../components/ui/AdminSidebar';
 import { checkAdminAccess, listAllRequirements } from '../lib/api/admin';
 import type { AdminRequirementOut } from '../lib/api/admin';
 import { logout } from '../lib/api/auth';
+import { errorMessage } from '../lib/api/client';
 
 type Access = 'CHECKING' | 'GRANTED' | 'DENIED';
 
@@ -65,7 +66,7 @@ export default function AdminRequirementsRoute() {
     try {
       setRequirements(await listAllRequirements());
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not load requirements.');
+      setError(errorMessage(e, 'Could not load requirements.'));
     } finally {
       setLoading(false);
     }

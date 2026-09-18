@@ -2,17 +2,22 @@ import os
 import re
 import uuid
 from datetime import date, datetime, timedelta
+from app.core.clock import now_ph
 from typing import List, Tuple
 
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session
 
 from app.core.database import engine
+from app.core import file_crypto
 from app.models.business_document import BusinessDocument
 from app.models.user import User
 from app.repositories import business_repository as repo
 from app.repositories import notification_repository as notif_repo
-from app.schemas.business import OnboardingSubmit, VerificationStatusOut, DocumentUploadOut, DashboardStatsOut, AdminFlaggedBusinessOut, AdminStatsOut, AdminBusinessOut, PublicBusinessProfileOut
+from app.schemas.business import OnboardingSubmit, VerificationStatusOut, DocumentUploadOut, DocumentExtractionOut, DescriptionSuggestionOut, DashboardStatsOut, AdminFlaggedBusinessOut, AdminStatsOut, AdminBusinessOut, PublicBusinessProfileOut
+from app.services import document_extraction_service
+from app.services import profile_assistant_service
+from app.services import matching_service
 
 UPLOAD_ROOT = os.path.join("uploads", "documents")
 
@@ -50,6 +55,7 @@ class BusinessService:
                 raise HTTPException(status_code=404, detail="User not found")
 
             user.registered_name = data.registered_name.strip()
+            user.display_name = data.display_name.strip() if data.display_name and data.display_name.strip() else None
             user.business_type = data.business_type.strip()
             user.industry_category = data.industry_category.strip()
             user.city = data.city.strip()
@@ -59,6 +65,13 @@ class BusinessService:
             user.capabilities = ",".join(c.strip() for c in data.capabilities if c.strip())
             user.service_areas = ",".join(a.strip() for a in data.service_areas if a.strip())
             user.signup_intent = data.signup_intent
+            user.business_description = data.business_description.strip() if data.business_description and data.business_description.strip() else None
+            # Semantic matching (Specific Objective #4) — recomputed whenever
+            # capabilities/service areas/category change, since those are
+            # exactly what a business's matching embedding is built from.
+            user.capability_embedding = matching_service.embed_to_json(
+                matching_service.business_matching_text(user.industry_category, data.capabilities, data.service_areas)
+            )
             user.onboarding_completed = True
             if user.verification_status == "unverified":
                 user.verification_status = "pending"
@@ -66,6 +79,30 @@ class BusinessService:
             repo.update_user(session, user)
 
     # ---------- document upload + validation ----------
+
+    def suggest_description(self, data) -> DescriptionSuggestionOut:
+        description = profile_assistant_service.suggest_description(
+            data.business_type, data.industry_category, data.capabilities,
+            data.service_areas, data.city, data.province,
+        )
+        return DescriptionSuggestionOut(description=description)
+
+    async def extract_document_fields(self, doc_type: str, file: UploadFile) -> DocumentExtractionOut:
+        """Assistive Document Extraction — see document_extraction_service.py.
+        Stateless: doesn't touch the database, doesn't require onboarding to
+        be complete yet (it runs *during* the DOCUMENTS step, before that's
+        even submitted)."""
+        doc_type = doc_type.strip().upper()
+        if doc_type not in VALID_DOC_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"doc_type must be one of {sorted(VALID_DOC_TYPES)}",
+            )
+        contents = await file.read()
+        id_number = document_extraction_service.extract_id_number(
+            doc_type, contents, file.content_type or ""
+        )
+        return DocumentExtractionOut(id_number=id_number)
 
     async def upload_document(
         self,
@@ -110,6 +147,16 @@ class BusinessService:
             document.validation_status = status_result
             document.validation_notes = notes
 
+            if status_result == "flagged":
+                notif_repo.create_if_allowed(
+                    session,
+                    user_id=user_id,
+                    type_="DOCUMENT_FLAGGED",
+                    category="activity",
+                    title=f"{doc_type} needs a second look",
+                    detail=f"Your {doc_type} document was flagged for review: {notes}",
+                )
+
             created = repo.add_document(session, document)
             result = DocumentUploadOut(**created.model_dump())
 
@@ -130,8 +177,11 @@ class BusinessService:
         full_path = os.path.join(user_dir, filename)
 
         contents = await file.read()
+        # Encrypted at rest (Fernet) — the file on disk is never the raw upload.
+        # See app.core.file_crypto and get_document_bytes_for_admin, which
+        # decrypts it back on the one path that ever reads it again.
         with open(full_path, "wb") as f:
-            f.write(contents)
+            f.write(file_crypto.encrypt_bytes(contents))
 
         return full_path
 
@@ -203,21 +253,23 @@ class BusinessService:
                     detail="Upload your required documents before submitting: " + ", ".join(missing),
                 )
 
-            user.submitted_at = datetime.utcnow()
+            user.submitted_at = now_ph()
             repo.update_user(session, user)
             self._recompute_verification(session, user)
 
             return self.get_status(user_id)
 
     def _recompute_verification(self, session: Session, user: User) -> None:
-        """Decides the resulting status. Only ever moves a business forward
-        from 'submitted' — uploading documents alone never verifies anyone,
-        since verification is something they have to ask for."""
+        """Decides how far along the review pipeline a business is — but
+        never sets 'verified' itself. Every document passing its automated
+        checks (format, expiry, name match) is not the same as a human
+        having actually looked at the submission: that only ever happens
+        through an explicit admin decision in admin_review(), even when
+        nothing was flagged. Automated checks exist to surface obvious
+        problems for the admin to see, not to substitute for their sign-off."""
         documents = repo.list_documents_for_user(session, user.id)
         passing_types = {d.doc_type for d in documents if d.validation_status == "pass"}
         flagged_exists = any(d.validation_status == "flagged" for d in documents)
-
-        has_required = bool(passing_types & REQUIRED_ONE_OF_TIER_1) and REQUIRED_FOR_TIER_1.issubset(passing_types)
 
         # Not yet submitted: they're still preparing, so the status only
         # reflects how far along they are.
@@ -229,22 +281,48 @@ class BusinessService:
             repo.update_user(session, user)
             return
 
-        if has_required:
-            was_verified = user.verification_status == "verified"
-            user.verification_status = "verified"
-            user.is_verified = True
-            if not was_verified:
-                user.verification_date = datetime.utcnow()
-                user.recheck_date = user.verification_date + timedelta(days=365)
-            user.tier = self._compute_tier(session, user, passing_types)
-        elif flagged_exists:
-            user.verification_status = "under_review"
-            user.is_verified = False
-        else:
-            user.verification_status = "submitted"
-            user.is_verified = False
+        if user.verification_status == "verified":
+            # Already verified by an admin — a later document (e.g. a Mayor's
+            # Permit upload working toward Tier 2/3) can only raise the trust
+            # tier here, never move status backward or demand a second sign-off
+            # for the original verification.
+            has_required = bool(passing_types & REQUIRED_ONE_OF_TIER_1) and REQUIRED_FOR_TIER_1.issubset(passing_types)
+            if has_required:
+                previous_tier = user.tier
+                user.tier = self._compute_tier(session, user, passing_types)
+                if user.tier > previous_tier:
+                    notif_repo.create_if_allowed(
+                        session,
+                        user_id=user.id,
+                        type_="TIER_UPGRADE",
+                        category="activity",
+                        title=f"You're now Tier {user.tier}",
+                        detail=f"Your trust tier moved up from Tier {previous_tier} to Tier {user.tier}.",
+                    )
+                repo.update_user(session, user)
+            return
 
+        # Not yet verified: automated checks only ever place the business in
+        # the admin's review queue, either as 'submitted' (nothing flagged)
+        # or 'under_review' (something needs a closer look) — never straight
+        # to 'verified'.
+        user.verification_status = "under_review" if flagged_exists else "submitted"
+        user.is_verified = False
         repo.update_user(session, user)
+
+    def recompute_tier(self, user_id: int) -> None:
+        """Re-checks the trust tier for an event that isn't a document
+        upload — namely, a Notice of Award being confirmed, which is when
+        the Tier 3 award count actually changes. _recompute_verification is
+        otherwise only ever called from the document-upload/admin-review
+        path, so without this, a business could cross the Tier 3 threshold
+        by winning and simply never be moved up until they happened to
+        upload an unrelated document afterward."""
+        with Session(engine) as session:
+            user = session.get(User, user_id)
+            if not user:
+                return
+            self._recompute_verification(session, user)
 
     def _compute_tier(self, session: Session, user: User, passing_types: set) -> int:
         # Tier reflects which documents were verified and how many times
@@ -278,7 +356,39 @@ class BusinessService:
             session.commit()
 
             if approve:
-                self._recompute_verification(session, user)
+                # This is the one and only place a business becomes 'verified' —
+                # _recompute_verification() deliberately never sets it, since a
+                # document merely passing its automated checks isn't the same
+                # as an admin actually signing off on it.
+                passing_types = {
+                    d.doc_type for d in repo.list_documents_for_user(session, user_id) if d.validation_status == "pass"
+                }
+                has_required = bool(passing_types & REQUIRED_ONE_OF_TIER_1) and REQUIRED_FOR_TIER_1.issubset(passing_types)
+                if has_required:
+                    was_verified = user.verification_status == "verified"
+                    previous_tier = user.tier
+                    user.verification_status = "verified"
+                    user.is_verified = True
+                    if not was_verified:
+                        user.verification_date = now_ph()
+                        user.recheck_date = user.verification_date + timedelta(days=365)
+                    user.tier = self._compute_tier(session, user, passing_types)
+                    repo.update_user(session, user)
+                    if was_verified and user.tier > previous_tier:
+                        notif_repo.create_if_allowed(
+                            session,
+                            user_id=user.id,
+                            type_="TIER_UPGRADE",
+                            category="activity",
+                            title=f"You're now Tier {user.tier}",
+                            detail=f"Your trust tier moved up from Tier {previous_tier} to Tier {user.tier}.",
+                        )
+                else:
+                    # Approving the flagged documents wasn't enough on its own —
+                    # a required document type is still missing entirely.
+                    user.verification_status = "submitted"
+                    user.is_verified = False
+                    repo.update_user(session, user)
                 detail = (
                     "Your business is now verified."
                     if user.verification_status == "verified"
@@ -321,6 +431,7 @@ class BusinessService:
                 has_submitted=user.submitted_at is not None,
                 missing_documents=self._missing_documents(session, user),
                 registered_name=user.registered_name,
+                display_name=user.display_name,
                 business_type=user.business_type,
                 industry_category=user.industry_category,
                 city=user.city,
@@ -330,6 +441,7 @@ class BusinessService:
                 capabilities=[c for c in (user.capabilities or "").split(",") if c],
                 service_areas=[a for a in (user.service_areas or "").split(",") if a],
                 signup_intent=user.signup_intent,
+                business_description=user.business_description,
             )
 
     def get_public_profile(self, business_id: int) -> PublicBusinessProfileOut:
@@ -342,10 +454,12 @@ class BusinessService:
             return PublicBusinessProfileOut(
                 id=user.id,
                 registered_name=user.registered_name or user.business_name,
+                display_name=user.display_name,
                 business_type=user.business_type,
                 industry_category=user.industry_category,
                 city=user.city,
                 province=user.province,
+                business_description=user.business_description,
                 capabilities=[c for c in (user.capabilities or "").split(",") if c],
                 service_areas=[a for a in (user.service_areas or "").split(",") if a],
                 is_verified=user.is_verified,
@@ -408,13 +522,21 @@ class BusinessService:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
             return document
 
+    def get_document_bytes_for_admin(self, document_id: int) -> Tuple[bytes, str]:
+        """Decrypted file content + the original filename, for the one route
+        that ever serves a document's actual bytes back (admin review)."""
+        document = self.get_document_for_admin(document_id)
+        with open(document.file_path, "rb") as f:
+            encrypted = f.read()
+        return file_crypto.decrypt_bytes_lenient(encrypted), os.path.basename(document.file_path)
+
     def get_admin_stats(self) -> AdminStatsOut:
         from datetime import timedelta
         from app.repositories import requirement_repository as req_repo
         from app.schemas.business import RegistrationsByDay
 
         with Session(engine) as session:
-            since = datetime.utcnow() - timedelta(days=7)
+            since = now_ph() - timedelta(days=7)
             by_day = repo.registrations_by_day(session, since)
 
             return AdminStatsOut(

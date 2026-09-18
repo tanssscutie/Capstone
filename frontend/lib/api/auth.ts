@@ -5,7 +5,9 @@ import { api, tokenStore, API_BASE_URL } from './client';
 export interface BackendUser {
   id: number;
   business_name: string;
-  mobile_number: string;
+  // Null until a Google sign-up completes its profile — see completeProfile().
+  mobile_number: string | null;
+  email: string | null;
   is_admin: boolean;
   notify_messages: boolean;
   notify_activity: boolean;
@@ -73,6 +75,19 @@ export async function me(): Promise<BackendUser> {
 
 export function isLoggedIn(): boolean {
   return !!tokenStore.get();
+}
+
+/** Full-page redirect target for "Sign in with Google" — not an API call,
+ *  the browser navigates here directly (window.location.href). Google
+ *  eventually bounces back to /auth-callback with our own token. */
+export function googleLoginUrl(): string {
+  return `${API_BASE_URL}/auth/google/login`;
+}
+
+/** POST /auth/complete-profile — the one-time mobile number a fresh Google
+ *  sign-up still needs. Rejected by the backend if one is already set. */
+export async function completeProfile(mobileNumber: string): Promise<BackendUser> {
+  return api.post<BackendUser>('/auth/complete-profile', { mobile_number: mobileNumber });
 }
 
 export function logout() {

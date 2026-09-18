@@ -11,7 +11,9 @@ class UserCreate(BaseModel):
 class UserRead(BaseModel):
     id: int
     business_name: str
-    mobile_number: str
+    # Null until a Google sign-up completes its profile (see /auth/complete-profile).
+    mobile_number: Optional[str] = None
+    email: Optional[str] = None
     is_admin: bool = False
     notify_messages: bool = True
     notify_activity: bool = True
@@ -39,3 +41,10 @@ class MobileNumberChange(BaseModel):
 class NotificationPreferences(BaseModel):
     notify_messages: bool
     notify_activity: bool
+
+
+class CompleteProfile(BaseModel):
+    """First-time mobile number for a Google sign-up — see
+    auth_service.complete_profile. Not for changing an existing number;
+    that's PUT /auth/mobile-number (password-verified)."""
+    mobile_number: str = Field(min_length=7, max_length=20)

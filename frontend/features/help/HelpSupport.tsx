@@ -6,7 +6,8 @@
 // AccountSettings.tsx (breadcrumb, hero, bordered cards).
 
 import { useState } from 'react';
-import { Linking, View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { Linking, View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
   color,
   font,
@@ -96,7 +97,7 @@ export default function HelpSupport({ onBack }: HelpSupportProps) {
   const isWide = width >= breakpoint.desktop;
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={isWide ? styles.pageWide : styles.page}>
         <View style={styles.breadcrumbRow}>
           <Pressable onPress={onBack} hitSlop={6}>
@@ -142,7 +143,7 @@ export default function HelpSupport({ onBack }: HelpSupportProps) {
           </Pressable>
         </View>
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 

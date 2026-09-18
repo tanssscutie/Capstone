@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.clock import now_ph
 from typing import Optional
 
 from sqlmodel import SQLModel, Field
@@ -17,9 +18,14 @@ class Quotation(SQLModel, table=True):
     requirement_id: int = Field(foreign_key="requirement.id", index=True)
     business_id: int = Field(foreign_key="user.id", index=True)
 
-    # Sealed content (simplified from the full "line items" spec to a
-    # total price for this MVP; itemized breakdowns are a follow-up).
+    # Sealed content. total_price is always the authoritative grand total,
+    # kept even when line_items is set so every consumer (award comparison,
+    # ledger hash payload) can keep reading one number. line_items is the
+    # optional itemized breakdown behind it — JSON-encoded list of
+    # {"description": str, "quantity": float, "unit_price": float} — empty
+    # string when the respondent chose "Total price only".
     total_price: Optional[float] = None
+    line_items: str = Field(default="", max_length=4000)
     delivery_lead_time: Optional[str] = None
     payment_terms: Optional[str] = None
     validity_period: Optional[str] = None
@@ -45,6 +51,6 @@ class Quotation(SQLModel, table=True):
     submission_hash: str
     ledger_entry_id: Optional[int] = None  # the SUBMITTED entry's id ("ledger entry number")
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=now_ph)
     withdrawn_at: Optional[datetime] = None
     released_at: Optional[datetime] = None

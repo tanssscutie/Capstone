@@ -28,16 +28,21 @@ import type {
   Message,
   ClarificationQuestion,
 } from '../types';
-import type { RequirementOut, MyRequirementOut, PosterOut, MyQuotationOut, QuotationDetailOut, LedgerEntryOut, ClarificationQuestionOut } from './requirements';
+import type { RequirementOut, MyRequirementOut, PosterOut, MyQuotationOut, QuotationDetailOut, LedgerEntryOut, ClarificationQuestionOut, LineItemOut } from './requirements';
 import type { VerificationStatusOut, DashboardStatsOut, PublicBusinessProfileOut } from './business';
 import type { NotificationOut } from './notifications';
 import type { MessageThreadOut, MessageOut } from './messages';
 import type { BackendUser } from './auth';
-import type { Quotation, QuotationStatus, IntegrityResult, LedgerEntry, LedgerEntryType } from '../types';
+import type { Quotation, QuotationStatus, IntegrityResult, LedgerEntry, LedgerEntryType, QuotationLineItem } from '../types';
+
+function mapLineItems(items: LineItemOut[]): QuotationLineItem[] {
+  return items.map((li) => ({ description: li.description, quantity: li.quantity, unitPrice: li.unit_price }));
+}
 
 const REQUIREMENT_STATUS_MAP: Record<string, RequirementStatus> = {
   open: 'OPEN',
   closed: 'CLOSED',
+  award_pending: 'AWARD_PENDING',
   awarded: 'AWARDED',
   closed_no_award: 'CLOSED_NO_AWARD',
   cancelled: 'CANCELLED',
@@ -69,7 +74,7 @@ export function mapPosterToFeedBuyer(poster: PosterOut) {
   return {
     id: String(poster.id) as BusinessId,
     registeredName: poster.registered_name ?? poster.business_name,
-    displayName: null,
+    displayName: poster.display_name,
     category: '', // BACKEND GAP
     city: poster.city ?? '',
     province: poster.province ?? '',
@@ -107,12 +112,16 @@ export function mapRequirement(r: RequirementOut): Requirement {
       sizeBytes: 0, // BACKEND GAP
       mimeType: '', // BACKEND GAP
       uri: '', // BACKEND GAP — no download URL in AttachmentOut yet
+      documentLabel: a.document_label,
     })),
+    requiredDocuments: r.required_documents,
     closingAt: r.closes_at,
+    releasedAt: r.released_at,
     publishedAt: r.created_at,
     quotationCount: r.quotations_count,
     lastQuotationAt: r.latest_quotation_at,
     awardedQuotationId: r.awarded_quotation_id ? String(r.awarded_quotation_id) : null,
+    awardResponseDeadline: r.award_response_deadline,
     isSaved: r.is_saved,
   };
 }
@@ -136,11 +145,14 @@ export function mapMyRequirement(r: MyRequirementOut, ownerId: BusinessId): Requ
     deliverySite: { name: r.city, address: '', accessHours: '', accessNote: '' },
     deliveryWindow: '',
     attachments: [],
+    requiredDocuments: r.required_documents,
     closingAt: r.closes_at,
+    releasedAt: r.released_at,
     publishedAt: r.created_at,
     quotationCount: r.quotations_count,
     lastQuotationAt: null,
     awardedQuotationId: r.awarded_quotation_id ? String(r.awarded_quotation_id) : null,
+    awardResponseDeadline: r.award_response_deadline,
     isSaved: false, // BACKEND GAP — /requirements/mine doesn't return this; not needed for the owner's own listing anyway
   };
 }
@@ -152,9 +164,10 @@ export function mapPosterToBusiness(poster: PosterOut): Business {
   return {
     id: String(poster.id),
     registeredName: poster.registered_name ?? poster.business_name,
-    displayName: null,
+    displayName: poster.display_name,
     businessType: 'SOLE_PROP', // BACKEND GAP — not in PosterOut
     category: '', // BACKEND GAP
+    description: null, // PosterOut doesn't carry a bio — see mapPublicProfileToBusiness for the fuller lookup that does
     city: poster.city ?? '',
     province: poster.province ?? '',
     contactPerson: '', // BACKEND GAP
@@ -176,6 +189,7 @@ export interface PublicBusinessProfile {
   registeredName: string;
   businessType: string;
   category: string;
+  description: string | null;
   city: string;
   province: string;
   capabilities: string[];
@@ -187,9 +201,10 @@ export interface PublicBusinessProfile {
 export function mapPublicBusinessProfile(p: PublicBusinessProfileOut): PublicBusinessProfile {
   return {
     id: String(p.id),
-    registeredName: p.registered_name ?? '',
+    registeredName: p.display_name ?? p.registered_name ?? '',
     businessType: p.business_type ?? '',
     category: p.industry_category ?? '',
+    description: p.business_description,
     city: p.city ?? '',
     province: p.province ?? '',
     capabilities: p.capabilities,
@@ -208,6 +223,7 @@ export function mapPublicBusinessProfile(p: PublicBusinessProfileOut): PublicBus
 const QUOTATION_OUTCOME_MAP: Record<string, QuotationStatus> = {
   sealed: 'SUBMITTED',
   released: 'RELEASED',
+  award_pending: 'AWARD_PENDING',
   awarded: 'AWARDED',
   not_awarded: 'NOT_SELECTED',
   withdrawn: 'WITHDRAWN',
@@ -225,7 +241,10 @@ const LEDGER_EVENT_MAP: Record<string, LedgerEntryType> = {
   WITHDRAWN: 'QUOTATION_WITHDRAWN',
   RELEASED: 'REQUIREMENT_CLOSED',
   CANCELLED: 'REQUIREMENT_CANCELLED',
+  AWARD_NOTICE_SENT: 'AWARD_NOTICE_SENT',
+  AWARD_DECLINED: 'AWARD_DECLINED',
   AWARDED: 'AWARD_RECORDED',
+  CLOSED_NO_AWARD: 'CLOSED_NO_AWARD_RECORDED',
 };
 
 // The chain's starting point — see backend app/services/ledger_service.py GENESIS_HASH.
@@ -235,8 +254,11 @@ export function mapLedgerEntry(e: LedgerEntryOut): LedgerEntry {
   return {
     id: `led-${e.id}`,
     sequence: e.sequence,
-    type: LEDGER_EVENT_MAP[e.event_type] ?? 'QUOTATION_SUBMITTED',
+    // Was silently defaulting CLOSED_NO_AWARD (and anything else unmapped) to
+    // QUOTATION_SUBMITTED — a real mislabel, not just a missing case.
+    type: LEDGER_EVENT_MAP[e.event_type] ?? e.event_type as LedgerEntryType,
     subjectId: String(e.quotation_id ?? e.requirement_id),
+    actorName: e.actor_name,
     hash: e.entry_hash,
     previousHash: e.prev_hash === LEDGER_GENESIS_HASH ? null : e.prev_hash,
     createdAt: e.created_at,
@@ -259,6 +281,7 @@ export function mapMyQuotation(q: MyQuotationOut): Quotation {
     respondentId: '', // BACKEND GAP — it's always the viewer, but no id echoed back here
     status: QUOTATION_OUTCOME_MAP[q.outcome] ?? 'SUBMITTED',
     totalPrice: q.total_price ?? 0,
+    lineItems: mapLineItems(q.line_items),
     leadTimeDays: parseLeadingInt(q.delivery_lead_time),
     paymentTerms: q.payment_terms ?? '',
     validityDays: parseLeadingInt(q.validity_period),
@@ -269,6 +292,7 @@ export function mapMyQuotation(q: MyQuotationOut): Quotation {
       sizeBytes: 0, // BACKEND GAP
       mimeType: '', // BACKEND GAP
       uri: '', // BACKEND GAP — no download URL in AttachmentOut yet
+      documentLabel: a.document_label,
     })),
     submittedAt: q.submitted_at,
     hashTruncated: '', // BACKEND GAP — only returned once, on the initial sealed receipt
@@ -297,11 +321,14 @@ export function mapMyQuotationRequirement(q: MyQuotationOut): Requirement {
     deliverySite: { name: q.requirement_location, address: '', accessHours: '', accessNote: '' },
     deliveryWindow: '',
     attachments: [],
+    requiredDocuments: [], // BACKEND GAP — MyQuotationOut doesn't echo back the requirement's required docs
     closingAt: q.closes_at,
+    releasedAt: q.released_at,
     publishedAt: q.submitted_at,
     quotationCount: 0,
     lastQuotationAt: null,
     awardedQuotationId: null,
+    awardResponseDeadline: null, // BACKEND GAP — MyQuotationOut doesn't echo this back either
     isSaved: false, // BACKEND GAP — MyQuotationOut doesn't return this; not needed for this lookup map
   };
 }
@@ -361,6 +388,7 @@ export function mapClarificationQuestion(q: ClarificationQuestionOut): Clarifica
 const QUOTATION_DETAIL_STATUS_MAP: Record<string, QuotationStatus> = {
   released: 'RELEASED',
   shortlisted: 'SHORTLISTED',
+  award_pending: 'AWARD_PENDING',
   awarded: 'AWARDED',
   not_selected: 'NOT_SELECTED',
   withdrawn: 'WITHDRAWN',
@@ -375,6 +403,7 @@ export function mapQuotationDetail(q: QuotationDetailOut, requirementId: string)
     respondentId: String(q.business.id),
     status: QUOTATION_DETAIL_STATUS_MAP[q.status] ?? 'RELEASED',
     totalPrice: q.total_price ?? 0,
+    lineItems: mapLineItems(q.line_items),
     leadTimeDays: parseLeadingInt(q.delivery_lead_time),
     paymentTerms: q.payment_terms ?? '',
     validityDays: parseLeadingInt(q.validity_period),
@@ -385,6 +414,7 @@ export function mapQuotationDetail(q: QuotationDetailOut, requirementId: string)
       sizeBytes: 0, // BACKEND GAP
       mimeType: '', // BACKEND GAP
       uri: '', // BACKEND GAP — no download URL in AttachmentOut yet
+      documentLabel: a.document_label,
     })),
     submittedAt: q.submitted_at,
     hashTruncated: '',
@@ -405,13 +435,14 @@ export function mapViewerBusiness(
   return {
     id: String(user.id),
     registeredName: verification.registered_name ?? user.business_name,
-    displayName: null,
+    displayName: verification.display_name,
     businessType: (verification.business_type as BusinessType) ?? 'SOLE_PROP',
     category: verification.industry_category ?? '',
+    description: verification.business_description,
     city: verification.city ?? '',
     province: verification.province ?? '',
     contactPerson: verification.contact_person ?? '',
-    contactMobile: verification.contact_mobile ?? user.mobile_number,
+    contactMobile: verification.contact_mobile ?? user.mobile_number ?? '',
     capabilities: verification.capabilities,
     serviceAreas: verification.service_areas,
     credibility: {

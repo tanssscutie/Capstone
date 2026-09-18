@@ -14,7 +14,6 @@ import type { ReactNode } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   Pressable,
   TextInput,
   StyleSheet,
@@ -23,6 +22,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import type { ViewStyle } from 'react-native';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
   color,
   font,
@@ -54,6 +54,8 @@ import type {
  *  submittedAt, integrity…) is assigned server-side once this is submitted. */
 export interface QuotationDraftInput {
   totalPrice: number;
+  /** Empty when the respondent chose "Total price only" instead of line items. */
+  lineItems: { description: string; quantity: number; unitPrice: number }[];
   leadTimeDays: number;
   paymentTerms: string;
   validityDays: number;
@@ -474,7 +476,7 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
   const addItem = () => setItems((prev) => [...prev, { id: `l${Date.now()}`, desc: '', qty: '1', unit: '0' }]);
   const removeItem = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id));
 
-  const addFile = () => {
+  const addFile = (documentLabel: string | null = null) => {
     if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
       const input = document.createElement('input');
       input.type = 'file';
@@ -485,8 +487,10 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
         const id = `att-${Date.now()}`;
         pickedQuotationFiles.set(id, picked);
         setFiles((prev) => [
-          ...prev,
-          { id, filename: picked.name, sizeBytes: picked.size, mimeType: picked.type, uri: '' },
+          // A required-document slot holds at most one file — picking a
+          // replacement drops whatever was there before for that label.
+          ...prev.filter((f) => !(documentLabel && f.documentLabel === documentLabel)),
+          { id, filename: picked.name, sizeBytes: picked.size, mimeType: picked.type, uri: '', documentLabel },
         ]);
       };
       input.click();
@@ -496,8 +500,8 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
     // Native fallback — placeholder metadata only, no real bytes. Same escape hatch as
     // PostRequirement.tsx's addFile; a native file picker is a separate follow-up.
     setFiles((prev) => [
-      ...prev,
-      { id: `f${Date.now()}`, filename: 'New attachment.pdf', sizeBytes: 640_000, mimeType: 'application/pdf', uri: '' },
+      ...prev.filter((f) => !(documentLabel && f.documentLabel === documentLabel)),
+      { id: `f${Date.now()}`, filename: 'New attachment.pdf', sizeBytes: 640_000, mimeType: 'application/pdf', uri: '', documentLabel },
     ]);
   };
   const removeFile = (id: string) => {
@@ -512,6 +516,12 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
     if (!ready) return;
     onSubmit?.({
       totalPrice: total,
+      lineItems:
+        priceMode === 'LINES'
+          ? items
+              .filter((i) => i.desc.trim() && num(i.qty) > 0)
+              .map((i) => ({ description: i.desc.trim(), quantity: num(i.qty), unitPrice: num(i.unit) }))
+          : [],
       leadTimeDays: Math.round(num(lead) * 7),
       paymentTerms: term,
       validityDays: validity,
@@ -720,6 +730,47 @@ function TermsSection({ requirement, st }: { requirement: Requirement; st: FormS
   );
 }
 
+function RequiredDocumentsSection({ requirement, st }: { requirement: Requirement; st: FormState }) {
+  if (requirement.requiredDocuments.length === 0) return null;
+  const attachedCount = requirement.requiredDocuments.filter((label) =>
+    st.files.some((f) => f.documentLabel === label),
+  ).length;
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeaderRow}>
+        <SectionLabel>Required documents</SectionLabel>
+        <View style={{ flex: 1 }} />
+        <Text style={styles.mutedSmall}>{attachedCount} of {requirement.requiredDocuments.length} attached</Text>
+      </View>
+      <Text style={styles.fieldCaption}>
+        The buyer asked for these to be attached to your quotation. Not a hard block on submitting — but a
+        missing one may put you at a disadvantage once quotations are compared.
+      </Text>
+      <View style={{ gap: space.sm, marginTop: space.sm }}>
+        {requirement.requiredDocuments.map((label) => {
+          const file = st.files.find((f) => f.documentLabel === label);
+          return (
+            <View key={label} style={styles.requiredDocRow}>
+              <Text style={styles.requiredDocLabel} numberOfLines={1}>{label}</Text>
+              {file ? (
+                <View style={styles.fileChip}>
+                  <Text style={styles.fileChipName} numberOfLines={1}>{file.filename}</Text>
+                  <Pressable onPress={() => st.removeFile(file.id)} hitSlop={8}>
+                    <XGlyph tone={color.inkFaint} />
+                  </Pressable>
+                </View>
+              ) : (
+                <AddDashedButton label="Attach" onPress={() => st.addFile(label)} />
+              )}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function NotesAttachmentsSection({ st, isWide }: { st: FormState; isWide: boolean }) {
   const notes = (
     <>
@@ -755,7 +806,7 @@ function NotesAttachmentsSection({ st, isWide }: { st: FormState; isWide: boolea
             </Pressable>
           </View>
         ))}
-        <AddDashedButton label="Add file" onPress={st.addFile} />
+        <AddDashedButton label="Add file" onPress={() => st.addFile()} />
       </View>
     </>
   );
@@ -839,6 +890,7 @@ function FormScreen(props: FormProps) {
       <ClosingBanner requirement={requirement} />
       <PriceSection requirement={requirement} st={st} />
       <TermsSection requirement={requirement} st={st} />
+      <RequiredDocumentsSection requirement={requirement} st={st} />
       <NotesAttachmentsSection st={st} isWide={isWide} />
       <SealSection requirement={requirement} st={st} onSaveDraft={props.onSaveDraft} />
     </>
@@ -846,19 +898,19 @@ function FormScreen(props: FormProps) {
 
   if (!isWide) {
     return (
-      <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+      <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
         <View style={styles.page}>
           <Breadcrumb requirement={requirement} onBack={props.onBack} />
           <TitleBlock requirement={requirement} buyer={buyer} />
           <ScopeSidebarCard requirement={requirement} buyer={buyer} onOpenBuyer={props.onOpenBuyer} />
           <View style={{ gap: space.lg }}>{sections}</View>
         </View>
-      </ScrollView>
+      </ScreenScroll>
     );
   }
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={styles.pageWide}>
         <Breadcrumb requirement={requirement} onBack={props.onBack} />
         <TitleBlock requirement={requirement} buyer={buyer} />
@@ -869,7 +921,7 @@ function FormScreen(props: FormProps) {
           </View>
         </View>
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 
@@ -1090,7 +1142,7 @@ function ReceiptScreen(props: SealedReceiptProps) {
   const { requirement, buyer, quotation, ledgerEntry } = props;
   const canWithdraw = quotation.status === 'SUBMITTED';
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={styles.receiptPage}>
         <ReceiptHero requirement={requirement} buyer={buyer} />
         <ReceiptCard requirement={requirement} quotation={quotation} ledgerEntry={ledgerEntry} />
@@ -1098,7 +1150,7 @@ function ReceiptScreen(props: SealedReceiptProps) {
         <TimelineCard requirement={requirement} quotation={quotation} />
         <ReceiptActions onTrack={props.onTrack} onBack={props.onBack} onWithdraw={props.onWithdraw} canWithdraw={canWithdraw} />
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 
@@ -1230,6 +1282,8 @@ const styles = StyleSheet.create({
   filesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm },
   fileChip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.xs, maxWidth: 220 },
   fileChipName: { flexShrink: 1, fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
+  requiredDocRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, flexWrap: 'wrap' },
+  requiredDocLabel: { flex: 1, fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
 
   /* x glyph */
   xGlyph: { width: 12, height: 12, alignItems: 'center', justifyContent: 'center' },

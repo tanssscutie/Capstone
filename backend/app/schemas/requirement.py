@@ -9,6 +9,25 @@ class SpecRow(BaseModel):
     value: str = Field(min_length=1, max_length=200)
 
 
+class LineItem(BaseModel):
+    description: str = Field(min_length=1, max_length=200)
+    quantity: float = Field(gt=0)
+    unit_price: float = Field(ge=0)
+
+
+class CategorySuggestionRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    scope: str = Field(default="", max_length=3000)
+
+
+class CategorySuggestionOut(BaseModel):
+    """Assistive category suggestion — a hint only. The buyer picks the
+    category themselves from the same fixed pill list either way; this never
+    writes anything and the field this feeds stays a normal, freely-editable
+    choice."""
+    category: Optional[str] = None
+
+
 class RequirementCreate(BaseModel):
     category: str = Field(min_length=2, max_length=100)
     title: str = Field(min_length=5, max_length=200)
@@ -23,12 +42,20 @@ class RequirementCreate(BaseModel):
     delivery_start: Optional[datetime] = None
     delivery_end: Optional[datetime] = None
 
+    # Qualifying documents respondents should attach to their quotation, e.g.
+    # ["PCAB License", "Sanitary Permit"] — see Requirement.required_documents.
+    required_documents: List[str] = []
+
     closes_at: datetime
 
 
 class AttachmentOut(BaseModel):
     id: int
     filename: str
+    # Set only for a quotation attachment that satisfies one of the
+    # requirement's required_documents — always None for a requirement's own
+    # attachments, and for a quotation's general/unlabeled ones.
+    document_label: Optional[str] = None
     uploaded_at: datetime
 
 
@@ -40,6 +67,9 @@ class PosterOut(BaseModel):
     # business's name is shown to someone else — mapPosterToBusiness on the frontend
     # falls back to business_name only when this is null, same as a viewer's own name.
     registered_name: Optional[str] = None
+    # Optional trading name — prefer this over both registered_name and
+    # business_name when set. See User.display_name.
+    display_name: Optional[str] = None
     city: Optional[str] = None
     province: Optional[str] = None
     is_verified: bool
@@ -69,6 +99,7 @@ class RequirementOut(BaseModel):
     location: str
     site_access_hours: str = ""
     site_access_notes: str = ""
+    required_documents: List[str] = []
     delivery_start: Optional[datetime]
     delivery_end: Optional[datetime]
     attachments: List[AttachmentOut] = []
@@ -78,6 +109,7 @@ class RequirementOut(BaseModel):
     quotations_count: int
     latest_quotation_at: Optional[datetime]
     closes_at: datetime
+    released_at: Optional[datetime] = None
 
     # Personalized: only set when the viewer already has a sealed quotation
     # on this requirement, so the feed can show "Sealed" instead of letting
@@ -85,6 +117,9 @@ class RequirementOut(BaseModel):
     my_active_quotation_ref: Optional[str] = None
     created_at: datetime
     awarded_quotation_id: Optional[int] = None
+    # Set only while status == 'award_pending' — when the proposed winner's
+    # response window closes. None once accepted, declined, or expired.
+    award_response_deadline: Optional[datetime] = None
 
     # Personalized: whether the viewer has bookmarked this requirement. False for
     # an anonymous/no-viewer lookup, same as my_active_quotation_ref above.
@@ -98,6 +133,10 @@ class QuotationCreate(BaseModel):
     # total > 0), enforced here too so a quotation can never be sealed empty
     # regardless of what actually called this endpoint.
     total_price: float = Field(gt=0)
+    # Optional itemized breakdown behind total_price — when present, total_price
+    # must still be the correct sum (the frontend computes it that way; not
+    # re-validated server-side since rounding on the client is display-only).
+    line_items: List[LineItem] = []
     delivery_lead_time: Optional[str] = Field(default=None, max_length=100)
     payment_terms: Optional[str] = Field(default=None, max_length=100)
     validity_period: Optional[str] = Field(default=None, max_length=100)
@@ -123,11 +162,12 @@ class QuotationDetailOut(BaseModel):
     quotation_ref: str
     business: PosterOut
     total_price: Optional[float]
+    line_items: List[LineItem] = []
     delivery_lead_time: Optional[str]
     payment_terms: Optional[str]
     validity_period: Optional[str]
     notes: str
-    status: str  # released | withdrawn | voided | shortlisted | awarded | not_selected
+    status: str  # released | withdrawn | voided | shortlisted | award_pending | awarded | not_selected
     shortlisted: bool = False
     submitted_at: datetime
     integrity_status: Optional[str]  # valid | flagged | None (not yet released)
@@ -135,7 +175,7 @@ class QuotationDetailOut(BaseModel):
 
 
 class RequirementQuotationsView(BaseModel):
-    requirement_status: str  # open | closed | cancelled | awarded | closed_no_award
+    requirement_status: str  # open | closed | cancelled | award_pending | awarded | closed_no_award
     sealed_count: Optional[int] = None       # present only while status == "open"
     quotations: Optional[List[QuotationDetailOut]] = None  # present once released
     awarded_quotation_id: Optional[int] = None
@@ -151,10 +191,11 @@ class LedgerEntryOut(BaseModel):
     id: int
     sequence: int  # same as `id` — the entry's position in the global chain,
     # kept as a separate field so the frontend doesn't need to know that.
-    event_type: str  # SUBMITTED | WITHDRAWN | RELEASED | CANCELLED | AWARDED
+    event_type: str  # SUBMITTED | WITHDRAWN | RELEASED | CANCELLED | AWARDED | CLOSED_NO_AWARD
     requirement_id: int
     quotation_id: Optional[int]
     actor_id: Optional[int]
+    actor_name: Optional[str] = None  # resolved for display — None for system-triggered entries (RELEASED)
     prev_hash: str
     entry_hash: str
     created_at: datetime
@@ -211,7 +252,8 @@ class MyRequirementOut(BaseModel):
     scope: str = ""
     specifications: List[SpecRow] = []
     quantity: str = ""
-    status: str  # open | closed | cancelled | awarded
+    required_documents: List[str] = []
+    status: str  # open | closed | cancelled | award_pending | awarded | closed_no_award
     city: str
     price_min: Optional[float]
     price_max: Optional[float]
@@ -219,6 +261,7 @@ class MyRequirementOut(BaseModel):
     closes_at: datetime
     released_at: Optional[datetime]
     awarded_quotation_id: Optional[int] = None
+    award_response_deadline: Optional[datetime] = None
     created_at: datetime
 
 
@@ -251,8 +294,9 @@ class MyQuotationOut(BaseModel):
     quotation_id: int
     quotation_ref: str
     status: str  # sealed | released | withdrawn | voided
-    outcome: str  # sealed | released | awarded | not_awarded | withdrawn | voided
+    outcome: str  # sealed | released | award_pending | awarded | not_awarded | withdrawn | voided
     total_price: Optional[float]
+    line_items: List[LineItem] = []
     delivery_lead_time: Optional[str]
     payment_terms: Optional[str]
     validity_period: Optional[str]
@@ -265,7 +309,7 @@ class MyQuotationOut(BaseModel):
     requirement_ref_code: str
     requirement_title: str
     requirement_location: str
-    requirement_status: str  # open | closed | cancelled | awarded | closed_no_award
+    requirement_status: str  # open | closed | cancelled | award_pending | awarded | closed_no_award
     closes_at: datetime
     released_at: Optional[datetime]
     poster: PosterOut

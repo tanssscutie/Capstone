@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { View, Text, ScrollView, Pressable, Modal, TextInput, StyleSheet, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, Modal, TextInput, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import type { ViewStyle } from 'react-native';
 import {
   color,
@@ -17,6 +17,7 @@ import {
   layout,
   breakpoint,
 } from '../../components/ui/tokens';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import type {
   Requirement,
   Business,
@@ -47,6 +48,7 @@ interface RespondentNotSubmitted {
   questions: ClarificationQuestion[];
   onAskQuestion?: (question: string) => void;
   onViewBuyerProfile?: () => void;
+  onViewLedger?: () => void;
 }
 
 interface RespondentSubmitted {
@@ -57,9 +59,15 @@ interface RespondentSubmitted {
   ownQuotation: Quotation;
   ledgerEntry: LedgerEntry;
   onWithdraw?: () => void;
+  /** Only meaningful while ownQuotation.status === 'AWARD_PENDING' — this
+   *  respondent is the proposed winner and needs to accept or decline the
+   *  Notice of Award before it's ever final. */
+  onAcceptAward?: () => void;
+  onDeclineAward?: () => void;
   questions: ClarificationQuestion[];
   onAskQuestion?: (question: string) => void;
   onViewBuyerProfile?: () => void;
+  onViewLedger?: () => void;
 }
 
 interface OwnerSealedProps {
@@ -70,6 +78,7 @@ interface OwnerSealedProps {
   onExtendClosing?: (newClosesAt: string) => void;
   onCancelRequirement?: () => void;
   onUpdateSiteNotes?: (accessHours: string, accessNotes: string) => void;
+  onViewLedger?: () => void;
 }
 
 /** Everything a released quotation card shows about its respondent — nothing more. */
@@ -81,10 +90,19 @@ interface OwnerReleasedProps {
   quotations: Quotation[];
   respondents: Record<BusinessId, Respondent>;
   onShortlistToggle?: (quotationId: string) => void;
-  onAward?: (quotationId: string) => void;
-  onCloseWithoutAward?: () => void;
+  /** Return false (or reject) if the backend refused the award — the hook
+   *  rolls the optimistic AWARD_PENDING state back rather than leaving the
+   *  screen stuck showing "locked" for a decision that never actually went
+   *  through. */
+  onAward?: (quotationId: string) => Promise<boolean> | void;
+  /** Same rollback contract as onAward — see its comment. Without this, a
+   *  rejected close-without-award (e.g. the requirement already reached a
+   *  final decision on the backend, from a stale screen or a double-click)
+   *  left the screen optimistically locked forever with no way out. */
+  onCloseWithoutAward?: () => Promise<boolean> | void;
   onViewRespondentProfile?: (businessId: string) => void;
   onMessageRespondent?: (businessId: string) => void;
+  onViewLedger?: () => void;
 }
 
 export type RequirementDetailProps =
@@ -170,6 +188,7 @@ function requirementStatusLabel(status: RequirementStatus): string {
     case 'DRAFT': return 'Draft';
     case 'OPEN': return 'Open';
     case 'CLOSED': return 'Closed';
+    case 'AWARD_PENDING': return 'Award pending';
     case 'AWARDED': return 'Awarded';
     case 'CLOSED_NO_AWARD': return 'Closed — No Award';
     case 'CANCELLED': return 'Cancelled';
@@ -193,6 +212,7 @@ function quotationStatusLabel(status: QuotationStatus): string {
     case 'SUBMITTED': return 'Submitted';
     case 'RELEASED': return 'Released';
     case 'SHORTLISTED': return 'Shortlisted';
+    case 'AWARD_PENDING': return 'Notice of Award — awaiting response';
     case 'AWARDED': return 'Awarded';
     case 'NOT_SELECTED': return 'Not selected';
     case 'WITHDRAWN': return 'Withdrawn';
@@ -500,12 +520,17 @@ function SealedRecordPanel({
   quotation,
   ledgerEntry,
   onWithdraw,
+  onAcceptAward,
+  onDeclineAward,
 }: {
   quotation: Quotation;
   ledgerEntry: LedgerEntry;
   onWithdraw?: () => void;
+  onAcceptAward?: () => void;
+  onDeclineAward?: () => void;
 }) {
   const canWithdraw = quotation.status === 'SUBMITTED';
+  const isAwardPending = quotation.status === 'AWARD_PENDING';
   return (
     <View style={styles.sealedCard}>
       <SectionLabel>Your quotation</SectionLabel>
@@ -515,7 +540,15 @@ function SealedRecordPanel({
         <LabelValueRow label="Ledger entry" value={`#${ledgerEntry.sequence}`} mono />
         {!canWithdraw && <LabelValueRow label="Status" value={quotationStatusLabel(quotation.status)} />}
       </View>
-      {canWithdraw ? (
+      {isAwardPending ? (
+        <>
+          <Text style={styles.mutedSmall}>
+            The buyer proposed you as the winner. Respond before the window closes, or it auto-declines.
+          </Text>
+          <ActionButton label="Accept award" variant="primary" onPress={onAcceptAward} />
+          <ActionButton label="Decline" variant="danger" onPress={onDeclineAward} />
+        </>
+      ) : canWithdraw ? (
         <ActionButton label="Withdraw quotation" variant="danger" onPress={onWithdraw} />
       ) : (
         <Text style={styles.mutedSmall}>
@@ -539,6 +572,8 @@ function RespondentSideContent(props: RespondentNotSubmitted | RespondentSubmitt
           quotation={props.ownQuotation}
           ledgerEntry={props.ledgerEntry}
           onWithdraw={props.onWithdraw}
+          onAcceptAward={props.onAcceptAward}
+          onDeclineAward={props.onDeclineAward}
         />
       ) : (
         <ActionButton label="Submit quotation" variant="primary" onPress={props.onSubmitQuotation} />
@@ -820,6 +855,7 @@ function QuotationCard({
   onRequestAward: () => void;
 }) {
   const isAwarded = quotation.status === 'AWARDED';
+  const isAwardPending = quotation.status === 'AWARD_PENDING';
   const isNotSelected = quotation.status === 'NOT_SELECTED';
   const isShortlisted = quotation.status === 'SHORTLISTED';
   const isFlagged = quotation.integrity === 'FLAGGED';
@@ -834,6 +870,7 @@ function QuotationCard({
         </View>
         <View style={{ gap: space.xs, alignItems: 'flex-end' }}>
           {isAwarded && <Badge label="Awarded" tone="primary" />}
+          {isAwardPending && <Badge label="Notice sent" tone="neutral" />}
           {isNotSelected && <Badge label="Not selected" tone="neutral" />}
           {isShortlisted && <Badge label="Shortlisted" tone="primary" />}
           {isFlagged && <Badge label="Flagged" tone="danger" />}
@@ -853,6 +890,22 @@ function QuotationCard({
         <Text style={styles.priceText}>{formatPHP(quotation.totalPrice)}</Text>
         <Text style={styles.mutedSmall}>{quotation.leadTimeDays} days lead time</Text>
       </View>
+
+      {quotation.lineItems.length > 0 && (
+        <View style={styles.block}>
+          <SectionLabel>Itemized breakdown</SectionLabel>
+          <View style={{ gap: space.xs, marginTop: space.xs }}>
+            {quotation.lineItems.map((li, i) => (
+              <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.sm }}>
+                <Text style={[styles.mutedSmall, { flex: 1 }]} numberOfLines={2}>
+                  {li.description} × {li.quantity}
+                </Text>
+                <Text style={styles.mutedSmall}>{formatPHP(li.quantity * li.unitPrice)}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
 
       <View style={styles.quotationFactRow}>
         <LabelValueRow label="Payment terms" value={quotation.paymentTerms} />
@@ -885,7 +938,11 @@ function QuotationCard({
         </Text>
       )}
 
-      {!isAwarded && !isNotSelected && (
+      {isAwardPending && (
+        <Text style={styles.mutedSmall}>Notice of Award sent — awaiting this business's response.</Text>
+      )}
+
+      {!isAwarded && !isAwardPending && !isNotSelected && (
         <View style={styles.quotationActions}>
           <ActionButton
             label={isShortlisted ? 'Unshortlist' : 'Shortlist'}
@@ -915,15 +972,16 @@ function AwardConfirmationModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable style={styles.modalOverlay} onPress={onCancel}>
         <Pressable style={styles.modalCard} onPress={() => {}}>
-          <SectionLabel>Confirm award</SectionLabel>
+          <SectionLabel>Send Notice of Award</SectionLabel>
           <Text style={styles.bodyTextSemi}>
-            {respondentName ? `Award ${respondentName}?` : 'Award this quotation?'}
+            {respondentName ? `Send a Notice of Award to ${respondentName}?` : 'Send a Notice of Award?'}
           </Text>
           <Text style={styles.bodyText}>
-            All other quotations for this requirement move to Not Selected.
+            They'll have a few days to accept or decline. Nothing is final yet — every other quotation
+            stays exactly as it is until they respond.
           </Text>
           <Text style={styles.bodyText}>
-            This is irreversible and is recorded on the ledger.
+            If they decline, or don't respond in time, you can propose someone else. Recorded on the ledger.
           </Text>
           <Text style={styles.mutedSmall}>
             Trustlink does not handle payment, delivery, or contracts — the two parties settle directly.
@@ -942,6 +1000,40 @@ function AwardConfirmationModal({
   );
 }
 
+function AwardPendingBanner({ respondentName, deadline }: { respondentName: string | null; deadline: ISODateTime | null }) {
+  return (
+    <View style={styles.awardPendingBanner}>
+      <SectionLabel>Notice of Award sent</SectionLabel>
+      <Text style={styles.bodyText}>
+        {respondentName ? `Waiting on ${respondentName} to accept or decline.` : 'Waiting on a response.'}
+        {deadline ? ` Responds by ${formatDateTime(deadline)}, or you can propose someone else.` : ''}
+      </Text>
+    </View>
+  );
+}
+
+/** No forcing function makes a buyer decide after release — this is purely a
+ *  nudge, computed live from releasedAt rather than a stored alert, since the
+ *  platform's Alerts inbox is a fixed 11-event list (thesis Coverage of the
+ *  Study) that a "still no decision" reminder doesn't belong in. Shown only
+ *  while nothing has been decided yet (no award proposed, none confirmed,
+ *  not closed without award) — see the `locked` check at each call site. */
+const DECISION_REMINDER_DAYS = 3;
+
+function DecisionReminderBanner({ releasedAt }: { releasedAt: ISODateTime | null }) {
+  if (!releasedAt) return null;
+  const days = Math.floor((Date.now() - new Date(releasedAt).getTime()) / (24 * 60 * 60 * 1000));
+  if (days < DECISION_REMINDER_DAYS) return null;
+  return (
+    <View style={styles.awardPendingBanner}>
+      <SectionLabel>Still no decision</SectionLabel>
+      <Text style={styles.bodyText}>
+        Released {days} day{days === 1 ? '' : 's'} ago. Every respondent is waiting — shortlist, send a Notice of Award, or close without award.
+      </Text>
+    </View>
+  );
+}
+
 /** State + business logic for OWNER_RELEASED, shared by the phone stack and the
  *  wide layout's rebuilt cards so both render the same underlying decisions. */
 function useOwnerReleased({
@@ -953,12 +1045,20 @@ function useOwnerReleased({
   onCloseWithoutAward,
 }: OwnerReleasedProps) {
   const [quotations, setQuotations] = useState<Quotation[]>(initialQuotations);
-  const [awardedId, setAwardedId] = useState<string | null>(requirement.awardedQuotationId);
+  const [awardedId, setAwardedId] = useState<string | null>(
+    requirement.status === 'AWARDED' ? requirement.awardedQuotationId : null,
+  );
+  // A Notice of Award sent but not yet accepted/declined — distinct from
+  // awardedId, which only ever means "confirmed." Kept separate so the UI
+  // can tell "waiting on their response" apart from "this is final."
+  const [awardPendingId, setAwardPendingId] = useState<string | null>(
+    requirement.status === 'AWARD_PENDING' ? requirement.awardedQuotationId : null,
+  );
   const [closedNoAward, setClosedNoAward] = useState(requirement.status === 'CLOSED_NO_AWARD');
   const [sortKey, setSortKey] = useState<SortKey>('submittedAt');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [awardTargetId, setAwardTargetId] = useState<string | null>(null);
-  const locked = awardedId !== null || closedNoAward;
+  const locked = awardedId !== null || closedNoAward || awardPendingId !== null;
 
   const handleSortPress = (key: SortKey) => {
     if (key === sortKey) {
@@ -979,25 +1079,37 @@ function useOwnerReleased({
     onShortlistToggle?.(id);
   };
 
-  const handleConfirmAward = (id: string) => {
-    setAwardedId(id);
-    setQuotations((prev) =>
-      prev.map((q) => {
-        if (q.status === 'WITHDRAWN') return q;
-        return { ...q, status: q.id === id ? 'AWARDED' : 'NOT_SELECTED' };
-      }),
-    );
+  const handleConfirmAward = async (id: string) => {
+    // Sends a Notice of Award — proposes, doesn't finalize. Only the target
+    // row changes; every other quotation stays exactly as it was until the
+    // proposed business actually accepts (see accept_award/decline_award on
+    // the backend — award() itself never touches anyone else's status).
+    const previousStatus = quotations.find((q) => q.id === id)?.status ?? 'RELEASED';
+    setAwardPendingId(id);
+    setQuotations((prev) => prev.map((q) => (q.id === id ? { ...q, status: 'AWARD_PENDING' } : q)));
     setAwardTargetId(null);
-    onAward?.(id);
+    const ok = await Promise.resolve(onAward?.(id)).catch(() => false);
+    // The backend refused this (e.g. someone else already got a Notice of
+    // Award, or the requirement moved on) — undo the optimistic lock rather
+    // than leaving the screen stuck showing a pending award that never sent.
+    if (ok === false) {
+      setAwardPendingId((current) => (current === id ? null : current));
+      setQuotations((prev) => prev.map((q) => (q.id === id ? { ...q, status: previousStatus } : q)));
+    }
   };
 
-  const handleCloseWithoutAward = () => {
+  const handleCloseWithoutAward = async () => {
     if (locked) return;
+    const previousStatuses = new Map(quotations.map((q) => [q.id, q.status]));
     setClosedNoAward(true);
     setQuotations((prev) =>
       prev.map((q) => (q.status === 'RELEASED' || q.status === 'SHORTLISTED' ? { ...q, status: 'NOT_SELECTED' } : q)),
     );
-    onCloseWithoutAward?.();
+    const ok = await Promise.resolve(onCloseWithoutAward?.()).catch(() => false);
+    if (ok === false) {
+      setClosedNoAward(false);
+      setQuotations((prev) => prev.map((q) => ({ ...q, status: previousStatuses.get(q.id) ?? q.status })));
+    }
   };
 
   const visible = quotations.filter((q) => q.status !== 'WITHDRAWN');
@@ -1007,6 +1119,9 @@ function useOwnerReleased({
 
   const awardTarget = quotations.find((q) => q.id === awardTargetId) ?? null;
   const awardTargetName = awardTarget ? respondents[awardTarget.respondentId].registeredName : null;
+
+  const awardPending = quotations.find((q) => q.id === awardPendingId) ?? null;
+  const awardPendingName = awardPending ? respondents[awardPending.respondentId].registeredName : null;
 
   const shortlistedCount = quotations.filter((q) => q.status === 'SHORTLISTED').length;
   const flaggedCount = visible.filter((q) => q.integrity === 'FLAGGED').length;
@@ -1020,6 +1135,10 @@ function useOwnerReleased({
     sortKey,
     sortDir,
     awardedId,
+    awardPendingId,
+    awardPendingName,
+    awardResponseDeadline: requirement.awardResponseDeadline,
+    releasedAt: requirement.releasedAt,
     closedNoAward,
     locked,
     awardTargetId,
@@ -1039,6 +1158,10 @@ function OwnerReleasedPanel(props: OwnerReleasedProps) {
 
   return (
     <View style={{ gap: space.lg }}>
+      {st.awardPendingId !== null && (
+        <AwardPendingBanner respondentName={st.awardPendingName} deadline={st.awardResponseDeadline} />
+      )}
+      {!st.locked && <DecisionReminderBanner releasedAt={st.releasedAt} />}
       <SectionLabel>{`${st.visible.length} quotation${st.visible.length === 1 ? '' : 's'} released`}</SectionLabel>
       <SortBar activeKey={st.sortKey} activeDir={st.sortDir} onPress={st.handleSortPress} />
       <View style={{ gap: space.md }}>
@@ -1174,11 +1297,27 @@ function WideScopeCard({ requirement }: { requirement: Requirement }) {
           <WideFileChips attachments={requirement.attachments} />
         </View>
       </View>
+
+      {requirement.requiredDocuments.length > 0 && (
+        <View style={styles.wideDividedSection}>
+          <SectionLabel>Required documents from respondents</SectionLabel>
+          <Text style={[styles.mutedSmall, { marginTop: space.xs }]}>
+            Respondents are asked to attach these to their quotation — not a hard block on submitting.
+          </Text>
+          <View style={[styles.wideChipsRow, { marginTop: space.sm }]}>
+            {requirement.requiredDocuments.map((d) => (
+              <View key={d} style={styles.fileChip}>
+                <Text style={styles.fileChipLabel} numberOfLines={1}>{d}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
-function WideRecordCard({ requirement }: { requirement: Requirement }) {
+function WideRecordCard({ requirement, onViewLedger }: { requirement: Requirement; onViewLedger?: () => void }) {
   return (
     <View style={styles.wideCard}>
       <SectionLabel>Record</SectionLabel>
@@ -1187,6 +1326,9 @@ function WideRecordCard({ requirement }: { requirement: Requirement }) {
         <LabelValueRow label="Published" value={requirement.publishedAt ? formatDateTime(requirement.publishedAt) : '—'} mono />
         <LabelValueRow label="Closing" value={formatDateTime(requirement.closingAt)} mono />
       </View>
+      <Pressable onPress={onViewLedger} style={{ marginTop: space.md }}>
+        <Text style={styles.wideLinkText}>View full audit trail</Text>
+      </Pressable>
     </View>
   );
 }
@@ -1321,7 +1463,7 @@ function WideInfoBand({
   );
 }
 
-function WideSealedHero({ requirement }: { requirement: Requirement }) {
+function WideSealedHero({ requirement, onViewLedger }: { requirement: Requirement; onViewLedger?: () => void }) {
   const [showHow, setShowHow] = useState(false);
   const bars = Array.from({ length: Math.min(requirement.quotationCount, 12) });
 
@@ -1359,7 +1501,9 @@ function WideSealedHero({ requirement }: { requirement: Requirement }) {
             is re-checked and any quotation altered after submission opens with a flag rather than being hidden.
             Withdrawals stay in the record alongside their replacement.
           </Text>
-          <Text style={styles.wideLinkText}>View audit record</Text>
+          <Pressable onPress={onViewLedger}>
+            <Text style={styles.wideLinkText}>View audit record</Text>
+          </Pressable>
         </View>
       )}
     </View>
@@ -1567,16 +1711,21 @@ function WideMyRecordCard({
   quotation,
   ledgerEntry,
   onWithdraw,
+  onAcceptAward,
+  onDeclineAward,
 }: {
   quotation: Quotation;
   ledgerEntry: LedgerEntry;
   onWithdraw?: () => void;
+  onAcceptAward?: () => void;
+  onDeclineAward?: () => void;
 }) {
   const canWithdraw = quotation.status === 'SUBMITTED';
+  const isAwardPending = quotation.status === 'AWARD_PENDING';
   return (
     <View style={styles.wideMyRecordCard}>
       <View style={styles.submittedTag}>
-        <Text style={styles.submittedTagLabel}>Submitted · sealed</Text>
+        <Text style={styles.submittedTagLabel}>{isAwardPending ? 'Notice of Award — respond' : 'Submitted · sealed'}</Text>
       </View>
       <Text style={styles.mutedSmall}>
         Your quotation is recorded and cannot be read by the buyer or any other respondent until closing.
@@ -1588,7 +1737,15 @@ function WideMyRecordCard({
       <Text style={styles.wideLedgerNote}>
         Recorded and tamper-evident · #{ledgerEntry.sequence}
       </Text>
-      {canWithdraw ? (
+      {isAwardPending ? (
+        <>
+          <Text style={styles.mutedSmall}>
+            The buyer proposed you as the winner. Respond before the window closes, or it auto-declines.
+          </Text>
+          <ActionButton label="Accept award" variant="primary" onPress={onAcceptAward} />
+          <ActionButton label="Decline" variant="danger" onPress={onDeclineAward} />
+        </>
+      ) : canWithdraw ? (
         <>
           <ActionButton label="Withdraw quotation" variant="danger" onPress={onWithdraw} />
           <Text style={styles.mutedSmall}>
@@ -1672,6 +1829,7 @@ function WideQuotationCard({
   onMessage: () => void;
 }) {
   const isAwarded = quotation.status === 'AWARDED';
+  const isAwardPending = quotation.status === 'AWARD_PENDING';
   const isNotSelected = quotation.status === 'NOT_SELECTED';
   const isShortlisted = quotation.status === 'SHORTLISTED';
   const isFlagged = quotation.integrity === 'FLAGGED';
@@ -1683,6 +1841,7 @@ function WideQuotationCard({
   let stateLabel: string | null = null;
   let stateTone: BadgeTone = 'neutral';
   if (isAwarded) { stateLabel = 'Awarded'; stateTone = 'ink'; }
+  else if (isAwardPending) { stateLabel = 'Notice sent'; stateTone = 'neutral'; }
   else if (isNotSelected) { stateLabel = 'Not selected'; stateTone = 'neutral'; }
   else if (isShortlisted) { stateLabel = 'Shortlisted'; stateTone = 'primary'; }
 
@@ -1737,6 +1896,17 @@ function WideQuotationCard({
         </View>
       </View>
 
+      {quotation.lineItems.length > 0 && (
+        <View style={styles.wideSpecTable}>
+          {quotation.lineItems.map((li, index) => (
+            <View key={index} style={[styles.wideSpecRow, index % 2 === 1 ? styles.wideSpecRowAlt : null]}>
+              <Text style={styles.wideSpecKey}>{li.description} × {li.quantity}</Text>
+              <Text style={styles.wideSpecValue}>{formatPHP(li.quantity * li.unitPrice)}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       {quotation.notesToBuyer.length > 0 && (
         <Text style={styles.bodyText}>{quotation.notesToBuyer}</Text>
       )}
@@ -1764,18 +1934,22 @@ function WideQuotationCard({
         <View style={styles.wideQuoteFooterActions}>
           <ActionButton label="View profile" variant="outline" onPress={onViewProfile} />
           <ActionButton label="Message" variant="outline" onPress={onMessage} />
-          <ActionButton
-            label={isShortlisted ? 'Shortlisted' : 'Shortlist'}
-            variant={isShortlisted ? 'tinted' : 'outline'}
-            onPress={onToggleShortlist}
-            disabled={awardLocked}
-          />
-          <ActionButton
-            label={isAwarded ? 'Awarded' : isNotSelected ? 'Not selected' : 'Award'}
-            variant={isAwarded ? 'ink' : 'primary'}
-            onPress={onRequestAward}
-            disabled={awardLocked}
-          />
+          {!isAwardPending && (
+            <ActionButton
+              label={isShortlisted ? 'Shortlisted' : 'Shortlist'}
+              variant={isShortlisted ? 'tinted' : 'outline'}
+              onPress={onToggleShortlist}
+              disabled={awardLocked}
+            />
+          )}
+          {!isAwardPending && (
+            <ActionButton
+              label={isAwarded ? 'Awarded' : isNotSelected ? 'Not selected' : 'Award'}
+              variant={isAwarded ? 'ink' : 'primary'}
+              onPress={onRequestAward}
+              disabled={awardLocked}
+            />
+          )}
         </View>
       </View>
     </View>
@@ -1784,19 +1958,29 @@ function WideQuotationCard({
 
 function WideCloseoutCard({
   awarded,
+  pending,
   closedNoAward,
   onCloseWithoutAward,
 }: {
   awarded: boolean;
+  pending: boolean;
   closedNoAward: boolean;
   onCloseWithoutAward?: () => void;
 }) {
-  const title = awarded ? 'This requirement is awarded' : closedNoAward ? 'Closed without an award' : 'No suitable quotation?';
+  const title = awarded
+    ? 'This requirement is awarded'
+    : pending
+      ? 'A Notice of Award is pending'
+      : closedNoAward
+        ? 'Closed without an award'
+        : 'No suitable quotation?';
   const body = awarded
     ? 'All other respondents were notified that the requirement was awarded to another business.'
-    : closedNoAward
-      ? 'Every respondent was notified. This outcome is recorded on your public profile and cannot be reversed.'
-      : 'Closing without award notifies every respondent and records the outcome on your public profile. The requirement cannot be reopened.';
+    : pending
+      ? 'You can close without award once the pending notice is accepted, declined, or its response window passes.'
+      : closedNoAward
+        ? 'Every respondent was notified. This outcome is recorded on your public profile and cannot be reversed.'
+        : 'Closing without award notifies every respondent and records the outcome on your public profile. The requirement cannot be reopened.';
 
   return (
     <View style={styles.wideCloseoutCard}>
@@ -1804,25 +1988,30 @@ function WideCloseoutCard({
         <Text style={styles.bodyTextSemi}>{title}</Text>
         <Text style={[styles.mutedSmall, { marginTop: space.xs }]}>{body}</Text>
       </View>
-      {!awarded && !closedNoAward && <ActionButton label="Close without award" variant="danger" onPress={onCloseWithoutAward} />}
+      {!awarded && !pending && !closedNoAward && <ActionButton label="Close without award" variant="danger" onPress={onCloseWithoutAward} />}
     </View>
   );
 }
 
 function WideDecisionCard({ st }: { st: ReturnType<typeof useOwnerReleased> }) {
   const awarded = st.awardedId !== null;
+  const pending = st.awardPendingId !== null;
   const title = awarded
     ? 'Awarded'
-    : st.closedNoAward
-      ? 'Closed — No Award'
-      : st.shortlistedCount > 0
-        ? 'Shortlist in progress'
-        : 'No decision recorded';
+    : pending
+      ? 'Notice of Award sent'
+      : st.closedNoAward
+        ? 'Closed — No Award'
+        : st.shortlistedCount > 0
+          ? 'Shortlist in progress'
+          : 'No decision recorded';
   const body = awarded
     ? 'The award is written to the ledger. Contact details have been exchanged — Trustlink does not handle payment, delivery, or contracts, and observes nothing beyond this point.'
-    : st.closedNoAward
-      ? 'This requirement was closed without awarding any of the released quotations. Every respondent was notified.'
-      : 'Shortlisting is optional. You may award directly from the released quotations, or shortlist first when comparing many.';
+    : pending
+      ? `Waiting on ${st.awardPendingName ?? 'the proposed business'} to accept or decline. Nothing else changes until they respond.`
+      : st.closedNoAward
+        ? 'This requirement was closed without awarding any of the released quotations. Every respondent was notified.'
+        : 'Shortlisting is optional. You may award directly from the released quotations, or shortlist first when comparing many.';
 
   return (
     <View style={styles.wideCard}>
@@ -1837,7 +2026,7 @@ function WideDecisionCard({ st }: { st: ReturnType<typeof useOwnerReleased> }) {
   );
 }
 
-function WideIntegrityFlagCard() {
+function WideIntegrityFlagCard({ onViewLedger }: { onViewLedger?: () => void }) {
   return (
     <View style={styles.wideFlagCard}>
       <View style={styles.wideFlagHeader}>
@@ -1848,7 +2037,9 @@ function WideIntegrityFlagCard() {
         One quotation no longer matches the record made at submission. It stays in the list, marked, so you can
         judge it yourself.
       </Text>
-      <Text style={[styles.wideLinkText, { color: color.danger, marginTop: space.md }]}>View audit record</Text>
+      <Pressable onPress={onViewLedger}>
+        <Text style={[styles.wideLinkText, { color: color.danger, marginTop: space.md }]}>View audit record</Text>
+      </Pressable>
     </View>
   );
 }
@@ -1861,7 +2052,7 @@ function WideOwnerReleasedScreen(props: OwnerReleasedProps) {
   const decided = st.locked;
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={styles.pageWide}>
         <WideHeader requirement={requirement} />
         <View style={styles.columns}>
@@ -1877,6 +2068,10 @@ function WideOwnerReleasedScreen(props: OwnerReleasedProps) {
               countCaption="opened simultaneously"
               sealLine="Every quotation opened together at the closing time. Nobody saw a price before that moment."
             />
+            {st.awardPendingId !== null && (
+              <AwardPendingBanner respondentName={st.awardPendingName} deadline={st.awardResponseDeadline} />
+            )}
+            {!st.locked && <DecisionReminderBanner releasedAt={st.releasedAt} />}
             <WideReleasedHeaderCard st={st} requirement={requirement} />
             <View style={{ gap: space.lg }}>
               {st.sorted.map((q) => {
@@ -1896,13 +2091,18 @@ function WideOwnerReleasedScreen(props: OwnerReleasedProps) {
                 );
               })}
             </View>
-            <WideCloseoutCard awarded={st.awardedId !== null} closedNoAward={st.closedNoAward} onCloseWithoutAward={st.handleCloseWithoutAward} />
+            <WideCloseoutCard
+              awarded={st.awardedId !== null}
+              pending={st.awardPendingId !== null}
+              closedNoAward={st.closedNoAward}
+              onCloseWithoutAward={st.handleCloseWithoutAward}
+            />
             <WideScopeCard requirement={requirement} />
           </View>
           <View style={[styles.sideColumn, stickyOnWeb]}>
             <WideDecisionCard st={st} />
-            {st.flaggedCount > 0 && <WideIntegrityFlagCard />}
-            <WideRecordCard requirement={requirement} />
+            {st.flaggedCount > 0 && <WideIntegrityFlagCard onViewLedger={props.onViewLedger} />}
+            <WideRecordCard requirement={requirement} onViewLedger={props.onViewLedger} />
           </View>
         </View>
         <AwardConfirmationModal
@@ -1914,7 +2114,7 @@ function WideOwnerReleasedScreen(props: OwnerReleasedProps) {
           }}
         />
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 
@@ -1927,7 +2127,7 @@ export default function RequirementDetail(props: RequirementDetailProps) {
 
   if (!isWide) {
     return (
-      <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+      <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
         <View style={styles.page}>
           <Header requirement={requirement} />
           <RequirementOverview requirement={requirement} />
@@ -1936,7 +2136,7 @@ export default function RequirementDetail(props: RequirementDetailProps) {
           {props.state === 'OWNER_SEALED' && <OwnerSealedPanel {...props} />}
           {props.state === 'OWNER_RELEASED' && <OwnerReleasedPanel {...props} />}
         </View>
-      </ScrollView>
+      </ScreenScroll>
     );
   }
 
@@ -1945,7 +2145,7 @@ export default function RequirementDetail(props: RequirementDetailProps) {
   }
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={styles.pageWide}>
         <WideHeader requirement={requirement} />
         <View style={styles.columns}>
@@ -1967,7 +2167,7 @@ export default function RequirementDetail(props: RequirementDetailProps) {
                   : 'Your price stays hidden until closing — from the buyer and from every other business quoting.'
               }
             />
-            {props.state === 'OWNER_SEALED' && <WideSealedHero requirement={requirement} />}
+            {props.state === 'OWNER_SEALED' && <WideSealedHero requirement={requirement} onViewLedger={props.onViewLedger} />}
             <WideScopeCard requirement={requirement} />
             {props.state === 'RESPONDENT' && (
               <QASection questions={props.questions} canAsk canAnswer={false} onAskQuestion={props.onAskQuestion} />
@@ -1982,6 +2182,8 @@ export default function RequirementDetail(props: RequirementDetailProps) {
                 quotation={props.ownQuotation}
                 ledgerEntry={props.ledgerEntry}
                 onWithdraw={props.onWithdraw}
+                onAcceptAward={props.onAcceptAward}
+                onDeclineAward={props.onDeclineAward}
               />
             )}
             {props.state === 'OWNER_SEALED' && (
@@ -1992,11 +2194,11 @@ export default function RequirementDetail(props: RequirementDetailProps) {
                 onUpdateSiteNotes={props.onUpdateSiteNotes}
               />
             )}
-            <WideRecordCard requirement={requirement} />
+            <WideRecordCard requirement={requirement} onViewLedger={props.onViewLedger} />
           </View>
         </View>
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 
@@ -2276,6 +2478,14 @@ const styles = StyleSheet.create({
   },
   quotationCardFlagged: {
     borderColor: color.dangerBorder,
+  },
+  awardPendingBanner: {
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    backgroundColor: color.surfaceSunken,
+    gap: space.xs,
   },
   quotationCardHeader: {
     flexDirection: 'row',

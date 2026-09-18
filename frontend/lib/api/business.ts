@@ -27,6 +27,7 @@ export interface VerificationStatusOut {
   has_submitted: boolean;
   missing_documents: string[];
   registered_name: string | null;
+  display_name: string | null;
   business_type: string | null;
   industry_category: string | null;
   city: string | null;
@@ -36,6 +37,7 @@ export interface VerificationStatusOut {
   capabilities: string[];
   service_areas: string[];
   signup_intent: string;
+  business_description: string | null;
 }
 
 export interface DashboardStatsOut {
@@ -50,10 +52,12 @@ export interface DashboardStatsOut {
 export interface PublicBusinessProfileOut {
   id: number;
   registered_name: string | null;
+  display_name: string | null;
   business_type: string | null;
   industry_category: string | null;
   city: string | null;
   province: string | null;
+  business_description: string | null;
   capabilities: string[];
   service_areas: string[];
   is_verified: boolean;
@@ -69,6 +73,7 @@ export interface PublicBusinessProfileOut {
 export async function submitOnboarding(identity: IdentityDraft, operations: OperationsDraft): Promise<void> {
   await api.post<void>('/business/onboarding', {
     registered_name: identity.registeredName,
+    display_name: identity.displayName.trim() || null,
     business_type: identity.businessType,
     industry_category: identity.category,
     city: identity.city,
@@ -78,6 +83,27 @@ export async function submitOnboarding(identity: IdentityDraft, operations: Oper
     capabilities: operations.capabilities,
     service_areas: operations.serviceAreas,
     signup_intent: identity.signupIntent,
+    business_description: operations.businessDescription.trim() || null,
+  });
+}
+
+export interface DescriptionSuggestionOut {
+  description: string | null;
+}
+
+/** POST /business/suggest-description — AI profile assistant's draft bio.
+ *  A suggestion only: the caller decides whether to use it, same contract
+ *  as extractDocumentFields and requirementsApi.suggestCategory. */
+export async function suggestDescription(
+  identity: IdentityDraft, capabilities: string[], serviceAreas: string[],
+): Promise<DescriptionSuggestionOut> {
+  return api.post<DescriptionSuggestionOut>('/business/suggest-description', {
+    business_type: identity.businessType,
+    industry_category: identity.category,
+    capabilities,
+    service_areas: serviceAreas,
+    city: identity.city,
+    province: identity.province,
   });
 }
 
@@ -101,6 +127,22 @@ export async function uploadDocument(input: UploadDocumentInput): Promise<Docume
   if (input.declaredExpiryDate) form.append('declared_expiry_date', input.declaredExpiryDate);
   form.append('file', input.file, input.fileName);
   return api.postForm<DocumentUploadOut>('/business/documents', form);
+}
+
+export interface DocumentExtractionOut {
+  id_number: string | null;
+}
+
+/** POST /business/documents/extract — Assistive Document Extraction. A
+ *  suggestion only: the caller pre-fills an editable field with the result,
+ *  never submits it directly. `id_number: null` just means nothing was
+ *  confidently found (no Gemini key configured, unreadable image, etc.) —
+ *  never surfaced as an error, the field is just left for manual entry. */
+export async function extractDocumentFields(docType: string, file: File | Blob, fileName: string): Promise<DocumentExtractionOut> {
+  const form = new FormData();
+  form.append('doc_type', docType);
+  form.append('file', file, fileName);
+  return api.postForm<DocumentExtractionOut>('/business/documents/extract', form);
 }
 
 /** POST /business/submit-for-verification */

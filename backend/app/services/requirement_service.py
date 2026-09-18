@@ -1,11 +1,12 @@
 import json
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, timedelta
+from typing import List
 
 from fastapi import UploadFile
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.database import engine
+from app.core.clock import now_ph, to_ph_naive
 from app.models.requirement import Requirement
 from app.models.requirement_attachment import RequirementAttachment
 from app.models.quotation import Quotation
@@ -17,11 +18,13 @@ from app.repositories import ledger_repository as ledger_repo
 from app.repositories import notification_repository as notif_repo
 from app.repositories import message_repository as msg_repo
 from app.services import ledger_service
+from app.services import matching_service
 from app.schemas.requirement import (
     RequirementCreate,
     RequirementOut,
     PosterOut,
     SpecRow,
+    LineItem,
     AttachmentOut,
     QuotationCreate,
     QuotationSealedReceipt,
@@ -57,6 +60,19 @@ class NoActiveQuotation(Exception):
     pass
 
 
+class AlreadyQuoted(Exception):
+    """Raised on submit_quotation when this business already has a sealed
+    quotation on this requirement — withdraw it first, then resubmit."""
+
+
+class CannotQuoteOwnRequirement(Exception):
+    """Raised on submit_quotation when the caller is the requirement's own
+    owner. A business can freely post requirements and quote on other
+    businesses' requirements with the same account — that's the platform's
+    normal dual role — but quoting on its own posting would make it both
+    buyer and seller in the same sealed-bidding transaction."""
+
+
 class AlreadyAwarded(Exception):
     pass
 
@@ -69,6 +85,16 @@ class AlreadyDecided(Exception):
 
 class InvalidQuotation(Exception):
     pass
+
+
+class NoAwardPending(Exception):
+    """Raised on accept_award/decline_award when this requirement has no
+    outstanding Notice of Award to respond to."""
+
+
+class NotAwardCandidate(Exception):
+    """Raised on accept_award/decline_award when the caller isn't the
+    business the pending Notice of Award was sent to."""
 
 
 class HasActiveQuotations(Exception):
@@ -95,6 +121,10 @@ def _log(session: Session, event_type: str, requirement_id: int, quotation_id, a
 
 
 class RequirementService:
+    # How long a proposed winner has to accept or decline a Notice of Award
+    # before it auto-declines (see expire_due_award_notices).
+    AWARD_RESPONSE_WINDOW_DAYS = 3
+
     # ---------- read / list ----------
 
     def _to_out(self, session: Session, req: Requirement, viewer: User | None = None) -> RequirementOut:
@@ -108,6 +138,7 @@ class RequirementService:
             id=owner.id,
             business_name=owner.business_name,
             registered_name=owner.registered_name,
+            display_name=owner.display_name,
             city=owner.city,
             province=owner.province,
             is_verified=owner.is_verified,
@@ -145,6 +176,7 @@ class RequirementService:
             location=req.location,
             site_access_hours=req.site_access_hours,
             site_access_notes=req.site_access_notes,
+            required_documents=[d for d in req.required_documents.split(",") if d],
             delivery_start=req.delivery_start,
             delivery_end=req.delivery_end,
             attachments=[AttachmentOut(id=a.id, filename=a.original_filename, uploaded_at=a.uploaded_at) for a in attachments],
@@ -153,8 +185,10 @@ class RequirementService:
             quotations_count=quotations_count,
             latest_quotation_at=latest_q_at,
             closes_at=req.closes_at,
+            released_at=req.released_at,
             created_at=req.created_at,
             awarded_quotation_id=req.awarded_quotation_id,
+            award_response_deadline=req.award_response_deadline,
             my_active_quotation_ref=my_active_ref,
             is_saved=is_saved,
         )
@@ -198,18 +232,45 @@ class RequirementService:
         with Session(engine) as session:
             viewer = session.get(User, viewer_id) if viewer_id else None
             reqs = repo.list_open_requirements(session)
-            out = [self._to_out(session, r, viewer) for r in reqs]
+            pairs = [(r, self._to_out(session, r, viewer)) for r in reqs]
 
-            # Feed ordering: match first, then closing time. The match-boost only
-            # applies for a viewer here to find work (FIND_WORK/BOTH, or no signup_intent
-            # recorded) — a FIND_SUPPLIERS-only viewer isn't looking for their own
+            # Feed ordering: match first, then closing time — never popularity
+            # or recency (Specific Objective #4 / Scope: Semantic Matching).
+            # The match-boost only applies for a viewer here to find work
+            # (FIND_WORK/BOTH, or no signup_intent recorded) — a
+            # FIND_SUPPLIERS-only viewer isn't looking for their own
             # capability match, so their feed is ordered by closing time alone.
             wants_work = viewer is None or viewer.signup_intent != "FIND_SUPPLIERS"
-            if wants_work:
-                out.sort(key=lambda r: (r.match_note is None, r.closes_at))
+            if wants_work and viewer and viewer.capability_embedding:
+                # Real vector-database ranking, not the rule-based match_note
+                # text (that stays as the honest, legible "why" shown on the
+                # card — see _match_note's own docstring on why it's kept
+                # separate). A requirement Qdrant never indexed (0.0, missing
+                # from the dict) just sorts as no-boost, not an error.
+                scores = matching_service.rank_requirement_ids(
+                    viewer.capability_embedding, [r.id for r, _ in pairs],
+                )
+                pairs.sort(key=lambda pair: (-scores.get(pair[0].id, 0.0), pair[1].closes_at))
+            elif wants_work:
+                # No embedding yet (e.g. onboarding not completed) — fall back
+                # to the same rule-based ordering used before this feature,
+                # rather than an unordered/closing-time-only feed.
+                pairs.sort(key=lambda pair: (pair[1].match_note is None, pair[1].closes_at))
             else:
-                out.sort(key=lambda r: r.closes_at)
-            return out
+                pairs.sort(key=lambda pair: pair[1].closes_at)
+            return [out for _, out in pairs]
+
+    def get_by_id(self, requirement_id: int, viewer_id: int | None = None) -> RequirementOut:
+        """A single requirement's full detail, personalized the same way
+        list_open's rows are (my_active_quotation_ref, is_saved) — used by
+        requirement.tsx and submit-quotation.tsx instead of the client-side
+        requirementsCache, which only ever had what a list endpoint returned."""
+        with Session(engine) as session:
+            req = repo.get_requirement(session, requirement_id)
+            if not req:
+                raise RequirementNotFound()
+            viewer = session.get(User, viewer_id) if viewer_id else None
+            return self._to_out(session, req, viewer)
 
     def list_closing_soon(self, viewer_id: int | None = None) -> List[RequirementOut]:
         with Session(engine) as session:
@@ -241,11 +302,16 @@ class RequirementService:
                 city=data.city.strip(),
                 site_address=data.site_address.strip() if data.site_address else None,
                 location=location,
-                delivery_start=data.delivery_start,
-                delivery_end=data.delivery_end,
-                closes_at=data.closes_at,
+                required_documents=",".join(d.strip() for d in data.required_documents if d.strip()),
+                delivery_start=to_ph_naive(data.delivery_start) if data.delivery_start else None,
+                delivery_end=to_ph_naive(data.delivery_end) if data.delivery_end else None,
+                closes_at=to_ph_naive(data.closes_at),
+                embedding=matching_service.embed_to_json(
+                    matching_service.requirement_matching_text(data.category, data.title, data.scope)
+                ),
             )
             created = repo.create_requirement(session, req)
+            matching_service.upsert_requirement_vector(created.id, created.embedding)
             return self._to_out(session, created)
 
     # ---------- attachments ----------
@@ -294,6 +360,7 @@ class RequirementService:
                     scope=req.scope,
                     specifications=[SpecRow(**s) for s in json.loads(req.specifications_json or "[]")],
                     quantity=req.quantity,
+                    required_documents=[d for d in req.required_documents.split(",") if d],
                     status=req.status,
                     city=req.city,
                     price_min=req.price_min,
@@ -302,6 +369,7 @@ class RequirementService:
                     closes_at=req.closes_at,
                     released_at=req.released_at,
                     awarded_quotation_id=req.awarded_quotation_id,
+                    award_response_deadline=req.award_response_deadline,
                     created_at=req.created_at,
                 ))
             return out
@@ -369,7 +437,7 @@ class RequirementService:
             if repo.count_active_quotations(session, requirement_id) > 0:
                 raise HasActiveQuotations()
 
-            req.closes_at = new_closes_at
+            req.closes_at = to_ph_naive(new_closes_at)
             updated = repo.update_requirement(session, req)
             return self._to_out(session, updated)
 
@@ -406,12 +474,22 @@ class RequirementService:
                 repo.update_quotation(session, q)
 
             req.status = "cancelled"
-            req.cancelled_at = datetime.utcnow()
+            req.cancelled_at = now_ph()
             updated = repo.update_requirement(session, req)
 
             _log(session, "CANCELLED", requirement_id, None, owner_id, {
                 "requirement_id": requirement_id, "voided_count": len(actives),
             })
+
+            for q in actives:
+                notif_repo.create_if_allowed(
+                    session,
+                    user_id=q.business_id,
+                    type_="REQUIREMENT_CANCELLED",
+                    category="activity",
+                    title="Requirement cancelled",
+                    detail=f"{req.ref_code} · {req.title} was cancelled by the buyer. Your sealed quotation was voided unopened.",
+                )
 
             return self._to_out(session, updated)
 
@@ -422,20 +500,26 @@ class RequirementService:
             req = repo.get_requirement(session, requirement_id)
             if not req:
                 raise RequirementNotFound()
-            if req.status != "open" or req.closes_at <= datetime.utcnow():
+            if req.owner_id == business_id:
+                raise CannotQuoteOwnRequirement()
+            if req.status != "open" or req.closes_at <= now_ph():
                 raise RequirementNotOpen()
 
-            # Resubmission: silently withdraw any prior active quote from
-            # this business first, then record the new one. History of the
-            # withdrawal stays visible via the ledger and the old row.
+            # One sealed quotation per business per requirement — no silent
+            # replace. A business that wants to change its bid must withdraw
+            # its existing one first (an explicit action, visible on the
+            # ledger as its own WITHDRAWN entry), then submit again.
             existing = repo.get_active_quotation(session, requirement_id, business_id)
             if existing:
-                self._withdraw_row(session, existing, business_id)
+                raise AlreadyQuoted()
+
+            line_items_json = json.dumps([li.model_dump() for li in data.line_items]) if data.line_items else ""
 
             payload = {
                 "requirement_id": requirement_id,
                 "business_id": business_id,
                 "total_price": data.total_price,
+                "line_items": [li.model_dump() for li in data.line_items],
                 "delivery_lead_time": data.delivery_lead_time,
                 "payment_terms": data.payment_terms,
                 "validity_period": data.validity_period,
@@ -448,6 +532,7 @@ class RequirementService:
                 requirement_id=requirement_id,
                 business_id=business_id,
                 total_price=data.total_price,
+                line_items=line_items_json,
                 delivery_lead_time=data.delivery_lead_time,
                 payment_terms=data.payment_terms,
                 validity_period=data.validity_period,
@@ -488,7 +573,9 @@ class RequirementService:
 
     # ---------- quotation attachments ----------
 
-    async def upload_quotation_attachment(self, requirement_id: int, quotation_id: int, business_id: int, file: UploadFile) -> AttachmentOut:
+    async def upload_quotation_attachment(
+        self, requirement_id: int, quotation_id: int, business_id: int, file: UploadFile, document_label: str | None = None,
+    ) -> AttachmentOut:
         with Session(engine) as session:
             req = repo.get_requirement(session, requirement_id)
             if not req:
@@ -501,7 +588,7 @@ class RequirementService:
                 raise NotOwner()
             # Same window as withdraw/resubmit — attachments are part of the sealed
             # submission, so they can't be added once it's no longer sealed.
-            if req.status != "open" or req.closes_at <= datetime.utcnow() or quotation.status != "sealed":
+            if req.status != "open" or req.closes_at <= now_ph() or quotation.status != "sealed":
                 raise RequirementNotOpen()
 
             import os
@@ -521,9 +608,15 @@ class RequirementService:
                 quotation_id=quotation_id,
                 file_path=full_path,
                 original_filename=file.filename or saved_name,
+                document_label=document_label.strip() if document_label and document_label.strip() else None,
             )
             created = repo.add_quotation_attachment(session, attachment)
-            return AttachmentOut(id=created.id, filename=created.original_filename, uploaded_at=created.uploaded_at)
+            return AttachmentOut(
+                id=created.id,
+                filename=created.original_filename,
+                document_label=created.document_label,
+                uploaded_at=created.uploaded_at,
+            )
 
     # ---------- withdraw ----------
 
@@ -532,7 +625,7 @@ class RequirementService:
             req = repo.get_requirement(session, requirement_id)
             if not req:
                 raise RequirementNotFound()
-            if req.status != "open" or req.closes_at <= datetime.utcnow():
+            if req.status != "open" or req.closes_at <= now_ph():
                 raise RequirementNotOpen()
 
             existing = repo.get_active_quotation(session, requirement_id, business_id)
@@ -543,7 +636,7 @@ class RequirementService:
 
     def _withdraw_row(self, session: Session, quotation: Quotation, actor_id: int) -> None:
         quotation.status = "withdrawn"
-        quotation.withdrawn_at = datetime.utcnow()
+        quotation.withdrawn_at = now_ph()
         repo.update_quotation(session, quotation)
 
         _log(session, "WITHDRAWN", quotation.requirement_id, quotation.id, actor_id, {
@@ -652,6 +745,7 @@ class RequirementService:
                 "requirement_id": q.requirement_id,
                 "business_id": q.business_id,
                 "total_price": q.total_price,
+                "line_items": json.loads(q.line_items) if q.line_items else [],
                 "delivery_lead_time": q.delivery_lead_time,
                 "payment_terms": q.payment_terms,
                 "validity_period": q.validity_period,
@@ -667,7 +761,7 @@ class RequirementService:
                 q.integrity_status = "flagged"
 
             q.status = "released"
-            q.released_at = datetime.utcnow()
+            q.released_at = now_ph()
             repo.update_quotation(session, q)
 
             # One-to-one messaging opens at release, not at award — the buyer can talk
@@ -678,12 +772,22 @@ class RequirementService:
                 msg_repo.create_thread(session, requirement_id=req.id, buyer_id=req.owner_id, business_id=q.business_id)
 
         req.status = "closed"
-        req.released_at = datetime.utcnow()
+        req.released_at = now_ph()
         repo.update_requirement(session, req)
 
         _log(session, "RELEASED", req.id, None, None, {
             "requirement_id": req.id, "released_count": len(actives),
         })
+
+        notif_repo.create_if_allowed(
+            session,
+            user_id=req.owner_id,
+            type_="REQUIREMENT_RELEASED",
+            category="activity",
+            title="Quotations released",
+            detail=f"{req.ref_code} · {req.title} — {len(actives)} quotation{'s' if len(actives) != 1 else ''} released and ready to review.",
+            urgent=True,
+        )
 
     # ---------- post-release view ----------
 
@@ -709,6 +813,7 @@ class RequirementService:
                         id=business.id,
                         business_name=business.business_name,
                         registered_name=business.registered_name,
+                        display_name=business.display_name,
                         city=business.city,
                         province=business.province,
                         is_verified=business.is_verified,
@@ -717,6 +822,7 @@ class RequirementService:
                         requirements_posted_count=posted_count,
                     ),
                     total_price=q.total_price,
+                    line_items=[LineItem(**li) for li in json.loads(q.line_items)] if q.line_items else [],
                     delivery_lead_time=q.delivery_lead_time,
                     payment_terms=q.payment_terms,
                     validity_period=q.validity_period,
@@ -726,7 +832,7 @@ class RequirementService:
                     submitted_at=q.created_at,
                     integrity_status=q.integrity_status,
                     attachments=[
-                        AttachmentOut(id=a.id, filename=a.original_filename, uploaded_at=a.uploaded_at)
+                        AttachmentOut(id=a.id, filename=a.original_filename, document_label=a.document_label, uploaded_at=a.uploaded_at)
                         for a in repo.list_quotation_attachments(session, q.id)
                     ],
                 ))
@@ -765,6 +871,9 @@ class RequirementService:
             else:
                 visible = [e for e in all_entries if e.actor_id == viewer_id]
 
+            actor_ids = {e.actor_id for e in visible if e.actor_id is not None}
+            actors = {u.id: u for u in session.exec(select(User).where(User.id.in_(actor_ids)))} if actor_ids else {}
+
             entries = [
                 LedgerEntryOut(
                     id=e.id,
@@ -773,6 +882,11 @@ class RequirementService:
                     requirement_id=e.requirement_id,
                     quotation_id=e.quotation_id,
                     actor_id=e.actor_id,
+                    actor_name=(
+                        (actors[e.actor_id].display_name or actors[e.actor_id].registered_name or actors[e.actor_id].business_name)
+                        if e.actor_id in actors
+                        else None
+                    ),
                     prev_hash=e.prev_hash,
                     entry_hash=e.entry_hash,
                     created_at=e.created_at,
@@ -789,6 +903,11 @@ class RequirementService:
         quotation's own released/withdrawn/voided row status."""
         if q.status != "released":
             return q.status
+        if req.status == "award_pending":
+            # Nothing is decided yet — only the proposed candidate's own row
+            # changes; every other released quotation still reads exactly
+            # like it did before the notice went out.
+            return "award_pending" if req.awarded_quotation_id == q.id else "released"
         if req.status == "awarded":
             return "awarded" if req.awarded_quotation_id == q.id else "not_selected"
         if req.status == "closed_no_award":
@@ -807,6 +926,8 @@ class RequirementService:
         # status == "released" from here on
         if req.status == "closed_no_award":
             return "not_awarded"
+        if req.status == "award_pending":
+            return "award_pending" if req.awarded_quotation_id == q.id else "released"
         if req.status == "awarded":
             return "awarded" if req.awarded_quotation_id == q.id else "not_awarded"
         return "released"
@@ -828,6 +949,7 @@ class RequirementService:
                     status=q.status,
                     outcome=self._outcome_for(req, q),
                     total_price=q.total_price,
+                    line_items=[LineItem(**li) for li in json.loads(q.line_items)] if q.line_items else [],
                     delivery_lead_time=q.delivery_lead_time,
                     payment_terms=q.payment_terms,
                     validity_period=q.validity_period,
@@ -835,7 +957,7 @@ class RequirementService:
                     submitted_at=q.created_at,
                     integrity_status=q.integrity_status,
                     attachments=[
-                        AttachmentOut(id=a.id, filename=a.original_filename, uploaded_at=a.uploaded_at)
+                        AttachmentOut(id=a.id, filename=a.original_filename, document_label=a.document_label, uploaded_at=a.uploaded_at)
                         for a in repo.list_quotation_attachments(session, q.id)
                     ],
                     requirement_id=req.id,
@@ -849,6 +971,7 @@ class RequirementService:
                         id=owner.id,
                         business_name=owner.business_name,
                         registered_name=owner.registered_name,
+                        display_name=owner.display_name,
                         city=owner.city,
                         province=owner.province,
                         is_verified=owner.is_verified,
@@ -860,13 +983,19 @@ class RequirementService:
             return out
 
     def award(self, requirement_id: int, owner_id: int, quotation_id: int) -> RequirementOut:
+        """Sends a Notice of Award — proposes a winner, doesn't confirm one.
+        Nothing is final and no other respondent is told they lost until the
+        proposed business explicitly accepts (accept_award). A decline, or
+        letting award_response_deadline pass, reverts this back to 'closed'
+        so the buyer can propose someone else — see decline_award and
+        expire_due_award_notices."""
         with Session(engine) as session:
             req = repo.get_requirement(session, requirement_id)
             if not req:
                 raise RequirementNotFound()
             if req.owner_id != owner_id:
                 raise NotOwner()
-            if req.status == "awarded":
+            if req.status in ("awarded", "award_pending"):
                 raise AlreadyAwarded()
             if req.status != "closed":
                 raise RequirementNotReleased()
@@ -875,35 +1004,148 @@ class RequirementService:
             if not quotation or quotation.requirement_id != requirement_id or quotation.status != "released":
                 raise InvalidQuotation()
 
-            req.status = "awarded"
+            req.status = "award_pending"
             req.awarded_quotation_id = quotation_id
+            req.award_response_deadline = now_ph() + timedelta(days=self.AWARD_RESPONSE_WINDOW_DAYS)
             updated = repo.update_requirement(session, req)
 
-            _log(session, "AWARDED", requirement_id, quotation_id, owner_id, {
+            _log(session, "AWARD_NOTICE_SENT", requirement_id, quotation_id, owner_id, {
                 "requirement_id": requirement_id,
                 "quotation_id": quotation_id,
-                "awarded_business_id": quotation.business_id,
+                "candidate_business_id": quotation.business_id,
+                "response_deadline": req.award_response_deadline.isoformat(),
             })
 
+            # Only the candidate is told — every other released respondent
+            # still doesn't know a decision is even in motion, same as they
+            # never knew how many quotations existed while sealed. Telling
+            # them "not selected" now, only to reopen the pick if this one
+            # declines, would be a real, visible flip-flop.
+            notif_repo.create_if_allowed(
+                session,
+                user_id=quotation.business_id,
+                type_="DECISION",
+                category="activity",
+                title="You've been proposed as the winner",
+                detail=(
+                    f"{req.ref_code} · {req.title} — respond within "
+                    f"{self.AWARD_RESPONSE_WINDOW_DAYS} days to accept or decline."
+                ),
+                urgent=True,
+            )
+
+            return self._to_out(session, updated)
+
+    def accept_award(self, requirement_id: int, business_id: int) -> RequirementOut:
+        """The proposed winner confirms — this is the only path that finalizes
+        an award. Only now do the other released respondents learn they lost."""
+        with Session(engine) as session:
+            req, quotation = self._get_award_pending_or_raise(session, requirement_id, business_id)
+
+            req.status = "awarded"
+            req.award_response_deadline = None
+            updated = repo.update_requirement(session, req)
+
+            # The Tier 3 award count just changed for this business — tier is
+            # otherwise only recomputed on a document upload/re-verification,
+            # which confirming an award isn't. Local import: business_service
+            # doesn't import this module, so no cycle, but keeping the import
+            # here (not at module level) matches this file's existing
+            # convention for cross-service calls (see _match_note's req_repo).
+            from app.services.business_service import business_service
+            business_service.recompute_tier(business_id)
+
+            _log(session, "AWARDED", requirement_id, quotation.id, business_id, {
+                "requirement_id": requirement_id,
+                "quotation_id": quotation.id,
+                "awarded_business_id": business_id,
+            })
+
+            notif_repo.create_if_allowed(
+                session,
+                user_id=req.owner_id,
+                type_="DECISION",
+                category="activity",
+                title="Award accepted",
+                detail=f"Your Notice of Award for {req.ref_code} · {req.title} was accepted.",
+            )
             for q in repo.list_all_quotations_for_requirement(session, requirement_id):
-                if q.status != "released":
+                if q.status != "released" or q.id == quotation.id:
                     continue
-                won = q.id == quotation_id
                 notif_repo.create_if_allowed(
                     session,
                     user_id=q.business_id,
                     type_="DECISION",
                     category="activity",
-                    title="You won this requirement" if won else "Not selected this time",
-                    detail=(
-                        f"Your quotation on {req.ref_code} · {req.title} was awarded."
-                        if won
-                        else f"{req.ref_code} · {req.title} was awarded to another business."
-                    ),
-                    urgent=won,
+                    title="Not selected this time",
+                    detail=f"{req.ref_code} · {req.title} was awarded to another business.",
                 )
 
             return self._to_out(session, updated)
+
+    def decline_award(self, requirement_id: int, business_id: int) -> RequirementOut:
+        """The proposed winner turns it down. Reverts to 'closed' rather than
+        deciding anything final — the buyer picks again from the same
+        released list, same as if they hadn't awarded yet."""
+        with Session(engine) as session:
+            req, quotation = self._get_award_pending_or_raise(session, requirement_id, business_id)
+            return self._revert_award_pending(session, req, quotation, actor_id=business_id)
+
+    def expire_due_award_notices(self) -> int:
+        """Called by the scheduler. A Notice of Award nobody responded to
+        within the window is treated exactly like a decline — the clock
+        acts in the candidate's place, same reasoning as release being
+        clock-triggered rather than person-triggered."""
+        expired_count = 0
+        with Session(engine) as session:
+            due = repo.list_award_pending_requirements_past_deadline(session)
+            for req in due:
+                quotation = repo.get_quotation(session, req.awarded_quotation_id) if req.awarded_quotation_id else None
+                if not quotation:
+                    continue  # defensive: shouldn't happen, but never crash the sweep over one row
+                self._revert_award_pending(session, req, quotation, actor_id=None)
+                expired_count += 1
+        return expired_count
+
+    def _get_award_pending_or_raise(self, session: Session, requirement_id: int, business_id: int):
+        req = repo.get_requirement(session, requirement_id)
+        if not req:
+            raise RequirementNotFound()
+        if req.status != "award_pending" or not req.awarded_quotation_id:
+            raise NoAwardPending()
+        quotation = repo.get_quotation(session, req.awarded_quotation_id)
+        if not quotation or quotation.business_id != business_id:
+            raise NotAwardCandidate()
+        return req, quotation
+
+    def _revert_award_pending(self, session: Session, req: Requirement, quotation: "Quotation", actor_id: int | None) -> RequirementOut:
+        req.status = "closed"
+        req.awarded_quotation_id = None
+        req.award_response_deadline = None
+        updated = repo.update_requirement(session, req)
+
+        _log(session, "AWARD_DECLINED", req.id, quotation.id, actor_id, {
+            "requirement_id": req.id,
+            "quotation_id": quotation.id,
+            "declined_by_business_id": quotation.business_id,
+            "auto_expired": actor_id is None,
+        })
+
+        notif_repo.create_if_allowed(
+            session,
+            user_id=req.owner_id,
+            type_="DECISION",
+            category="activity",
+            title="Award declined",
+            detail=(
+                f"{req.ref_code} · {req.title} — the proposed winner "
+                f"{'did not respond in time' if actor_id is None else 'declined the award'}. "
+                "You can propose another respondent."
+            ),
+            urgent=True,
+        )
+
+        return self._to_out(session, updated)
 
     def set_shortlist(self, requirement_id: int, quotation_id: int, owner_id: int, shortlisted: bool) -> None:
         """Owner's private working note on one released quotation — purely a
@@ -953,7 +1195,7 @@ class RequirementService:
                 notif_repo.create_if_allowed(
                     session,
                     user_id=q.business_id,
-                    type_="DECISION",
+                    type_="CLOSED_NO_AWARD",
                     category="activity",
                     title="Not selected this time",
                     detail=f"{req.ref_code} · {req.title} was closed without an award.",
@@ -976,7 +1218,7 @@ class RequirementService:
             for req in soon:
                 if notif_repo.exists_for_requirement(session, req.owner_id, "REQUIREMENT_CLOSING", req.id):
                     continue
-                hours_left = max(1, round((req.closes_at - datetime.utcnow()).total_seconds() / 3600))
+                hours_left = max(1, round((req.closes_at - now_ph()).total_seconds() / 3600))
                 notif_repo.create_if_allowed(
                     session,
                     user_id=req.owner_id,

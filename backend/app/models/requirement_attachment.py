@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.clock import now_ph
 from typing import Optional
 
 from sqlmodel import SQLModel, Field
@@ -9,4 +10,4 @@ class RequirementAttachment(SQLModel, table=True):
     requirement_id: int = Field(foreign_key="requirement.id", index=True)
     file_path: str
     original_filename: str
-    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    uploaded_at: datetime = Field(default_factory=now_ph)

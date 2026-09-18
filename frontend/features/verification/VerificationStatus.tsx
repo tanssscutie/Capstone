@@ -5,7 +5,8 @@
 // straight from GET /business/verification-status, so it's accurate any time the
 // business comes back to check, including after an admin has since reviewed them.
 
-import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
   color,
   font,
@@ -161,7 +162,7 @@ export default function VerificationStatus({ status, onBack, onContinueOnboardin
   const notStarted = status.verification_status === 'unverified' || (status.verification_status === 'pending' && !status.onboarding_completed);
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={isWide ? styles.pageWide : styles.page}>
         <View style={styles.breadcrumbRow}>
           <Pressable onPress={onBack} hitSlop={6}>
@@ -206,7 +207,7 @@ export default function VerificationStatus({ status, onBack, onContinueOnboardin
           <ActionButton label="Back to home" variant="outline" onPress={onBack} />
         </View>
       </View>
-    </ScrollView>
+    </ScreenScroll>
   );
 }
 

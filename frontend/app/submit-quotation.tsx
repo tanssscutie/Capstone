@@ -7,8 +7,10 @@ import { requirementsApi } from '../lib/api/requirements';
 import { requirementsCache } from '../lib/api/requirementsCache';
 import { mapRequirement, mapPosterToBusiness } from '../lib/api/mappers';
 import { getVerificationStatus } from '../lib/api/business';
+import { me } from '../lib/api/auth';
 import type { Business, LedgerEntry, Quotation, Requirement } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
+import { errorMessage } from '../lib/api/client';
 
 export default function QuotationRoute() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -31,22 +33,35 @@ export default function QuotationRoute() {
         const verification = await getVerificationStatus();
         // Backend already 403s an unverified POST .../quotations (require_verified) —
         // this catches it before they fill out the whole form. Same gate as
-        // post-requirement.tsx, same reasoning: send them to the status page if
-        // they've already submitted for review, otherwise into onboarding.
+        // post-requirement.tsx: always the status page, never straight into the
+        // onboarding wizard — a brand-new account that never even started
+        // verification still deserves the explanation first, not to be dropped
+        // into a four-step form with no context. VerificationStatus.tsx's
+        // "not started" state already covers that, with its own explicit
+        // "Start verification" button.
         if (!verification.is_verified) {
-          router.replace(verification.has_submitted ? '/verification-status' : '/onboarding');
+          router.replace('/verification-status');
           return;
         }
 
-        const raw = await requirementsCache.ensure(Number(id));
+        const [raw, user] = await Promise.all([requirementsCache.ensure(Number(id)), me()]);
         if (!raw) {
           setError("Couldn't find that requirement.");
+          return;
+        }
+        // Backend already 403s this (can't quote your own requirement — see
+        // CannotQuoteOwnRequirement) — this catches it before they fill out
+        // the whole sealed-quotation form, same as the verification gate
+        // above. Sends them to the real owner view instead of a bare error,
+        // since that's the page this requirement actually belongs to for them.
+        if (raw.poster.id === user.id) {
+          router.replace({ pathname: '/requirement', params: { id } });
           return;
         }
         setRequirement(mapRequirement(raw));
         setBuyer(mapPosterToBusiness(raw.poster));
       } catch (e: any) {
-        setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Failed to load this requirement.');
+        setError(errorMessage(e, 'Failed to load this requirement.'));
       } finally {
         setLoading(false);
       }
@@ -84,7 +99,7 @@ export default function QuotationRoute() {
             await requirementsApi.withdrawQuotation(Number(id));
             setSubmission(null);
           } catch (e: any) {
-            setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not withdraw this quotation.');
+            setError(errorMessage(e, 'Could not withdraw this quotation.'));
           }
         }}
         onBack={() => router.back()}
@@ -104,6 +119,11 @@ export default function QuotationRoute() {
         try {
           const receipt = await requirementsApi.submitQuotation(Number(id), {
             total_price: input.totalPrice,
+            line_items: input.lineItems.map((li) => ({
+              description: li.description,
+              quantity: li.quantity,
+              unit_price: li.unitPrice,
+            })),
             delivery_lead_time: `${input.leadTimeDays} days`,
             payment_terms: input.paymentTerms,
             validity_period: `${input.validityDays} days`,
@@ -117,7 +137,13 @@ export default function QuotationRoute() {
             const file = pickedQuotationFiles.get(att.id);
             if (!file) continue;
             try {
-              await requirementsApi.uploadQuotationAttachment(Number(id), receipt.quotation_id, file, att.filename);
+              await requirementsApi.uploadQuotationAttachment(
+                Number(id),
+                receipt.quotation_id,
+                file,
+                att.filename,
+                att.documentLabel ?? undefined,
+              );
             } finally {
               pickedQuotationFiles.delete(att.id);
             }
@@ -130,6 +156,7 @@ export default function QuotationRoute() {
             respondentId: buyer.id, // placeholder — see mapPosterToBusiness note; not the viewer's real id
             status: 'SUBMITTED',
             totalPrice: input.totalPrice,
+            lineItems: input.lineItems,
             leadTimeDays: input.leadTimeDays,
             paymentTerms: input.paymentTerms,
             validityDays: input.validityDays,
@@ -147,13 +174,14 @@ export default function QuotationRoute() {
             sequence: receipt.ledger_entry_number,
             type: 'QUOTATION_SUBMITTED',
             subjectId: quotation.id,
+            actorName: null, // it's always the viewer's own submission here — nothing to label
             hash: receipt.truncated_hash,
             previousHash: null, // BACKEND GAP — not returned
             createdAt: receipt.submitted_at,
           };
           setSubmission({ quotation, ledgerEntry });
         } catch (e: any) {
-          setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not submit your quotation.');
+          setError(errorMessage(e, 'Could not submit your quotation.'));
         }
       }}
     />

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 
 from sqlmodel import Session
@@ -41,7 +42,15 @@ class MessageService:
         with Session(engine) as session:
             threads = repo.list_threads_for_user(session, user_id)
             out = [self._to_thread_out(session, t, user_id) for t in threads]
-            out.sort(key=lambda t: t.last_message_at or t.id, reverse=True)  # type: ignore[arg-type]
+            # last_message_at is a datetime for a thread with at least one
+            # message, None for a thread nobody has posted in yet (opened
+            # at release, per SYSTEM_PROCESS.md — every released respondent
+            # gets one, whether or not either side ever writes into it).
+            # `t.last_message_at or t.id` used to fall back to an int in
+            # that case, and sorting a list containing both datetimes and
+            # ints raises TypeError the moment one of each appears together
+            # — datetime.min keeps the sort key a single type throughout.
+            out.sort(key=lambda t: (t.last_message_at or datetime.min, t.id), reverse=True)
             return out
 
     def _require_participant(self, session: Session, thread_id: int, user_id: int) -> MessageThread:

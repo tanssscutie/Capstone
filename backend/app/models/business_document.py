@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from app.core.clock import now_ph
 from typing import Optional
 
 from sqlmodel import SQLModel, Field
@@ -32,4 +33,4 @@ class BusinessDocument(SQLModel, table=True):
     validation_status: str = "pending"  # pending | pass | flagged
     validation_notes: str = ""  # human-readable reasons when flagged
 
-    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    uploaded_at: datetime = Field(default_factory=now_ph)

@@ -43,7 +43,12 @@ def count_awarded_requirements(session: Session, owner_id: int) -> int:
 
 
 def list_flagged_users(session: Session) -> List[User]:
-    statement = select(User).where(User.verification_status == "under_review")
+    """The admin review queue — every business waiting on a verification
+    decision. Includes 'submitted' (documents cleared every automated
+    check) as well as 'under_review' (something got flagged): verification
+    is never automatic, so a clean submission still needs an explicit
+    admin sign-off before it becomes 'verified', same as a flagged one."""
+    statement = select(User).where(User.verification_status.in_(["submitted", "under_review"]))
     return list(session.exec(statement).all())
 
 

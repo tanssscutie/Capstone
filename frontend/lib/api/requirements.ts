@@ -11,6 +11,7 @@ export interface PosterOut {
   id: number;
   business_name: string;
   registered_name: string | null;
+  display_name: string | null;
   city: string | null;
   province: string | null;
   is_verified: boolean;
@@ -38,6 +39,7 @@ export interface RequirementOut {
   location: string;
   site_access_hours: string;
   site_access_notes: string;
+  required_documents: string[];
   delivery_start: string | null;
   delivery_end: string | null;
   attachments: AttachmentOut[];
@@ -46,9 +48,11 @@ export interface RequirementOut {
   quotations_count: number;
   latest_quotation_at: string | null;
   closes_at: string;
+  released_at: string | null;
   my_active_quotation_ref: string | null;
   created_at: string;
   awarded_quotation_id: number | null;
+  award_response_deadline: string | null;
   is_saved: boolean;
 }
 
@@ -71,6 +75,7 @@ export interface MyRequirementOut {
   scope: string;
   specifications: SpecRowOut[];
   quantity: string;
+  required_documents: string[];
   status: string;
   city: string;
   price_min: number | null;
@@ -79,13 +84,21 @@ export interface MyRequirementOut {
   closes_at: string;
   released_at: string | null;
   awarded_quotation_id: number | null;
+  award_response_deadline: string | null;
   created_at: string;
 }
 
 export interface AttachmentOut {
   id: number;
   filename: string;
+  document_label: string | null;
   uploaded_at: string;
+}
+
+export interface LineItemOut {
+  description: string;
+  quantity: number;
+  unit_price: number;
 }
 
 export interface MyQuotationOut {
@@ -94,6 +107,7 @@ export interface MyQuotationOut {
   status: string;
   outcome: string;
   total_price: number | null;
+  line_items: LineItemOut[];
   delivery_lead_time: string | null;
   payment_terms: string | null;
   validity_period: string | null;
@@ -116,6 +130,7 @@ export interface QuotationDetailOut {
   quotation_ref: string;
   business: PosterOut;
   total_price: number | null;
+  line_items: LineItemOut[];
   delivery_lead_time: string | null;
   payment_terms: string | null;
   validity_period: string | null;
@@ -146,11 +161,13 @@ export interface RequirementCreateInput {
   site_address?: string | null;
   delivery_start?: string | null; // ISO datetime
   delivery_end?: string | null;
+  required_documents?: string[];
   closes_at: string; // ISO datetime
 }
 
 export interface QuotationCreateInput {
   total_price: number; // required, must be > 0 — backend rejects otherwise
+  line_items?: LineItemOut[];
   delivery_lead_time?: string | null;
   payment_terms?: string | null;
   validity_period?: string | null;
@@ -173,6 +190,7 @@ export interface LedgerEntryOut {
   requirement_id: number;
   quotation_id: number | null;
   actor_id: number | null;
+  actor_name: string | null;
   prev_hash: string;
   entry_hash: string;
   created_at: string;
@@ -183,8 +201,15 @@ export interface RequirementLedgerView {
   entries: LedgerEntryOut[];
 }
 
+export interface CategorySuggestionOut {
+  category: string | null;
+}
+
 export const requirementsApi = {
   listOpen: () => api.get<RequirementOut[]>('/requirements'),
+  suggestCategory: (title: string, scope: string) =>
+    api.post<CategorySuggestionOut>('/requirements/suggest-category', { title, scope }),
+  getById: (requirementId: number) => api.get<RequirementOut>(`/requirements/${requirementId}`),
   listClosingSoon: () => api.get<RequirementOut[]>('/requirements/closing-soon'),
   listMine: () => api.get<MyRequirementOut[]>('/requirements/mine'),
   listMyQuotations: () => api.get<MyQuotationOut[]>('/requirements/mine/quotations'),
@@ -214,9 +239,16 @@ export const requirementsApi = {
   submitQuotation: (requirementId: number, data: QuotationCreateInput) =>
     api.post<QuotationSealedReceipt>(`/requirements/${requirementId}/quotations`, data),
 
-  uploadQuotationAttachment: (requirementId: number, quotationId: number, file: File | Blob, fileName: string) => {
+  uploadQuotationAttachment: (
+    requirementId: number,
+    quotationId: number,
+    file: File | Blob,
+    fileName: string,
+    documentLabel?: string,
+  ) => {
     const form = new FormData();
     form.append('file', file, fileName);
+    if (documentLabel) form.append('document_label', documentLabel);
     return api.postForm<AttachmentOut>(
       `/requirements/${requirementId}/quotations/${quotationId}/attachments`,
       form,
@@ -232,8 +264,16 @@ export const requirementsApi = {
   listLedger: (requirementId: number) =>
     api.get<RequirementLedgerView>(`/requirements/${requirementId}/ledger`),
 
+  /** Sends a Notice of Award — proposes a winner, doesn't confirm one. See
+   *  acceptAward/declineAward, the proposed business's own response. */
   award: (requirementId: number, quotationId: number) =>
     api.post<RequirementOut>(`/requirements/${requirementId}/award`, { quotation_id: quotationId }),
+
+  acceptAward: (requirementId: number) =>
+    api.post<RequirementOut>(`/requirements/${requirementId}/award/accept`),
+
+  declineAward: (requirementId: number) =>
+    api.post<RequirementOut>(`/requirements/${requirementId}/award/decline`),
 
   shortlistQuotation: (requirementId: number, quotationId: number) =>
     api.post<void>(`/requirements/${requirementId}/quotations/${quotationId}/shortlist`),

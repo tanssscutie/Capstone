@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field
 
 class OnboardingSubmit(BaseModel):
     registered_name: str = Field(min_length=2, max_length=200)
+    # Optional public-facing trading name — shown instead of registered_name
+    # wherever a business's name appears to someone else. Blank/omitted means
+    # registered_name is used everywhere, same as before this field existed.
+    display_name: Optional[str] = Field(default=None, max_length=200)
     business_type: str = Field(min_length=2, max_length=100)
     industry_category: str = Field(min_length=2, max_length=100)
     city: str = Field(min_length=2, max_length=100)
@@ -15,6 +19,9 @@ class OnboardingSubmit(BaseModel):
     capabilities: List[str] = Field(min_length=3, max_length=8)
     service_areas: List[str] = Field(min_length=1)
     signup_intent: Literal["FIND_SUPPLIERS", "FIND_WORK", "BOTH"] = "BOTH"
+    # Optional public-facing bio — the business can leave it blank, type
+    # their own, or accept an AI-suggested draft (see /business/suggest-description).
+    business_description: Optional[str] = Field(default=None, max_length=500)
 
 
 class DocumentUploadOut(BaseModel):
@@ -27,6 +34,30 @@ class DocumentUploadOut(BaseModel):
     validation_status: str
     validation_notes: str
     uploaded_at: datetime
+
+
+class DescriptionSuggestionRequest(BaseModel):
+    business_type: str
+    industry_category: str
+    capabilities: List[str] = []
+    service_areas: List[str] = []
+    city: str = ""
+    province: str = ""
+
+
+class DescriptionSuggestionOut(BaseModel):
+    """AI profile assistant's draft bio — a suggestion only, same convention
+    as DocumentExtractionOut below: None means nothing usable came back, the
+    business's own business_description field is untouched either way."""
+    description: Optional[str] = None
+
+
+class DocumentExtractionOut(BaseModel):
+    """Assistive Document Extraction's result — a suggestion only. None means
+    nothing was confidently found (no key configured, unreadable image, or
+    the model genuinely couldn't find it); the frontend leaves the field as
+    the business typed it either way. See document_extraction_service.py."""
+    id_number: Optional[str] = None
 
 
 class VerificationStatusOut(BaseModel):
@@ -49,6 +80,7 @@ class VerificationStatusOut(BaseModel):
     # relying on anything cached in the browser — business_type in
     # particular decides whether DTI or SEC registration is asked for.
     registered_name: Optional[str] = None
+    display_name: Optional[str] = None
     business_type: Optional[str] = None
     industry_category: Optional[str] = None
     city: Optional[str] = None
@@ -58,6 +90,7 @@ class VerificationStatusOut(BaseModel):
     capabilities: List[str] = []
     service_areas: List[str] = []
     signup_intent: str = "BOTH"
+    business_description: Optional[str] = None
 
 
 class PublicBusinessProfileOut(BaseModel):
@@ -68,10 +101,12 @@ class PublicBusinessProfileOut(BaseModel):
     admin-facing — those stay private to the business itself and to admin."""
     id: int
     registered_name: Optional[str]
+    display_name: Optional[str]
     business_type: Optional[str]
     industry_category: Optional[str]
     city: Optional[str]
     province: Optional[str]
+    business_description: Optional[str] = None
     capabilities: List[str] = []
     service_areas: List[str] = []
     is_verified: bool

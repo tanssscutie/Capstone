@@ -1,9 +1,9 @@
-import os
+import mimetypes
 from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlmodel import Session
 
 from app.core.database import get_session
@@ -12,6 +12,9 @@ from app.models.user import User
 from app.schemas.business import (
     OnboardingSubmit,
     DocumentUploadOut,
+    DocumentExtractionOut,
+    DescriptionSuggestionRequest,
+    DescriptionSuggestionOut,
     VerificationStatusOut,
     AdminReviewAction,
     DashboardStatsOut,
@@ -28,6 +31,20 @@ router = APIRouter()
 @router.post("/onboarding", status_code=status.HTTP_204_NO_CONTENT)
 def submit_onboarding(payload: OnboardingSubmit, current_user: User = Depends(get_current_user)):
     business_service.submit_onboarding(current_user.id, payload)
+
+
+@router.post("/documents/extract", response_model=DocumentExtractionOut)
+async def extract_document_fields(
+    doc_type: str = Form(...),
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    return await business_service.extract_document_fields(doc_type=doc_type, file=file)
+
+
+@router.post("/suggest-description", response_model=DescriptionSuggestionOut)
+def suggest_description(payload: DescriptionSuggestionRequest, current_user: User = Depends(get_current_user)):
+    return business_service.suggest_description(payload)
 
 
 @router.post("/documents", response_model=DocumentUploadOut, status_code=status.HTTP_201_CREATED)
@@ -97,9 +114,15 @@ def get_admin_stats(_admin: User = Depends(require_admin)):
 
 @router.get("/admin/documents/{document_id}/file")
 def get_document_file(document_id: int, _admin: User = Depends(require_admin)):
-    document = business_service.get_document_for_admin(document_id)
-    filename = os.path.basename(document.file_path)
-    return FileResponse(document.file_path, filename=filename)
+    # Decrypted here, not streamed straight off disk — the file is encrypted
+    # at rest (see business_service._save_file / file_crypto).
+    content, filename = business_service.get_document_bytes_for_admin(document_id)
+    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
 
 
 @router.post("/admin/{user_id}/review", status_code=status.HTTP_204_NO_CONTENT)

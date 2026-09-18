@@ -16,6 +16,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 def verify_password(plain_password, hashed_password):
+    # A Google-only account has no password to check against.
+    if not hashed_password:
+        return False
     return pwd_context.verify(plain_password, hashed_password)
 
 

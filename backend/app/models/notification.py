@@ -1,16 +1,21 @@
 from datetime import datetime
+from app.core.clock import now_ph
 from typing import Optional
 
 from sqlmodel import SQLModel, Field
 
 
 class Notification(SQLModel, table=True):
-    """An alert delivered to one user (REQUIREMENT_CLOSING, DECISION, VERIFICATION,
-    MESSAGE_RECEIVED, QUESTION_ASKED, QUESTION_ANSWERED — see AlertType on the
-    frontend). Created by whichever service action causes it: the closing-soon
-    scheduler pass, award, admin_review, send_message, or ask/answer_question.
-    Deliberately nothing for an individual quotation submission — the buyer is
-    never notified of one, only the running count they can pull on demand."""
+    """An alert delivered to one user — 11 system events (thesis Coverage of the
+    Study — Alerts), each traceable to a recorded action: REQUIREMENT_CLOSING,
+    REQUIREMENT_RELEASED, REQUIREMENT_CANCELLED, DECISION, CLOSED_NO_AWARD,
+    VERIFICATION, TIER_UPGRADE, DOCUMENT_FLAGGED, MESSAGE_RECEIVED,
+    QUESTION_ASKED, QUESTION_ANSWERED (see AlertType on the frontend). Created
+    by whichever service action causes it: the closing-soon scheduler pass,
+    release, cancel, award, close_without_award, admin_review, upload_document,
+    _recompute_verification, send_message, or ask/answer_question. Deliberately
+    nothing for an individual quotation submission — the buyer is never
+    notified of one, only the running count they can pull on demand."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", index=True)
@@ -26,4 +31,4 @@ class Notification(SQLModel, table=True):
     # exactly once, at the event that causes them, so they leave this unset.
     related_requirement_id: Optional[int] = Field(default=None, index=True)
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=now_ph)

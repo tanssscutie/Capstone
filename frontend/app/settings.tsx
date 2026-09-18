@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import AccountSettings from '../features/settings/AccountSettings';
 import { me, changeMobileNumber, changePassword, updateNotificationPreferences, type BackendUser } from '../lib/api/auth';
 import { color, font, fontSize, space } from '../components/ui/tokens';
+import { errorMessage } from '../lib/api/client';
 
 export default function SettingsRoute() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function SettingsRoute() {
     try {
       setUser(await me());
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not load your account settings.');
+      setError(errorMessage(e, 'Could not load your account settings.'));
     } finally {
       setLoading(false);
     }
@@ -50,7 +51,7 @@ export default function SettingsRoute() {
 
   return (
     <AccountSettings
-      mobileNumber={user.mobile_number}
+      mobileNumber={user.mobile_number ?? ''}
       notifyMessages={user.notify_messages}
       notifyActivity={user.notify_activity}
       onBack={() => router.push('/home')}

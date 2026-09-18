@@ -5,10 +5,11 @@ import Onboarding, { pickedDocumentFiles } from '../features/onboarding/Onboardi
 import type { IdentityDraft, OperationsDraft, DocumentsDraft } from '../features/onboarding/Onboarding';
 import type { Business, OnboardingStep, SignupIntent } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
-import { submitOnboarding, uploadDocument, submitForVerification, getVerificationStatus } from '../lib/api/business';
+import { submitOnboarding, uploadDocument, submitForVerification, getVerificationStatus, extractDocumentFields, suggestDescription } from '../lib/api/business';
 import { mapViewerBusiness } from '../lib/api/mappers';
 import { me } from '../lib/api/auth';
 import { getDashboardStats } from '../lib/api/business';
+import { errorMessage } from '../lib/api/client';
 
 export default function OnboardingRoute() {
   const router = useRouter();
@@ -25,18 +26,28 @@ export default function OnboardingRoute() {
   const [operations, setOperations] = useState<OperationsDraft | null>(null);
   const [documents, setDocuments] = useState<DocumentsDraft | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
-  const [seeding, setSeeding] = useState(editMode);
+  const [seeding, setSeeding] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Always checks first, edit mode or not: a business that already finished
+  // IDENTITY + OPERATIONS (onboarding_completed) but never got past DOCUMENTS —
+  // e.g. they left and came back via "Continue onboarding" on the verification
+  // status page — used to be dropped straight back into a blank IDENTITY step,
+  // forcing them to retype everything already on file. Now that data is seeded
+  // from the backend the same way edit mode already seeded it, and a non-edit
+  // resume skips straight to DOCUMENTS, the one step actually still missing.
+  // A brand-new business (onboarding_completed: false) still starts at IDENTITY,
+  // same as before — there's nothing to seed for them.
   useEffect(() => {
-    if (!editMode) return;
     (async () => {
       try {
         const status = await getVerificationStatus();
+        if (!status.onboarding_completed) return;
         setIdentity({
           signupIntent: (status.signup_intent as SignupIntent) ?? 'BOTH',
           registeredName: status.registered_name ?? '',
+          displayName: status.display_name ?? '',
           businessType: (status.business_type as IdentityDraft['businessType']) ?? 'SOLE_PROP',
           category: status.industry_category ?? '',
           city: status.city ?? '',
@@ -44,9 +55,17 @@ export default function OnboardingRoute() {
           contactPerson: status.contact_person ?? '',
           contactMobile: status.contact_mobile ?? '',
         });
-        setOperations({ capabilities: status.capabilities, serviceAreas: status.service_areas });
+        setOperations({
+          capabilities: status.capabilities,
+          serviceAreas: status.service_areas,
+          businessDescription: status.business_description ?? '',
+        });
+        if (!editMode) setStep('DOCUMENTS');
       } catch (e: any) {
-        setSubmitError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not load your current profile.');
+        // A brand-new business with no status on file yet shouldn't block them
+        // from starting fresh at IDENTITY — only surface this in edit mode,
+        // where silently landing on an empty form would look like data loss.
+        if (editMode) setSubmitError(errorMessage(e, 'Could not load your current profile.'));
       } finally {
         setSeeding(false);
       }
@@ -60,7 +79,7 @@ export default function OnboardingRoute() {
       await submitOnboarding(identityDraft, operationsDraft);
       router.replace('/account');
     } catch (e: any) {
-      setSubmitError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not save your changes.');
+      setSubmitError(errorMessage(e, 'Could not save your changes.'));
     } finally {
       setSubmitting(false);
     }
@@ -105,9 +124,7 @@ export default function OnboardingRoute() {
       setDocuments(draft);
       setStep('ARRIVAL');
     } catch (e: any) {
-      setSubmitError(
-        typeof e?.detail === 'string' ? e.detail : typeof e?.message === 'string' ? e.message : 'Submission failed. Please try again.',
-      );
+      setSubmitError(errorMessage(e, 'Submission failed. Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -154,6 +171,14 @@ export default function OnboardingRoute() {
             setStep('DOCUMENTS');
           }}
           onBack={() => setStep('IDENTITY')}
+          onSuggestDescription={async (capabilities, serviceAreas) => {
+            try {
+              const result = await suggestDescription(identity, capabilities, serviceAreas);
+              return result.description;
+            } catch {
+              return null;
+            }
+          }}
         />
       </View>
     );
@@ -173,6 +198,17 @@ export default function OnboardingRoute() {
           operations={operations}
           onSubmit={(draft) => handleDocumentsSubmit(draft, identity, operations)}
           onBack={() => setStep('OPERATIONS')}
+          onExtractDocument={async (docType, file) => {
+            try {
+              const result = await extractDocumentFields(docType, file, file.name);
+              return result.id_number;
+            } catch {
+              // Assistive extraction is a convenience only — a failed call
+              // (no key configured, network hiccup, etc.) just means no
+              // suggestion, same as if the feature weren't there at all.
+              return null;
+            }
+          }}
         />
       </View>
     );

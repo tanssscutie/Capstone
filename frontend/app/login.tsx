@@ -4,20 +4,21 @@
 // entry point needed to actually call POST /auth/register and POST /auth/login.
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, Image, StyleSheet, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { color, font, fontSize, space, radius } from '../components/ui/tokens';
-import { registerAndLogin, login } from '../lib/api/auth';
+import { registerAndLogin, login, googleLoginUrl } from '../lib/api/auth';
 
 type Mode = 'LOGIN' | 'REGISTER';
 
 export default function LoginRoute() {
   const router = useRouter();
+  const { googleError } = useLocalSearchParams<{ googleError?: string }>();
   const [mode, setMode] = useState<Mode>('LOGIN');
   const [businessName, setBusinessName] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(typeof googleError === 'string' ? googleError : null);
 
   async function handleSubmit() {
     setError(null);
@@ -72,11 +73,12 @@ export default function LoginRoute() {
           <TextInput
             style={styles.input}
             value={mobileNumber}
-            onChangeText={setMobileNumber}
-            placeholder="+63 917 555 0118"
+            onChangeText={(v) => setMobileNumber(v.replace(/\D/g, '').slice(0, 11))}
+            placeholder="09175550118"
             placeholderTextColor={color.inkFaint}
-            keyboardType="phone-pad"
+            keyboardType="number-pad"
             autoCapitalize="none"
+            maxLength={11}
           />
         </View>
 
@@ -104,6 +106,21 @@ export default function LoginRoute() {
           ) : (
             <Text style={styles.buttonLabel}>{mode === 'LOGIN' ? 'Log in' : 'Create account'}</Text>
           )}
+        </Pressable>
+
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <Pressable
+          style={styles.googleButton}
+          onPress={() => {
+            if (typeof window !== 'undefined') window.location.href = googleLoginUrl();
+          }}
+        >
+          <Text style={styles.googleButtonLabel}>Continue with Google</Text>
         </Pressable>
 
         <Pressable onPress={() => setMode(mode === 'LOGIN' ? 'REGISTER' : 'LOGIN')} style={{ marginTop: space.lg }}>
@@ -196,6 +213,36 @@ const styles = StyleSheet.create({
     fontFamily: font.bodySemi,
     fontSize: fontSize.base,
     color: color.onPrimary,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginTop: space.lg,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: color.border,
+  },
+  dividerText: {
+    fontFamily: font.body,
+    fontSize: fontSize.sm,
+    color: color.inkFaint,
+  },
+  googleButton: {
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    paddingVertical: space.md,
+    alignItems: 'center',
+    marginTop: space.lg,
+    backgroundColor: color.surface,
+  },
+  googleButtonLabel: {
+    fontFamily: font.bodySemi,
+    fontSize: fontSize.base,
+    color: color.ink,
   },
   switchText: {
     fontFamily: font.body,

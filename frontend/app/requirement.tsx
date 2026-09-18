@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import type { ReactNode } from 'react';
+import { View, Text, ActivityIndicator, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import RequirementDetail from '../features/requirement-detail/RequirementDetail';
 import { me } from '../lib/api/auth';
@@ -16,6 +17,7 @@ import {
 } from '../lib/api/mappers';
 import type { Business, BusinessId, ClarificationQuestion, LedgerEntry, Quotation, Requirement } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
+import { errorMessage } from '../lib/api/client';
 
 type Respondent = Pick<Business, 'id' | 'registeredName' | 'city' | 'province' | 'credibility'>;
 
@@ -25,6 +27,13 @@ export default function RequirementRoute() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Distinct from `error` above: `error` gates the full-screen replacement
+  // for a failed initial load (nothing to show yet). An action failing
+  // AFTER the screen already loaded (award, close-without-award, shortlist,
+  // etc.) must not blank out the whole page the same way — the requirement
+  // is still right there, the user just needs to see what went wrong and
+  // keep going. Rendered as a dismissible banner over the loaded screen.
+  const [actionError, setActionError] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [requirement, setRequirement] = useState<Requirement | null>(null);
   const [buyer, setBuyer] = useState<Business | null>(null);
@@ -99,7 +108,7 @@ export default function RequirementRoute() {
         }
       }
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Failed to load this requirement.');
+      setError(errorMessage(e, 'Failed to load this requirement.'));
     } finally {
       setLoading(false);
     }
@@ -115,8 +124,33 @@ export default function RequirementRoute() {
       const rows = await requirementsApi.listQuestions(Number(id));
       setQuestions(rows.map(mapClarificationQuestion));
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not refresh questions.');
+      setActionError(errorMessage(e, 'Could not refresh questions.'));
     }
+  }
+
+  /** Wraps an already-loaded screen with a dismissible banner for an action
+   *  failure — never replaces the screen the way the full-page `error` case
+   *  above does, since the requirement itself loaded fine. */
+  function withActionErrorBanner(node: ReactNode) {
+    return (
+      <View style={{ flex: 1 }}>
+        {node}
+        {actionError && (
+          <Pressable
+            onPress={() => setActionError(null)}
+            style={{
+              position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
+              backgroundColor: color.dangerFaint, borderBottomWidth: 1, borderBottomColor: color.dangerBorder,
+              paddingVertical: space.sm, paddingHorizontal: space.lg,
+            }}
+          >
+            <Text style={{ fontFamily: font.body, fontSize: fontSize.sm, color: color.danger, textAlign: 'center' }}>
+              {actionError} · Tap to dismiss
+            </Text>
+          </Pressable>
+        )}
+      </View>
+    );
   }
 
   if (loading) {
@@ -139,7 +173,7 @@ export default function RequirementRoute() {
 
   if (isOwner) {
     if (requirement.status === 'OPEN') {
-      return (
+      return withActionErrorBanner(
         <RequirementDetail
           state="OWNER_SEALED"
           requirement={requirement}
@@ -149,7 +183,7 @@ export default function RequirementRoute() {
               await requirementsApi.answerQuestion(Number(id), Number(questionId), answer);
               await reloadQuestions();
             } catch (e: any) {
-              setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not post that answer.');
+              setActionError(errorMessage(e, 'Could not post that answer.'));
             }
           }}
           onExtendClosing={async (newClosesAt) => {
@@ -157,7 +191,7 @@ export default function RequirementRoute() {
               await requirementsApi.extend(Number(id), newClosesAt);
               await load();
             } catch (e: any) {
-              setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not extend the closing time.');
+              setActionError(errorMessage(e, 'Could not extend the closing time.'));
             }
           }}
           onCancelRequirement={async () => {
@@ -165,7 +199,7 @@ export default function RequirementRoute() {
               await requirementsApi.cancel(Number(id));
               await load();
             } catch (e: any) {
-              setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not cancel this requirement.');
+              setActionError(errorMessage(e, 'Could not cancel this requirement.'));
             }
           }}
           onUpdateSiteNotes={async (accessHours, accessNotes) => {
@@ -173,13 +207,14 @@ export default function RequirementRoute() {
               await requirementsApi.updateSiteNotes(Number(id), accessHours, accessNotes);
               await load();
             } catch (e: any) {
-              setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not save site notes.');
+              setActionError(errorMessage(e, 'Could not save site notes.'));
             }
           }}
+          onViewLedger={() => router.push({ pathname: '/ledger', params: { id } })}
         />
       );
     }
-    return (
+    return withActionErrorBanner(
       <RequirementDetail
         state="OWNER_RELEASED"
         requirement={requirement}
@@ -189,8 +224,10 @@ export default function RequirementRoute() {
           try {
             await requirementsApi.award(Number(id), Number(quotationId));
             await load();
+            return true;
           } catch (e: any) {
-            setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not award this quotation.');
+            setActionError(errorMessage(e, 'Could not award this quotation.'));
+            return false;
           }
         }}
         onShortlistToggle={async (quotationId) => {
@@ -202,15 +239,17 @@ export default function RequirementRoute() {
               : requirementsApi.unshortlistQuotation(Number(id), Number(quotationId)));
             await load();
           } catch (e: any) {
-            setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not update the shortlist.');
+            setActionError(errorMessage(e, 'Could not update the shortlist.'));
           }
         }}
         onCloseWithoutAward={async () => {
           try {
             await requirementsApi.closeWithoutAward(Number(id));
             await load();
+            return true;
           } catch (e: any) {
-            setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not close this requirement without an award.');
+            setActionError(errorMessage(e, 'Could not close this requirement without an award.'));
+            return false;
           }
         }}
         onViewRespondentProfile={(businessId) => router.push({ pathname: '/business-profile', params: { id: businessId } })}
@@ -221,14 +260,15 @@ export default function RequirementRoute() {
               (t) => t.requirement_id === Number(id) && t.counterparty_id === Number(businessId),
             );
             if (!thread) {
-              setError('No conversation with this business yet.');
+              setActionError('No conversation with this business yet.');
               return;
             }
             router.push({ pathname: '/home', params: { openThread: String(thread.id) } });
           } catch (e: any) {
-            setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not open this conversation.');
+            setActionError(errorMessage(e, 'Could not open this conversation.'));
           }
         }}
+        onViewLedger={() => router.push({ pathname: '/ledger', params: { id } })}
       />
     );
   }
@@ -241,12 +281,12 @@ export default function RequirementRoute() {
       await requirementsApi.askQuestion(Number(id), question);
       await reloadQuestions();
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not post that question.');
+      setActionError(errorMessage(e, 'Could not post that question.'));
     }
   };
 
   if (hasSubmitted && ownQuotation && ledgerEntry) {
-    return (
+    return withActionErrorBanner(
       <RequirementDetail
         state="RESPONDENT"
         requirement={requirement}
@@ -261,15 +301,32 @@ export default function RequirementRoute() {
             await requirementsApi.withdrawQuotation(Number(id));
             await load();
           } catch (e: any) {
-            setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not withdraw this quotation.');
+            setActionError(errorMessage(e, 'Could not withdraw this quotation.'));
+          }
+        }}
+        onAcceptAward={async () => {
+          try {
+            await requirementsApi.acceptAward(Number(id));
+            await load();
+          } catch (e: any) {
+            setActionError(errorMessage(e, 'Could not accept this award.'));
+          }
+        }}
+        onDeclineAward={async () => {
+          try {
+            await requirementsApi.declineAward(Number(id));
+            await load();
+          } catch (e: any) {
+            setActionError(errorMessage(e, 'Could not decline this award.'));
           }
         }}
         onViewBuyerProfile={() => router.push({ pathname: '/business-profile', params: { id: buyer.id } })}
+        onViewLedger={() => router.push({ pathname: '/ledger', params: { id } })}
       />
     );
   }
 
-  return (
+  return withActionErrorBanner(
     <RequirementDetail
       state="RESPONDENT"
       requirement={requirement}
@@ -279,6 +336,7 @@ export default function RequirementRoute() {
       onAskQuestion={onAskQuestion}
       onSubmitQuotation={() => router.push({ pathname: '/submit-quotation', params: { id } })}
       onViewBuyerProfile={() => router.push({ pathname: '/business-profile', params: { id: buyer.id } })}
+      onViewLedger={() => router.push({ pathname: '/ledger', params: { id } })}
     />
   );
 }

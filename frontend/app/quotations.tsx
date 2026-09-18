@@ -6,6 +6,7 @@ import { requirementsApi } from '../lib/api/requirements';
 import { mapMyQuotation, mapMyQuotationRequirement, mapPosterToBusiness } from '../lib/api/mappers';
 import type { Quotation, Requirement, Business, BusinessId } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
+import { errorMessage } from '../lib/api/client';
 
 export default function MyQuotationsRoute() {
   const router = useRouter();
@@ -31,7 +32,7 @@ export default function MyQuotationsRoute() {
       setRequirements(reqMap);
       setBuyers(buyerMap);
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Failed to load your quotations.');
+      setError(errorMessage(e, 'Failed to load your quotations.'));
     } finally {
       setLoading(false);
     }
@@ -77,7 +78,7 @@ export default function MyQuotationsRoute() {
           await requirementsApi.withdrawQuotation(Number(quotation.requirementId));
           await load();
         } catch (e: any) {
-          setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Could not withdraw this quotation.');
+          setError(errorMessage(e, 'Could not withdraw this quotation.'));
         }
       }}
     />

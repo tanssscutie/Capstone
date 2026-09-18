@@ -7,6 +7,7 @@ import { notificationsApi } from '../lib/api/notifications';
 import { mapNotification } from '../lib/api/mappers';
 import type { Alert } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
+import { errorMessage } from '../lib/api/client';
 
 export default function AlertsRoute() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function AlertsRoute() {
       const rows = await notificationsApi.listMine();
       setAlerts(rows.map(mapNotification));
     } catch (e: any) {
-      setError(typeof e?.detail === 'string' ? e.detail : e?.message ?? 'Failed to load your alerts.');
+      setError(errorMessage(e, 'Failed to load your alerts.'));
     } finally {
       setLoading(false);
     }

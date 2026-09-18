@@ -36,6 +36,31 @@ export class ApiError extends Error {
   }
 }
 
+/** FastAPI's own validation failures (422) send `detail` as a list of
+ *  {loc, msg, type} objects rather than a string — every call site's
+ *  `typeof e?.detail === 'string' ? e.detail : e?.message ?? fallback`
+ *  pattern was silently swallowing those into a useless "Request failed
+ *  (422)", with no way to tell which field failed. This turns either shape
+ *  (a plain string detail, or that Pydantic array) into one readable
+ *  message, falling back to `err.message` / `fallback` for anything else. */
+export function errorMessage(err: unknown, fallback: string): string {
+  const detail = err instanceof ApiError ? err.detail : (err as any)?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((d) => {
+        if (d && typeof d === 'object' && 'msg' in d) {
+          const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : null;
+          return field ? `${field}: ${d.msg}` : String(d.msg);
+        }
+        return typeof d === 'string' ? d : null;
+      })
+      .filter(Boolean);
+    if (parts.length > 0) return parts.join('; ');
+  }
+  return (err as any)?.message ?? fallback;
+}
+
 type RequestOpts = {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT';
   body?: unknown;

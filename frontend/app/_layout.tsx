@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Stack, usePathname } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { BricolageGrotesque_700Bold } from '@expo-google-fonts/bricolage-grotesque';
@@ -25,7 +25,14 @@ SplashScreen.preventAutoHideAsync();
  *  regular business AppHeader (which is built around a logged-in business viewer, not
  *  an admin). */
 function isPreLoginRoute(pathname: string): boolean {
-  return pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/onboarding') || pathname.startsWith('/admin');
+  return (
+    pathname === '/' ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/onboarding') ||
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/auth-callback') ||
+    pathname.startsWith('/complete-profile')
+  );
 }
 
 export default function RootLayout() {
@@ -38,6 +45,7 @@ export default function RootLayout() {
     DMMono_500Medium,
   });
   const pathname = usePathname();
+  const router = useRouter();
   const [viewer, setViewer] = useState<Business | null>(null);
   const [alertCount, setAlertCount] = useState(0);
 
@@ -62,6 +70,13 @@ export default function RootLayout() {
           getVerificationStatus(),
           getDashboardStats(),
         ]);
+        // A Google sign-up that never finished setting a mobile number — every
+        // other screen assumes one exists (contact display, admin roster, etc.),
+        // so this is required before anything else, not a skippable step.
+        if (!cancelled && !user.mobile_number) {
+          router.replace('/complete-profile');
+          return;
+        }
         if (!cancelled) setViewer(mapViewerBusiness(user, verification, stats));
       } catch {
         if (!cancelled) setViewer(null);
