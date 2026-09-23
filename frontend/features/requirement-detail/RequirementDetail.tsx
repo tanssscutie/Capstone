@@ -516,15 +516,30 @@ function Header({ requirement }: { requirement: Requirement }) {
 
 /* ─── RESPONDENT state ──────────────────────────────── */
 
+/** The proposed winner's side of a Notice of Award — when the response window
+ *  closes. Past that, the backend's scheduler auto-declines it. */
+function AwardResponseNote({ deadline }: { deadline: ISODateTime | null }) {
+  return (
+    <Text style={styles.mutedSmall}>
+      The buyer proposed you as the winner.{' '}
+      {deadline
+        ? `Respond by ${formatDateTime(deadline)}, or it auto-declines.`
+        : 'Respond before the window closes, or it auto-declines.'}
+    </Text>
+  );
+}
+
 function SealedRecordPanel({
   quotation,
   ledgerEntry,
+  awardResponseDeadline,
   onWithdraw,
   onAcceptAward,
   onDeclineAward,
 }: {
   quotation: Quotation;
   ledgerEntry: LedgerEntry;
+  awardResponseDeadline: ISODateTime | null;
   onWithdraw?: () => void;
   onAcceptAward?: () => void;
   onDeclineAward?: () => void;
@@ -542,9 +557,7 @@ function SealedRecordPanel({
       </View>
       {isAwardPending ? (
         <>
-          <Text style={styles.mutedSmall}>
-            The buyer proposed you as the winner. Respond before the window closes, or it auto-declines.
-          </Text>
+          <AwardResponseNote deadline={awardResponseDeadline} />
           <ActionButton label="Accept award" variant="primary" onPress={onAcceptAward} />
           <ActionButton label="Decline" variant="danger" onPress={onDeclineAward} />
         </>
@@ -571,6 +584,7 @@ function RespondentSideContent(props: RespondentNotSubmitted | RespondentSubmitt
         <SealedRecordPanel
           quotation={props.ownQuotation}
           ledgerEntry={props.ledgerEntry}
+          awardResponseDeadline={requirement.awardResponseDeadline}
           onWithdraw={props.onWithdraw}
           onAcceptAward={props.onAcceptAward}
           onDeclineAward={props.onDeclineAward}
@@ -1710,12 +1724,14 @@ function WideOwnerControlsCard({
 function WideMyRecordCard({
   quotation,
   ledgerEntry,
+  awardResponseDeadline,
   onWithdraw,
   onAcceptAward,
   onDeclineAward,
 }: {
   quotation: Quotation;
   ledgerEntry: LedgerEntry;
+  awardResponseDeadline: ISODateTime | null;
   onWithdraw?: () => void;
   onAcceptAward?: () => void;
   onDeclineAward?: () => void;
@@ -1739,9 +1755,7 @@ function WideMyRecordCard({
       </Text>
       {isAwardPending ? (
         <>
-          <Text style={styles.mutedSmall}>
-            The buyer proposed you as the winner. Respond before the window closes, or it auto-declines.
-          </Text>
+          <AwardResponseNote deadline={awardResponseDeadline} />
           <ActionButton label="Accept award" variant="primary" onPress={onAcceptAward} />
           <ActionButton label="Decline" variant="danger" onPress={onDeclineAward} />
         </>
@@ -2181,6 +2195,7 @@ export default function RequirementDetail(props: RequirementDetailProps) {
               <WideMyRecordCard
                 quotation={props.ownQuotation}
                 ledgerEntry={props.ledgerEntry}
+                awardResponseDeadline={props.requirement.awardResponseDeadline}
                 onWithdraw={props.onWithdraw}
                 onAcceptAward={props.onAcceptAward}
                 onDeclineAward={props.onDeclineAward}

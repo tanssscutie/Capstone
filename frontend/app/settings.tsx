@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import AccountSettings from '../features/settings/AccountSettings';
-import { me, changeMobileNumber, changePassword, updateNotificationPreferences, type BackendUser } from '../lib/api/auth';
+import { me, changeMobileNumber, changePassword, requestPasswordChangeOtp, updateNotificationPreferences, type BackendUser } from '../lib/api/auth';
 import { color, font, fontSize, space } from '../components/ui/tokens';
 import { errorMessage } from '../lib/api/client';
 
@@ -52,6 +52,7 @@ export default function SettingsRoute() {
   return (
     <AccountSettings
       mobileNumber={user.mobile_number ?? ''}
+      email={user.email}
       notifyMessages={user.notify_messages}
       notifyActivity={user.notify_activity}
       onBack={() => router.push('/home')}
@@ -59,8 +60,9 @@ export default function SettingsRoute() {
         const updated = await changeMobileNumber(newNumber, currentPassword);
         setUser(updated);
       }}
-      onChangePassword={async (currentPassword, newPassword) => {
-        await changePassword(currentPassword, newPassword);
+      onRequestPasswordOtp={requestPasswordChangeOtp}
+      onChangePassword={async (currentPassword, newPassword, code) => {
+        await changePassword(currentPassword, newPassword, code);
       }}
       onChangeNotificationPreferences={async (notifyMessages, notifyActivity) => {
         const updated = await updateNotificationPreferences(notifyMessages, notifyActivity);

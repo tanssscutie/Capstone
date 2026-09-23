@@ -16,6 +16,10 @@ from app.schemas.auth import (
     MobileNumberChange,
     NotificationPreferences,
     CompleteProfile,
+    VerifyEmail,
+    ResendOtp,
+    ForgotPassword,
+    ResetPassword,
 )
 from app.core.security import get_current_user
 
@@ -26,6 +30,19 @@ router = APIRouter()
 def register(user_in: UserCreate):
     user = auth_service.create_user(user_in)
     return user
+
+
+@router.post("/verify-email", response_model=Token)
+def verify_email(data: VerifyEmail):
+    """Completes sign-up: a correct code clears the pending check and
+    returns a login token, so the user goes straight to home."""
+    return auth_service.verify_email(data.email, data.code)
+
+
+@router.post("/resend-otp")
+def resend_otp(data: ResendOtp):
+    auth_service.resend_otp(data.email)
+    return {"detail": "If that account is awaiting verification, a new code has been sent."}
 
 
 @router.post("/login", response_model=Token)
@@ -67,10 +84,35 @@ def complete_profile(data: CompleteProfile, current_user=Depends(get_current_use
     return auth_service.complete_profile(current_user.id, data.mobile_number)
 
 
+@router.post("/password/request-otp")
+def request_password_change_otp(current_user=Depends(get_current_user)):
+    """Step 1 of a password change: emails a 6-digit code to the account's
+    address. PUT /auth/password then requires it."""
+    auth_service.request_password_change_otp(current_user.id)
+    return {"detail": "We sent a code to your email."}
+
+
 @router.put("/password")
 def change_password(data: PasswordChange, current_user=Depends(get_current_user)):
     auth_service.change_password(current_user.id, data)
     return {"detail": "Password updated"}
+
+
+@router.post("/password/forgot")
+def forgot_password(data: ForgotPassword):
+    """Step 1 of a signed-out password reset: emails a 6-digit code if the
+    address belongs to a mobile+password account. Always answers the same
+    way regardless — see auth_service.request_password_reset_otp."""
+    auth_service.request_password_reset_otp(data.email)
+    return {"detail": "If that email has an account, we sent a reset code to it."}
+
+
+@router.post("/password/reset")
+def reset_password(data: ResetPassword):
+    """Step 2: the code from /password/forgot lets a signed-out caller set a
+    new password directly, no current password needed."""
+    auth_service.reset_password(data.email, data.code, data.new_password)
+    return {"detail": "Password updated. You can now log in."}
 
 
 @router.put("/mobile-number", response_model=UserRead)

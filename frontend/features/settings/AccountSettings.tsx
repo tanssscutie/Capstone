@@ -22,11 +22,13 @@ import { errorMessage } from '../../lib/api/client';
 
 export interface AccountSettingsProps {
   mobileNumber: string;
+  email: string | null;
   notifyMessages: boolean;
   notifyActivity: boolean;
   onBack?: () => void;
   onChangeMobileNumber: (newNumber: string, currentPassword: string) => Promise<void>;
-  onChangePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  onRequestPasswordOtp: () => Promise<void>;
+  onChangePassword: (currentPassword: string, newPassword: string, code: string) => Promise<void>;
   onChangeNotificationPreferences: (notifyMessages: boolean, notifyActivity: boolean) => Promise<void>;
 }
 
@@ -177,11 +179,36 @@ function MobileNumberCard({ mobileNumber, onChangeMobileNumber }: Pick<AccountSe
   );
 }
 
-function PasswordCard({ onChangePassword }: Pick<AccountSettingsProps, 'onChangePassword'>) {
+function EmailCard({ email }: Pick<AccountSettingsProps, 'email'>) {
+  // Read-only: no changeEmail endpoint exists yet (unlike mobile number and
+  // password, both of which have a real change flow below). Set at
+  // registration or by Google sign-in — see auth_service.create_user /
+  // handle_google_callback.
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeaderRow}>
+        <SectionLabel>Email</SectionLabel>
+      </View>
+      <View style={{ marginTop: space.sm, gap: space.xs }}>
+        <Text style={styles.valueText}>{email || 'Not set'}</Text>
+        <Text style={styles.mutedSmall}>Used to log in (in addition to your mobile number) and to link a Google sign-in to this account.</Text>
+      </View>
+    </View>
+  );
+}
+
+function PasswordCard({
+  email,
+  onRequestPasswordOtp,
+  onChangePassword,
+}: Pick<AccountSettingsProps, 'email' | 'onRequestPasswordOtp' | 'onChangePassword'>) {
   const [editing, setEditing] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [sending, setSending] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -190,6 +217,8 @@ function PasswordCard({ onChangePassword }: Pick<AccountSettingsProps, 'onChange
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    setCode('');
+    setCodeSent(false);
     setError(null);
     setSaved(false);
     setEditing(true);
@@ -198,6 +227,19 @@ function PasswordCard({ onChangePassword }: Pick<AccountSettingsProps, 'onChange
   const cancel = () => {
     setEditing(false);
     setError(null);
+  };
+
+  const sendCode = async () => {
+    setError(null);
+    setSending(true);
+    try {
+      await onRequestPasswordOtp();
+      setCodeSent(true);
+    } catch (e: any) {
+      setError(toMessage(e, 'Could not send the code.'));
+    } finally {
+      setSending(false);
+    }
   };
 
   const save = async () => {
@@ -210,9 +252,13 @@ function PasswordCard({ onChangePassword }: Pick<AccountSettingsProps, 'onChange
       setError('New password and confirmation do not match.');
       return;
     }
+    if (!/^\d{6}$/.test(code)) {
+      setError('Enter the 6-digit code we emailed you.');
+      return;
+    }
     setSubmitting(true);
     try {
-      await onChangePassword(currentPassword, newPassword);
+      await onChangePassword(currentPassword, newPassword, code);
       setEditing(false);
       setSaved(true);
     } catch (e: any) {
@@ -267,9 +313,36 @@ function PasswordCard({ onChangePassword }: Pick<AccountSettingsProps, 'onChange
               style={styles.input}
             />
           </View>
+          <View>
+            <Text style={styles.fieldLabel}>Email code</Text>
+            <Text style={styles.mutedSmall}>
+              {codeSent
+                ? `We sent a 6-digit code to ${email ?? 'your email'}. It expires in 10 minutes.`
+                : `To confirm it's you, we'll email a 6-digit code to ${email ?? 'your email'}.`}
+            </Text>
+            {codeSent && (
+              <TextInput
+                value={code}
+                onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
+                placeholder="123456"
+                placeholderTextColor={color.inkFaint}
+                keyboardType="number-pad"
+                maxLength={6}
+                style={styles.input}
+              />
+            )}
+            <View style={[styles.rowButtons, { marginTop: space.sm }]}>
+              <ActionButton
+                label={sending ? 'Sending…' : codeSent ? 'Resend code' : 'Send code'}
+                variant="outline"
+                onPress={sendCode}
+                disabled={sending || submitting || !email}
+              />
+            </View>
+          </View>
           <FieldError>{error}</FieldError>
           <View style={styles.rowButtons}>
-            <ActionButton label={submitting ? 'Saving…' : 'Save'} variant="primary" onPress={save} disabled={submitting} />
+            <ActionButton label={submitting ? 'Saving…' : 'Save'} variant="primary" onPress={save} disabled={submitting || !codeSent} />
             <ActionButton label="Cancel" variant="outline" onPress={cancel} disabled={submitting} />
           </View>
         </View>
@@ -332,10 +405,12 @@ function NotificationsCard({
 
 export default function AccountSettings({
   mobileNumber,
+  email,
   notifyMessages,
   notifyActivity,
   onBack,
   onChangeMobileNumber,
+  onRequestPasswordOtp,
   onChangePassword,
   onChangeNotificationPreferences,
 }: AccountSettingsProps) {
@@ -359,7 +434,8 @@ export default function AccountSettings({
         </View>
 
         <MobileNumberCard mobileNumber={mobileNumber} onChangeMobileNumber={onChangeMobileNumber} />
-        <PasswordCard onChangePassword={onChangePassword} />
+        <EmailCard email={email} />
+        <PasswordCard email={email} onRequestPasswordOtp={onRequestPasswordOtp} onChangePassword={onChangePassword} />
         <NotificationsCard
           notifyMessages={notifyMessages}
           notifyActivity={notifyActivity}

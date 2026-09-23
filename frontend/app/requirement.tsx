@@ -44,7 +44,7 @@ export default function RequirementRoute() {
   const [respondents, setRespondents] = useState<Record<BusinessId, Respondent>>({});
   const [questions, setQuestions] = useState<ClarificationQuestion[]>([]);
 
-  async function load() {
+  async function load(forceRefresh = false) {
     if (!id) {
       setError('No requirement specified.');
       setLoading(false);
@@ -54,7 +54,16 @@ export default function RequirementRoute() {
     setError(null);
     try {
       const numericId = Number(id);
-      const [user, raw] = await Promise.all([me(), requirementsCache.ensure(numericId)]);
+      // forceRefresh matters here specifically: every call after the first
+      // is a post-mutation reload (site notes, award, shortlist, extend,
+      // cancel, withdraw, ...), and requirementsCache.ensure() would just
+      // keep handing back whatever this id last held — including from
+      // before the user's own edit — since it only fetches on a true cache
+      // miss. refresh() always re-fetches and overwrites the entry.
+      const [user, raw] = await Promise.all([
+        me(),
+        forceRefresh ? requirementsCache.refresh(numericId) : requirementsCache.ensure(numericId),
+      ]);
       if (!raw) {
         setError("Couldn't find that requirement.");
         return;
@@ -89,12 +98,24 @@ export default function RequirementRoute() {
         }
       } else {
         setBuyer(mapPosterToBusiness(raw.poster));
-        if (raw.my_active_quotation_ref) {
+        // my_active_quotation_ref only covers a still-sealed quotation — the
+        // backend's get_active_quotation filters on status == "sealed", so it
+        // goes null the moment the requirement is released. Gating on it alone
+        // meant a respondent never got their own-quotation panel after
+        // release, which is exactly where a Notice of Award's Accept/Decline
+        // buttons live. So once the requirement is past OPEN, look for the
+        // respondent's quotation directly instead.
+        if (raw.my_active_quotation_ref || mapped.status !== 'OPEN') {
           const [mine, ledgerView] = await Promise.all([
             requirementsApi.listMyQuotations(),
             requirementsApi.listLedger(numericId),
           ]);
-          const match = mine.find((q) => q.requirement_id === numericId);
+          // A business can withdraw and resubmit, so there may be several rows
+          // for this requirement — the live one is whichever isn't
+          // withdrawn/voided.
+          const match = mine.find(
+            (q) => q.requirement_id === numericId && q.outcome !== 'withdrawn' && q.outcome !== 'voided',
+          );
           if (match) {
             setHasSubmitted(true);
             setOwnQuotation(mapMyQuotation(match));
@@ -102,6 +123,10 @@ export default function RequirementRoute() {
               (e) => e.quotation_id === match.quotation_id && e.event_type === 'SUBMITTED',
             );
             setLedgerEntry(entry ? mapLedgerEntry(entry) : null);
+          } else {
+            setHasSubmitted(false);
+            setOwnQuotation(null);
+            setLedgerEntry(null);
           }
         } else {
           setHasSubmitted(false);
@@ -189,7 +214,7 @@ export default function RequirementRoute() {
           onExtendClosing={async (newClosesAt) => {
             try {
               await requirementsApi.extend(Number(id), newClosesAt);
-              await load();
+              await load(true);
             } catch (e: any) {
               setActionError(errorMessage(e, 'Could not extend the closing time.'));
             }
@@ -197,7 +222,7 @@ export default function RequirementRoute() {
           onCancelRequirement={async () => {
             try {
               await requirementsApi.cancel(Number(id));
-              await load();
+              await load(true);
             } catch (e: any) {
               setActionError(errorMessage(e, 'Could not cancel this requirement.'));
             }
@@ -205,7 +230,7 @@ export default function RequirementRoute() {
           onUpdateSiteNotes={async (accessHours, accessNotes) => {
             try {
               await requirementsApi.updateSiteNotes(Number(id), accessHours, accessNotes);
-              await load();
+              await load(true);
             } catch (e: any) {
               setActionError(errorMessage(e, 'Could not save site notes.'));
             }
@@ -223,7 +248,7 @@ export default function RequirementRoute() {
         onAward={async (quotationId) => {
           try {
             await requirementsApi.award(Number(id), Number(quotationId));
-            await load();
+            await load(true);
             return true;
           } catch (e: any) {
             setActionError(errorMessage(e, 'Could not award this quotation.'));
@@ -237,7 +262,7 @@ export default function RequirementRoute() {
             await (nextShortlisted
               ? requirementsApi.shortlistQuotation(Number(id), Number(quotationId))
               : requirementsApi.unshortlistQuotation(Number(id), Number(quotationId)));
-            await load();
+            await load(true);
           } catch (e: any) {
             setActionError(errorMessage(e, 'Could not update the shortlist.'));
           }
@@ -245,7 +270,7 @@ export default function RequirementRoute() {
         onCloseWithoutAward={async () => {
           try {
             await requirementsApi.closeWithoutAward(Number(id));
-            await load();
+            await load(true);
             return true;
           } catch (e: any) {
             setActionError(errorMessage(e, 'Could not close this requirement without an award.'));
@@ -299,7 +324,7 @@ export default function RequirementRoute() {
         onWithdraw={async () => {
           try {
             await requirementsApi.withdrawQuotation(Number(id));
-            await load();
+            await load(true);
           } catch (e: any) {
             setActionError(errorMessage(e, 'Could not withdraw this quotation.'));
           }
@@ -307,7 +332,7 @@ export default function RequirementRoute() {
         onAcceptAward={async () => {
           try {
             await requirementsApi.acceptAward(Number(id));
-            await load();
+            await load(true);
           } catch (e: any) {
             setActionError(errorMessage(e, 'Could not accept this award.'));
           }
@@ -315,7 +340,7 @@ export default function RequirementRoute() {
         onDeclineAward={async () => {
           try {
             await requirementsApi.declineAward(Number(id));
-            await load();
+            await load(true);
           } catch (e: any) {
             setActionError(errorMessage(e, 'Could not decline this award.'));
           }

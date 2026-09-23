@@ -38,13 +38,16 @@ class RequirementCreate(BaseModel):
     price_max: Optional[float] = Field(default=None, ge=0)
 
     city: str = Field(min_length=2, max_length=120)
-    site_address: Optional[str] = Field(default=None, max_length=300)
+    site_address: str = Field(min_length=1, max_length=300)
     delivery_start: Optional[datetime] = None
     delivery_end: Optional[datetime] = None
 
     # Qualifying documents respondents should attach to their quotation, e.g.
     # ["PCAB License", "Sanitary Permit"] — see Requirement.required_documents.
-    required_documents: List[str] = []
+    # Required (min 1) at the buyer's explicit choice — enforced here too,
+    # not just in the frontend form, so it can't be bypassed by calling the
+    # API directly.
+    required_documents: List[str] = Field(min_length=1)
 
     closes_at: datetime
 

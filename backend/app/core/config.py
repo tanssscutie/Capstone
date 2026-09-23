@@ -20,6 +20,22 @@ class Settings(BaseSettings):
     # Where the backend sends the browser after a Google login completes.
     FRONTEND_URL: str = "http://localhost:8081"
 
+    # Email OTP verification — mobile+password sign-ups must enter a 6-digit
+    # code sent here before they can log in (see auth_service.verify_email).
+    # SMTP works with any provider; for Gmail use smtp.gmail.com:587 with an
+    # App Password (Google Account > Security > 2-Step Verification > App
+    # passwords), never the account's real password. Set in backend/.env.
+    # Blank SMTP_HOST means "dev mode": the code is printed to the backend
+    # console instead of emailed — see email_service.send_email.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""  # falls back to SMTP_USERNAME when blank
+    OTP_EXPIRE_MINUTES: int = 10
+    OTP_MAX_ATTEMPTS: int = 5
+    OTP_RESEND_COOLDOWN_SECONDS: int = 60
+
     # Symmetric key (Fernet) uploaded business documents are encrypted with
     # before they touch disk — see business_service._save_file. Set in
     # backend/.env, never commit a real value. Generate one with:

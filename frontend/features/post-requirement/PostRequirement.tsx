@@ -44,6 +44,7 @@ import {
 import type { Business, Attachment, ISODateTime, SpecRow, PostRequirementState } from '../../lib/types';
 import { CATEGORIES } from './constants';
 import { isRecognizedCity } from '../../lib/data/philippines';
+import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 
 /* ─── Draft shapes ───────────────────────────────────────
  * One draft per step, assembled into a real `Requirement` by the route only once REVIEW
@@ -157,6 +158,102 @@ const SPEC_LABEL_MAX = 100;
 const SPEC_VALUE_MIN = 2;
 const SPEC_VALUE_MAX = 200;
 const SITE_ADDRESS_MAX = 300;
+
+/** One example label/value pair per category, shown as the Specifications
+ *  row's placeholder text once a category is picked — before that, a
+ *  generic fabrication-flavored example (kept as the literal default so
+ *  existing behavior is unchanged when nothing's selected yet). Purely
+ *  illustrative: never prefilled into the actual fields, and picking a
+ *  different category doesn't touch specs the buyer already typed. */
+const SPEC_EXAMPLE_BY_CATEGORY: Record<string, { label: string; value: string }> = {
+  'Printing': { label: 'e.g. Paper size and stock', value: 'e.g. A4, 80gsm bond paper' },
+  'Construction Supply': { label: 'e.g. Material grade', value: 'e.g. Portland cement Type 1, 50kg bags' },
+  'Fabrication & Manufacturing': { label: 'e.g. Platform area', value: 'e.g. 240 sqm (20.0 m × 12.0 m)' },
+  'Industrial Services': { label: 'e.g. Service frequency', value: 'e.g. Quarterly preventive maintenance' },
+  'Food Supply & Catering': { label: 'e.g. Menu style', value: 'e.g. Buffet, 3 main dishes + dessert' },
+  'Medical & Clinic Supplies': { label: 'e.g. Product standard', value: 'e.g. Surgical grade, ISO 13485' },
+  'IT Equipment & Hardware': { label: 'e.g. Spec requirement', value: 'e.g. Intel i5, 16GB RAM, 512GB SSD' },
+  'Vehicle Parts & Services': { label: 'e.g. Part and model fit', value: 'e.g. Brake pads, Toyota Hilux 2020' },
+  'Packaging & Labeling': { label: 'e.g. Box dimensions', value: 'e.g. 30 cm × 20 cm × 15 cm, corrugated' },
+  'Office & Janitorial Supplies': { label: 'e.g. Item spec', value: 'e.g. A4 bond paper, 500 sheets/ream' },
+};
+const DEFAULT_SPEC_EXAMPLE = SPEC_EXAMPLE_BY_CATEGORY['Fabrication & Manufacturing'];
+
+/** Typical qualifying documents per category — a starting suggestion for
+ *  the (optional, per the study's own Scope and Delimitation) Required
+ *  documents field, not a mandate. Only ever pre-fills the field while it's
+ *  still empty (see the Category pill's onPress) — a buyer who has already
+ *  added or removed anything here keeps full control, same convention as
+ *  every other suggestion feature in this app. */
+const REQUIRED_DOCS_BY_CATEGORY: Record<string, string[]> = {
+  'Printing': ['DENR Permit'],
+  'Construction Supply': ['BPS Product/Import Certificate (PS/ICC)'],
+  'Fabrication & Manufacturing': ['DENR Permit'],
+  'Industrial Services': ['DTI Accreditation', 'DOLE Registration', 'PCAB License'],
+  'Food Supply & Catering': ['Sanitary Permit', 'Health Certificate', 'FDA License to Operate'],
+  'Medical & Clinic Supplies': ['FDA License to Operate'],
+  'IT Equipment & Hardware': ['NTC Permit', 'BPS Certification'],
+  'Vehicle Parts & Services': ['DTI Service & Repair Accreditation'],
+  'Packaging & Labeling': ['DENR Permit', 'FDA License to Operate'],
+  'Office & Janitorial Supplies': ['DOLE Registration', 'FDA License to Operate'],
+};
+
+/** Same convention as SPEC_EXAMPLE_BY_CATEGORY, extended to Title, Scope,
+ *  and Quantity — placeholder text only, never prefilled into the actual
+ *  fields, and switching category never touches anything already typed. */
+const DETAILS_EXAMPLE_BY_CATEGORY: Record<string, { title: string; scope: string; quantity: string }> = {
+  'Printing': {
+    title: 'e.g. Bulk printing of tarpaulins for a company event',
+    scope: 'e.g. Full-color tarpaulin printing, weatherproof, with grommets every 50cm.',
+    quantity: 'e.g. 20 pieces, 3ft × 8ft each',
+  },
+  'Construction Supply': {
+    title: 'e.g. Supply of cement and rebar for a warehouse slab',
+    scope: 'e.g. Ready-mix concrete and reinforcing steel delivered to site, per the attached plan.',
+    quantity: 'e.g. 80 cu.m. concrete, 5 tons rebar',
+  },
+  'Fabrication & Manufacturing': {
+    title: 'e.g. Fabrication and installation of steel mezzanine platform',
+    scope: 'What is included and what is not — the boundaries of the work.',
+    quantity: 'e.g. 1 platform',
+  },
+  'Industrial Services': {
+    title: 'e.g. Quarterly preventive maintenance for production line equipment',
+    scope: 'e.g. Scheduled inspection, lubrication, and part replacement for 5 machines.',
+    quantity: 'e.g. 5 units',
+  },
+  'Food Supply & Catering': {
+    title: 'e.g. Catering services for a company annual event',
+    scope: 'e.g. Buffet-style catering including setup and service staff for 200 guests.',
+    quantity: 'e.g. 200 pax',
+  },
+  'Medical & Clinic Supplies': {
+    title: 'e.g. Supply of PPE and consumables for a clinic',
+    scope: 'e.g. Monthly supply of gloves, masks, and surgical consumables per the attached list.',
+    quantity: 'e.g. 50 boxes gloves, 100 boxes masks',
+  },
+  'IT Equipment & Hardware': {
+    title: 'e.g. Supply and setup of office computers and network equipment',
+    scope: 'e.g. 10 desktop units, a managed switch, and setup/configuration on site.',
+    quantity: 'e.g. 10 units, 1 switch',
+  },
+  'Vehicle Parts & Services': {
+    title: 'e.g. Supply of brake parts for a fleet of delivery vans',
+    scope: 'e.g. Brake pads and rotors for 5 vans, Toyota Hiace 2019-2022 models.',
+    quantity: 'e.g. 5 sets',
+  },
+  'Packaging & Labeling': {
+    title: 'e.g. Custom corrugated boxes for product shipping',
+    scope: 'e.g. Printed corrugated boxes, double-wall, sized for a specific product line.',
+    quantity: 'e.g. 5,000 pieces',
+  },
+  'Office & Janitorial Supplies': {
+    title: 'e.g. Monthly supply of office and cleaning supplies',
+    scope: 'e.g. Bond paper, cleaning chemicals, and janitorial consumables, delivered monthly.',
+    quantity: 'e.g. Monthly, per attached list',
+  },
+};
+const DEFAULT_DETAILS_EXAMPLE = DETAILS_EXAMPLE_BY_CATEGORY['Fabrication & Manufacturing'];
 
 const TIME_OPTIONS: { value: string; label: string }[] = [
   { value: '09:00', label: '9:00 AM' },
@@ -416,12 +513,16 @@ interface SpecRowDraft {
 function SpecificationEditRow({
   row,
   invalid,
+  labelPlaceholder,
+  valuePlaceholder,
   onChangeLabel,
   onChangeValue,
   onRemove,
 }: {
   row: SpecRowDraft;
   invalid?: boolean;
+  labelPlaceholder?: string;
+  valuePlaceholder?: string;
   onChangeLabel: (v: string) => void;
   onChangeValue: (v: string) => void;
   onRemove: () => void;
@@ -433,7 +534,7 @@ function SpecificationEditRow({
           value={row.label}
           onChangeText={onChangeLabel}
           maxLength={SPEC_LABEL_MAX}
-          placeholder="e.g. Platform area"
+          placeholder={labelPlaceholder ?? DEFAULT_SPEC_EXAMPLE.label}
           placeholderTextColor={color.inkFaint}
           style={[styles.input, styles.specEditLabelInput, invalid ? styles.inputError : null]}
         />
@@ -441,7 +542,7 @@ function SpecificationEditRow({
           value={row.value}
           onChangeText={onChangeValue}
           maxLength={SPEC_VALUE_MAX}
-          placeholder="e.g. 240 sqm (20.0 m × 12.0 m)"
+          placeholder={valuePlaceholder ?? DEFAULT_SPEC_EXAMPLE.value}
           placeholderTextColor={color.inkFaint}
           style={[styles.input, styles.specEditValueInput, invalid ? styles.inputError : null]}
         />
@@ -665,6 +766,25 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   function removeRequiredDoc(v: string) {
     setRequiredDocuments((prev) => prev.filter((x) => x !== v));
   }
+  function addSuggestedDoc(v: string) {
+    setRequiredDocuments((prev) => (prev.includes(v) ? prev : [...prev, v]));
+  }
+  // Typical-for-this-category docs not yet in the list — tappable chips so
+  // adding one is a single tap, not type-then-press-Add, and the input's
+  // own placeholder mirrors the first of these instead of always showing
+  // the same generic example regardless of category.
+  const suggestedRemainingDocs = (REQUIRED_DOCS_BY_CATEGORY[category] ?? []).filter(
+    (d) => !requiredDocuments.includes(d),
+  );
+  const detailsExample = DETAILS_EXAMPLE_BY_CATEGORY[category] ?? DEFAULT_DETAILS_EXAMPLE;
+
+  function selectCategory(c: string) {
+    setCategory(c);
+    // Suggestion, not a mandate (the field stays optional per the study's
+    // Scope and Delimitation) — only pre-fills while the buyer hasn't added
+    // or removed anything here yet, so it never overwrites their own edits.
+    setRequiredDocuments((prev) => (prev.length === 0 ? (REQUIRED_DOCS_BY_CATEGORY[c] ?? prev) : prev));
+  }
 
   const budgetMin = num(budgetMinText);
   const budgetMax = num(budgetMaxText);
@@ -702,6 +822,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   if (validSpecRows.length === 0) missing.push('at least one real specification');
   else if (badSpecRows.length > 0) missing.push('a fix to the specification row marked below');
   if (!quantity.trim()) missing.push('quantity');
+  if (requiredDocuments.length === 0) missing.push('at least one required document');
 
   const ready = missing.length === 0 && !budgetReversed;
 
@@ -736,7 +857,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
           <FieldLabel>Category</FieldLabel>
           <View style={styles.pillGroupWrap}>
             {CATEGORIES.map((c) => (
-              <Pill key={c} label={c} active={category === c} onPress={() => setCategory(c)} />
+              <Pill key={c} label={c} active={category === c} onPress={() => selectCategory(c)} />
             ))}
           </View>
           {!category && suggestedCategory && (
@@ -753,7 +874,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
             onChangeText={setTitle}
             onBlur={() => void checkCategorySuggestion(title, scope)}
             maxLength={TITLE_MAX}
-            placeholder="e.g. Fabrication and installation of steel mezzanine platform"
+            placeholder={detailsExample.title}
             placeholderTextColor={color.inkFaint}
             style={[styles.input, attempted && titleTooShort ? styles.inputError : null]}
           />
@@ -771,7 +892,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
             multiline
             numberOfLines={6}
             maxLength={SCOPE_MAX}
-            placeholder="What is included and what is not — the boundaries of the work."
+            placeholder={detailsExample.scope}
             placeholderTextColor={color.inkFaint}
             style={[styles.textareaLarge, attempted && scopeTooShort ? styles.inputError : null]}
           />
@@ -791,6 +912,8 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
                 key={row.id}
                 row={row}
                 invalid={attempted && row.label.trim() !== '' && row.value.trim() !== '' && !isSpecRowValid(row)}
+                labelPlaceholder={(SPEC_EXAMPLE_BY_CATEGORY[category] ?? DEFAULT_SPEC_EXAMPLE).label}
+                valuePlaceholder={(SPEC_EXAMPLE_BY_CATEGORY[category] ?? DEFAULT_SPEC_EXAMPLE).value}
                 onChangeLabel={(v) => updateSpecRow(row.id, 'label', v)}
                 onChangeValue={(v) => updateSpecRow(row.id, 'value', v)}
                 onRemove={() => removeSpecRow(row.id)}
@@ -803,8 +926,8 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
         </View>
 
         <View>
-          <FieldLabel optional>Required documents</FieldLabel>
-          <Text style={styles.fieldCaption}>Qualifying documents each respondent should attach to their quotation — e.g. PCAB License, Sanitary Permit. Shown on submission, not a hard block.</Text>
+          <FieldLabel>Required documents</FieldLabel>
+          <Text style={styles.fieldCaption}>Qualifying documents each respondent should attach to their quotation — e.g. PCAB License, Sanitary Permit. Add at least one.</Text>
           <View style={styles.pillGroupWrap}>
             {requiredDocuments.map((d) => (
               <Pressable key={d} onPress={() => removeRequiredDoc(d)} style={[styles.pill, styles.pillActive]}>
@@ -812,12 +935,21 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
               </Pressable>
             ))}
           </View>
+          {suggestedRemainingDocs.length > 0 && (
+            <View style={[styles.pillGroupWrap, { marginTop: space.xs }]}>
+              {suggestedRemainingDocs.map((d) => (
+                <Pressable key={d} onPress={() => addSuggestedDoc(d)} style={styles.pill}>
+                  <Text style={styles.pillLabel}>+ {d}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
           <View style={styles.addDocRow}>
             <TextInput
               value={docInput}
               onChangeText={setDocInput}
               onSubmitEditing={addRequiredDoc}
-              placeholder="e.g. PCAB License"
+              placeholder="Or type your own"
               placeholderTextColor={color.inkFaint}
               style={[styles.input, { flex: 1, marginTop: 0 }]}
             />
@@ -834,7 +966,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
               value={quantity}
               onChangeText={setQuantity}
               maxLength={QUANTITY_MAX}
-              placeholder="e.g. One platform, 240 sqm"
+              placeholder={detailsExample.quantity}
               placeholderTextColor={color.inkFaint}
               style={styles.input}
             />
@@ -903,26 +1035,21 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
 
   const missing: string[] = [];
   if (!city.trim()) missing.push('city / municipality');
+  if (!address.trim()) missing.push('site address');
   if (!windowFrom || !windowTo) missing.push('a delivery window');
 
   const ready = missing.length === 0 && !windowBad && !windowFromInvalid && !windowToInvalid && !cityInvalid;
 
-  const addFile = () => {
-    if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,image/*';
-      input.onchange = () => {
-        const picked = input.files?.[0];
-        if (!picked) return;
-        const id = `att-${Date.now()}`;
-        pickedRequirementFiles.set(id, picked);
-        setAttachments((prev) => [
-          ...prev,
-          { id, filename: picked.name, sizeBytes: picked.size, mimeType: picked.type, uri: '', documentLabel: null },
-        ]);
-      };
-      input.click();
+  const addFile = async () => {
+    if (isWebFilePickerSupported()) {
+      const picked = await pickWebFile('.pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,image/*');
+      if (!picked) return; // dialog closed without picking — do nothing, same as before
+      const id = `att-${Date.now()}`;
+      pickedRequirementFiles.set(id, picked);
+      setAttachments((prev) => [
+        ...prev,
+        { id, filename: picked.name, sizeBytes: picked.size, mimeType: picked.type, uri: '', documentLabel: null },
+      ]);
       return;
     }
 
@@ -968,14 +1095,14 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
             )}
           </View>
           <View style={{ flexGrow: 2, flexBasis: 260, minWidth: 200 }}>
-            <FieldLabel optional>Site address</FieldLabel>
+            <FieldLabel>Site address</FieldLabel>
             <TextInput
               value={address}
               onChangeText={setAddress}
               maxLength={SITE_ADDRESS_MAX}
               placeholder="Barangay Canlubang, Calamba, Laguna"
               placeholderTextColor={color.inkFaint}
-              style={styles.input}
+              style={[styles.input, attempted && !address.trim() ? styles.inputError : null]}
             />
           </View>
         </View>
@@ -1005,6 +1132,7 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
 
         <View>
           <FieldLabel optional>Attachments</FieldLabel>
+          <Text style={styles.fieldCaption}>Reference files for anyone viewing this requirement — e.g. a floor plan, product photo, or spec sheet. Visible to every business browsing it, not just respondents.</Text>
           <View style={styles.pillGroupWrap}>
             {attachments.map((f) => (
               <View key={f.id} style={styles.fileChip}>
@@ -1430,7 +1558,12 @@ const styles = StyleSheet.create({
   backLink: { fontFamily: font.bodyMedium, fontSize: fontSize.base, color: color.inkMuted },
 
   segmentedSteps: { flexDirection: 'row', alignItems: 'flex-start', gap: space.lg, width: '100%', maxWidth: 480 },
-  segmentedStepItem: { flex: 1, minWidth: 76, gap: space.xs },
+  // minWidth is a floor, not a fixed size — flex: 1 still splits the row evenly
+  // on wide screens. 76 was too high: 4 items + 3 gaps at space.lg (16) needs
+  // 352px, which clips/overflows on real phones as narrow as 375px wide (after
+  // the 20px screen padding on each side leaves only 335px). 56 keeps the same
+  // total under 280px, fitting even a 320px-wide device with room to spare.
+  segmentedStepItem: { flex: 1, minWidth: 56, gap: space.xs },
   segmentedStepLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, color: color.inkFaint },
   segmentedStepLabelNow: { fontFamily: font.monoMedium, color: color.ink },
   segmentedStepLabelDone: { color: color.inkMuted },
@@ -1487,9 +1620,18 @@ const styles = StyleSheet.create({
   addDashed: { alignSelf: 'flex-start', borderWidth: 1, borderStyle: 'dashed', borderColor: color.border, borderRadius: radius.pill, paddingHorizontal: space.lg, paddingVertical: space.sm },
   addDashedLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
 
+  // Unlike every other field row in this form (twoColRow, dateRangeRow,
+  // budgetRow), this one has no flexWrap and its two inputs' minWidths used to
+  // add up to 280 before the remove button and gaps even joined in — 324px
+  // total, more than the ~280–335px actually available on a real phone (after
+  // the 20px screen padding on each side), so it clipped/overflowed on
+  // virtually every device. Text inputs scroll their own content internally,
+  // so shrinking the floor here (rather than adding wrap, which would risk
+  // orphaning the remove button on its own line) keeps this a predictable
+  // single row down to a 320px-wide screen.
   specEditRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  specEditLabelInput: { flex: 1, minWidth: 120, marginTop: 0 },
-  specEditValueInput: { flex: 2, minWidth: 160, marginTop: 0 },
+  specEditLabelInput: { flex: 1, minWidth: 90, marginTop: 0 },
+  specEditValueInput: { flex: 2, minWidth: 120, marginTop: 0 },
   specEditRemove: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
 
   xGlyph: { width: 12, height: 12, alignItems: 'center', justifyContent: 'center' },
@@ -1525,7 +1667,12 @@ const styles = StyleSheet.create({
   beforePublishCard: { borderWidth: 1, borderColor: color.dangerBorder, borderLeftWidth: 3, borderLeftColor: color.danger, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.lg },
   beforePublishHeading: { marginTop: space.md, fontFamily: font.display, fontSize: fontSize.lg, lineHeight: lineHeight.lg, letterSpacing: letterSpacing.tight, color: color.ink, maxWidth: 460 },
   lockRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
-  lockIcon: { width: 14, height: 14, marginTop: 3, borderRadius: radius.sm, borderWidth: 1.4, borderColor: color.danger },
+  // A solid dot, not an outlined box — an outlined square here reads as an
+  // unchecked checkbox (it used to be exactly that shape, just smaller than
+  // the real one below), which had a business tapping each one expecting
+  // them to toggle before the real acknowledgment checkbox would respond.
+  // These four are read-only context; only the checkbox below is real.
+  lockIcon: { width: 8, height: 8, marginTop: 7, borderRadius: radius.pill, backgroundColor: color.danger },
   lockName: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
   lockBody: { marginTop: 2, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
 

@@ -5,6 +5,9 @@ from typing import Optional
 class UserCreate(BaseModel):
     business_name: str = Field(min_length=2, max_length=120)
     mobile_number: str = Field(min_length=7, max_length=20)
+    # A lightweight shape check, not full RFC validation — good enough to
+    # catch a typo'd address without pulling in an extra dependency.
+    email: str = Field(min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     password: str = Field(min_length=8, max_length=72)
 
 
@@ -31,6 +34,8 @@ class TokenData(BaseModel):
 class PasswordChange(BaseModel):
     current_password: str = Field(min_length=8, max_length=72)
     new_password: str = Field(min_length=8, max_length=72)
+    # 6-digit code emailed by POST /auth/password/request-otp.
+    code: str = Field(pattern=r"^\d{6}$")
 
 
 class MobileNumberChange(BaseModel):
@@ -41,6 +46,26 @@ class MobileNumberChange(BaseModel):
 class NotificationPreferences(BaseModel):
     notify_messages: bool
     notify_activity: bool
+
+
+class VerifyEmail(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    code: str = Field(pattern=r"^\d{6}$")
+
+
+class ResendOtp(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+
+
+class ForgotPassword(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+
+
+class ResetPassword(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    new_password: str = Field(min_length=8, max_length=72)
+    # 6-digit code emailed by POST /auth/password/forgot.
+    code: str = Field(pattern=r"^\d{6}$")
 
 
 class CompleteProfile(BaseModel):

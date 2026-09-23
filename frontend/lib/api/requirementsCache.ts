@@ -36,4 +36,21 @@ export const requirementsCache = {
     }
     return cache.get(id);
   },
+  /** Always re-fetches and overwrites the cache entry, unlike ensure() —
+   *  for after a mutation (site notes, award, shortlist, extend, cancel,
+   *  withdraw, ...) on the Requirement Detail screen, where the cached
+   *  copy from whatever list screen the user arrived from is now stale and
+   *  must not be handed back again. Without this, every post-mutation
+   *  reload silently kept showing pre-mutation data for the rest of the
+   *  session — e.g. a saved "site access" note that never appeared to take,
+   *  even though it was correctly saved server-side. */
+  async refresh(id: number): Promise<RequirementOut | undefined> {
+    try {
+      const fresh = await requirementsApi.getById(id);
+      requirementsCache.put(fresh);
+    } catch {
+      // swallow — caller decides how to handle a still-missing requirement
+    }
+    return cache.get(id);
+  },
 };

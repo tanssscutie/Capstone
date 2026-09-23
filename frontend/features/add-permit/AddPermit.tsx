@@ -21,6 +21,7 @@ import {
   breakpoint,
 } from '../../components/ui/tokens';
 import { errorMessage } from '../../lib/api/client';
+import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 
 /** Mirrors the backend's ID_FORMAT_PATTERNS["MAYORS_PERMIT"] (business_service.py). */
 const PERMIT_NUMBER_PATTERN = /^[A-Za-z0-9\-/]{4,30}$/;
@@ -53,17 +54,11 @@ export default function AddPermit({ onBack, onSubmit }: AddPermitProps) {
 
   const numberBad = !PERMIT_NUMBER_PATTERN.test(permitNumber.trim());
 
-  const capture = () => {
-    if (typeof document === 'undefined' || typeof document.createElement !== 'function') return;
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*,application/pdf';
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      setPicked({ file, filename: file.name || 'mayors-permit.jpg', sizeBytes: file.size });
-    };
-    input.click();
+  const capture = async () => {
+    if (!isWebFilePickerSupported()) return; // native build — no picker wired up yet
+    const file = await pickWebFile('image/*,application/pdf');
+    if (!file) return; // dialog closed without picking — do nothing, same as before
+    setPicked({ file, filename: file.name || 'mayors-permit.jpg', sizeBytes: file.size });
   };
 
   const handleSubmit = async () => {

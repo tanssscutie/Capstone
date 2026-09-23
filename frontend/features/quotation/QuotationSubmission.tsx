@@ -36,6 +36,7 @@ import {
   breakpoint,
 } from '../../components/ui/tokens';
 import { AvatarChip, initials } from '../../components/ui/AvatarChip';
+import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 import type {
   Business,
   BusinessId,
@@ -476,24 +477,18 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
   const addItem = () => setItems((prev) => [...prev, { id: `l${Date.now()}`, desc: '', qty: '1', unit: '0' }]);
   const removeItem = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id));
 
-  const addFile = (documentLabel: string | null = null) => {
-    if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,image/*';
-      input.onchange = () => {
-        const picked = input.files?.[0];
-        if (!picked) return;
-        const id = `att-${Date.now()}`;
-        pickedQuotationFiles.set(id, picked);
-        setFiles((prev) => [
-          // A required-document slot holds at most one file — picking a
-          // replacement drops whatever was there before for that label.
-          ...prev.filter((f) => !(documentLabel && f.documentLabel === documentLabel)),
-          { id, filename: picked.name, sizeBytes: picked.size, mimeType: picked.type, uri: '', documentLabel },
-        ]);
-      };
-      input.click();
+  const addFile = async (documentLabel: string | null = null) => {
+    if (isWebFilePickerSupported()) {
+      const picked = await pickWebFile('.pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,image/*');
+      if (!picked) return; // dialog closed without picking — do nothing, same as before
+      const id = `att-${Date.now()}`;
+      pickedQuotationFiles.set(id, picked);
+      setFiles((prev) => [
+        // A required-document slot holds at most one file — picking a
+        // replacement drops whatever was there before for that label.
+        ...prev.filter((f) => !(documentLabel && f.documentLabel === documentLabel)),
+        { id, filename: picked.name, sizeBytes: picked.size, mimeType: picked.type, uri: '', documentLabel },
+      ]);
       return;
     }
 

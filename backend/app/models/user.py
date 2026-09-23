@@ -13,11 +13,15 @@ class User(SQLModel, table=True):
     business_name: str  # display name shown at registration
     # Both optional: a Google sign-up has neither until it completes its
     # profile (see auth_service.complete_profile) — a mobile+password sign-up
-    # has both from the start and never touches google_id/email.
+    # has both from the start and never touches google_id.
     mobile_number: Optional[str] = Field(default=None, index=True, unique=True)
     hashed_password: Optional[str] = None
     google_id: Optional[str] = Field(default=None, index=True, unique=True)
-    email: Optional[str] = None
+    # Required at mobile+password registration (see UserCreate), filled in by
+    # Google sign-up automatically. Unique so "log in with mobile or email"
+    # (auth_service.authenticate_user_and_get_token) never has to guess which
+    # account a shared address belongs to.
+    email: Optional[str] = Field(default=None, index=True, unique=True)
     is_active: bool = True
     is_admin: bool = False
 

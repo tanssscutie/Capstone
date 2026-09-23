@@ -36,6 +36,7 @@ import {
 import type { Business, BusinessType, SignupIntent, OnboardingStep, Attachment } from '../../lib/types';
 import { isRecognizedCity, isRecognizedProvince } from '../../lib/data/philippines';
 import { CATEGORIES as SHARED_CATEGORIES } from '../../lib/data/categories';
+import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 
 /* ─── Draft shapes ──────────────────────────────────────
  * Local to onboarding — not shared types. Assembled into a real `Business` by the route
@@ -1049,31 +1050,25 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
     }
   }
 
-  function capture(kind: 'registration' | 'bir' | 'permit') {
+  async function capture(kind: 'registration' | 'bir' | 'permit') {
     const tag = kind === 'registration' ? regSpec.key : kind === 'bir' ? 'BIR' : 'PERMIT';
     const docType = kind === 'registration' ? regSpec.key : kind === 'bir' ? 'BIR' : 'MAYORS_PERMIT';
 
     // Web: open a real file picker so there's an actual Blob to upload later.
-    if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*,application/pdf';
-      input.onchange = () => {
-        const picked = input.files?.[0];
-        if (!picked) return;
-        const id = `doc-${kind}-${Date.now()}`;
-        pickedDocumentFiles.set(id, picked);
-        applyPicked(kind, {
-          id,
-          filename: picked.name || `${tag}.jpg`,
-          sizeBytes: picked.size,
-          mimeType: picked.type,
-          uri: '',
-          documentLabel: null,
-        });
-        void runExtraction(kind, docType, picked);
-      };
-      input.click();
+    if (isWebFilePickerSupported()) {
+      const picked = await pickWebFile('image/*,application/pdf');
+      if (!picked) return; // dialog closed without picking — do nothing, same as before
+      const id = `doc-${kind}-${Date.now()}`;
+      pickedDocumentFiles.set(id, picked);
+      applyPicked(kind, {
+        id,
+        filename: picked.name || `${tag}.jpg`,
+        sizeBytes: picked.size,
+        mimeType: picked.type,
+        uri: '',
+        documentLabel: null,
+      });
+      void runExtraction(kind, docType, picked);
       return;
     }
 
@@ -1497,7 +1492,12 @@ const styles = StyleSheet.create({
    * current are filled; current is the stronger fill; future is a bare muted track. Sized
    * for the bottom bar's centre column, not stretched to fill it. */
   segmentedSteps: { flexDirection: 'row', alignItems: 'flex-start', gap: space.lg, width: '100%', maxWidth: 440 },
-  segmentedStepItem: { flex: 1, minWidth: 84, gap: space.xs },
+  // minWidth is a floor, not a fixed size — flex: 1 still splits the row evenly
+  // on wide screens. 84 was too high: 3 items + 2 gaps at space.lg (16) needs
+  // 284px, which just barely clips on the smallest phones (320px wide leaves
+  // only 280px after the 20px screen padding on each side). 76 keeps the same
+  // total comfortably under that.
+  segmentedStepItem: { flex: 1, minWidth: 76, gap: space.xs },
   segmentedStepLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, color: color.inkFaint },
   segmentedStepLabelNow: { fontFamily: font.monoMedium, color: color.ink },
   segmentedStepLabelDone: { color: color.inkMuted },

@@ -16,6 +16,7 @@ export interface BackendUser {
 export interface RegisterInput {
   businessName: string;
   mobileNumber: string;
+  email: string;
   password: string;
 }
 
@@ -31,6 +32,7 @@ export async function register(input: RegisterInput): Promise<BackendUser> {
     {
       business_name: input.businessName,
       mobile_number: input.mobileNumber,
+      email: input.email,
       password: input.password,
     },
     { auth: false },
@@ -53,19 +55,37 @@ export async function login(input: LoginInput): Promise<string> {
 
   const payload = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new Error(payload?.detail ?? 'Invalid mobile number or password');
+    // Right password, but the sign-up email was never confirmed — the caller
+    // sends them to the OTP step for this address instead of showing an error.
+    if (res.status === 403 && payload?.detail?.code === 'EMAIL_NOT_VERIFIED') {
+      throw new EmailNotVerifiedError(payload.detail.email);
+    }
+    throw new Error(typeof payload?.detail === 'string' ? payload.detail : 'Invalid mobile number or password');
   }
 
   tokenStore.set(payload.access_token);
   return payload.access_token as string;
 }
 
-/** Convenience: register then immediately log in, since /auth/register
- *  doesn't return a token by itself. */
-export async function registerAndLogin(input: RegisterInput): Promise<BackendUser> {
-  await register(input);
-  await login({ mobileNumber: input.mobileNumber, password: input.password });
-  return me();
+export class EmailNotVerifiedError extends Error {
+  email: string;
+  constructor(email: string) {
+    super('Please verify your email to continue.');
+    this.email = email;
+  }
+}
+
+/** POST /auth/verify-email — a correct 6-digit code completes sign-up and
+ *  returns a login token, stored here exactly like login() does. */
+export async function verifyEmail(email: string, code: string): Promise<void> {
+  const res = await api.post<{ access_token: string }>('/auth/verify-email', { email, code }, { auth: false });
+  tokenStore.set(res.access_token);
+}
+
+/** POST /auth/resend-otp — the backend enforces a cooldown and answers 429
+ *  with a "wait N seconds" message when asked too soon. */
+export async function resendOtp(email: string): Promise<void> {
+  await api.post<{ detail: string }>('/auth/resend-otp', { email }, { auth: false });
 }
 
 /** GET /auth/me */
@@ -94,12 +114,39 @@ export function logout() {
   tokenStore.clear();
 }
 
+/** POST /auth/password/request-otp — emails a 6-digit code to the account's
+ *  address; changePassword() needs it. The backend enforces a resend cooldown
+ *  and answers 429 with a "wait N seconds" message when asked too soon. */
+export async function requestPasswordChangeOtp(): Promise<void> {
+  await api.post<{ detail: string }>('/auth/password/request-otp', {});
+}
+
 /** PUT /auth/password */
-export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+export async function changePassword(currentPassword: string, newPassword: string, code: string): Promise<void> {
   await api.put<{ detail: string }>('/auth/password', {
     current_password: currentPassword,
     new_password: newPassword,
+    code,
   });
+}
+
+/** POST /auth/password/forgot — always resolves the same way whether or not
+ *  the email has an account (the backend never reveals which), so the
+ *  frontend just moves on to the "enter code" step either way. The backend
+ *  still enforces a resend cooldown and answers 429 when asked too soon. */
+export async function requestPasswordReset(email: string): Promise<void> {
+  await api.post<{ detail: string }>('/auth/password/forgot', { email }, { auth: false });
+}
+
+/** POST /auth/password/reset — the code from requestPasswordReset() plus a
+ *  brand-new password, no current password needed. Does not log the user in;
+ *  they log in fresh with the new password afterward. */
+export async function resetPassword(email: string, code: string, newPassword: string): Promise<void> {
+  await api.post<{ detail: string }>(
+    '/auth/password/reset',
+    { email, code, new_password: newPassword },
+    { auth: false },
+  );
 }
 
 /** PUT /auth/mobile-number */
