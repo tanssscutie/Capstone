@@ -3,9 +3,11 @@
 // (prefix /business/admin — see require_admin in app/core/security.py).
 import { api, API_BASE_URL, tokenStore } from './client';
 import type { DocumentUploadOut } from './business';
+import type { AccountRole } from '../types';
 
 export interface AdminFlaggedBusinessOut {
   user_id: number;
+  role: AccountRole | null;
   business_name: string;
   mobile_number: string;
   registered_name: string | null;
@@ -26,6 +28,7 @@ export interface RegistrationsByDay {
 
 export interface AdminBusinessOut {
   user_id: number;
+  role: AccountRole | null;
   business_name: string;
   mobile_number: string;
   registered_name: string | null;
@@ -62,6 +65,8 @@ export interface AdminRequirementOut {
 
 export interface AdminStatsOut {
   total_businesses: number;
+  total_buyers: number;
+  total_sellers: number;
   verified_businesses: number;
   pending_review_count: number;
   total_requirements: number;

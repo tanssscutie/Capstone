@@ -1,5 +1,8 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Literal, Optional
+
+# Admin isn't a choice here — admin accounts are is_admin, never self-registered.
+AccountRole = Literal["buyer", "seller"]
 
 
 class UserCreate(BaseModel):
@@ -9,6 +12,7 @@ class UserCreate(BaseModel):
     # catch a typo'd address without pulling in an extra dependency.
     email: str = Field(min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     password: str = Field(min_length=8, max_length=72)
+    role: AccountRole
 
 
 class UserRead(BaseModel):
@@ -18,6 +22,9 @@ class UserRead(BaseModel):
     mobile_number: Optional[str] = None
     email: Optional[str] = None
     is_admin: bool = False
+    # buyer | seller — null for admins and for a Google sign-up that hasn't
+    # completed its profile yet.
+    role: Optional[str] = None
     notify_messages: bool = True
     notify_activity: bool = True
 
@@ -69,7 +76,10 @@ class ResetPassword(BaseModel):
 
 
 class CompleteProfile(BaseModel):
-    """First-time mobile number for a Google sign-up — see
+    """First-time mobile number and account type for a Google sign-up — see
     auth_service.complete_profile. Not for changing an existing number;
-    that's PUT /auth/mobile-number (password-verified)."""
-    mobile_number: str = Field(min_length=7, max_length=20)
+    that's PUT /auth/mobile-number (password-verified). Either field may be
+    omitted if the account already has it (e.g. an older Google account that
+    has a number but predates buyer/seller accounts)."""
+    mobile_number: Optional[str] = Field(default=None, min_length=7, max_length=20)
+    role: Optional[AccountRole] = None

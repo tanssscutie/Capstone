@@ -784,12 +784,17 @@ function ProfileCard({ viewer, onAddMayorsPermit }: { viewer: Business; onAddMay
 
 function ActivityStatsCard({ viewer }: { viewer: Business }) {
   const c = viewer.credibility;
-  const rows: { label: string; value: string }[] = [
-    { label: 'Requirements posted', value: String(c.requirementsPosted) },
-    { label: 'Quotations submitted', value: String(c.quotationsSubmitted) },
-    { label: 'Requirements awarded to you', value: String(c.requirementsAwarded) },
-    { label: 'On Trustlink since', value: String(viewer.memberSinceYear) },
-  ];
+  const isBuyer = viewer.role === 'buyer';
+  const rows: { label: string; value: string }[] = isBuyer
+    ? [
+        { label: 'Requirements posted', value: String(c.requirementsPosted) },
+        { label: 'On Trustlink since', value: String(viewer.memberSinceYear) },
+      ]
+    : [
+        { label: 'Quotations submitted', value: String(c.quotationsSubmitted) },
+        { label: 'Requirements awarded to you', value: String(c.requirementsAwarded) },
+        { label: 'On Trustlink since', value: String(viewer.memberSinceYear) },
+      ];
   return (
     <View style={styles.statsCard}>
       <Text style={styles.microLabel}>Your activity on Trustlink</Text>
@@ -802,7 +807,9 @@ function ActivityStatsCard({ viewer }: { viewer: Business }) {
         ))}
       </View>
       <Text style={styles.statsCaption}>
-        Buyers see these counts on your profile. Responding to more requirements raises your standing.
+        {isBuyer
+          ? 'Sellers see these counts on your profile.'
+          : 'Buyers see these counts on your profile. Responding to more requirements raises your standing.'}
       </Text>
     </View>
   );
@@ -842,6 +849,40 @@ function CtaBanner({
         )}
       </View>
     </View>
+  );
+}
+
+/** A seller's counterpart to CtaBanner — there's nothing to post, so it only
+ *  appears while verification (required before quoting) is still missing. */
+function SellerVerifyBanner({ onCompleteVerification }: { onCompleteVerification?: () => void }) {
+  return (
+    <View style={styles.ctaBanner}>
+      <View style={{ flexShrink: 1, minWidth: 200, gap: space.xs }}>
+        <Text style={styles.ctaTitle}>Ready to win new business?</Text>
+        <Text style={styles.ctaSubtitle}>Complete verification to submit quotations on open requirements.</Text>
+      </View>
+      <View style={styles.ctaActions}>
+        <FeedButton label="Complete Verification" variant="primary" onPress={onCompleteVerification} />
+      </View>
+    </View>
+  );
+}
+
+/** The banner at the top of the centre column — buyer or seller flavour. */
+function RoleBanner(props: HomeFeedProps) {
+  const { viewer, myRequirements, recentlyClosed } = props;
+  const verified = viewer.credibility.status === 'VERIFIED';
+  if (viewer.role !== 'buyer') {
+    return verified ? null : <SellerVerifyBanner onCompleteVerification={props.onCompleteVerification} />;
+  }
+  return (
+    <CtaBanner
+      verified={verified}
+      onPostRequirement={props.onPostRequirement}
+      onCompleteVerification={props.onCompleteVerification}
+      hasPreviousRequirement={myRequirements.length > 0 || recentlyClosed.length > 0}
+      onUsePreviousRequirement={props.onUsePreviousRequirement}
+    />
   );
 }
 
@@ -1177,22 +1218,20 @@ function NoOpportunitiesRow({ query }: { query: string }) {
 function PhoneHomeFeed(props: HomeFeedProps) {
   const st = useHomeFeed(props);
   const { viewer, myRequirements, recentlyClosed, requirementBuyers, messageThreads, messagesByThread } = props;
+  // Buyers get their own requirements and the post CTA; sellers get the
+  // opportunities feed, closing-soon rail, and matching explainer instead.
+  const isSeller = viewer.role !== 'buyer';
 
   return (
     <View style={styles.root}>
     <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={styles.page}>
-        <CategoryPills categories={st.categories} active={st.categoryFilter} onSelect={st.setCategoryFilter} />
+        {isSeller && <CategoryPills categories={st.categories} active={st.categoryFilter} onSelect={st.setCategoryFilter} />}
         <ProfileCard viewer={viewer} onAddMayorsPermit={props.onAddMayorsPermit} />
         <ActivityStatsCard viewer={viewer} />
-        <CtaBanner
-          verified={viewer.credibility.status === 'VERIFIED'}
-          onPostRequirement={props.onPostRequirement}
-          onCompleteVerification={props.onCompleteVerification}
-          hasPreviousRequirement={myRequirements.length > 0 || recentlyClosed.length > 0}
-          onUsePreviousRequirement={props.onUsePreviousRequirement}
-        />
+        <RoleBanner {...props} />
 
+        {isSeller && <>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionHeading}>Business Opportunities</Text>
           <Text style={styles.microLabel}>{st.resultLabel}</Text>
@@ -1214,7 +1253,9 @@ function PhoneHomeFeed(props: HomeFeedProps) {
             />
           ))}
         </View>
+        </>}
 
+        {!isSeller && (
         <View style={styles.sectionBlock}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionHeading}>Your requirements</Text>
@@ -1226,6 +1267,7 @@ function PhoneHomeFeed(props: HomeFeedProps) {
             ))}
           </View>
         </View>
+        )}
 
         <View style={styles.sectionBlock}>
           <View style={styles.sectionHeaderRow}>
@@ -1243,6 +1285,7 @@ function PhoneHomeFeed(props: HomeFeedProps) {
           </View>
         </View>
 
+        {isSeller && <>
         <View style={styles.sectionBlock}>
           <Text style={styles.microLabel}>Closing within 24 hours</Text>
           <View>
@@ -1259,6 +1302,7 @@ function PhoneHomeFeed(props: HomeFeedProps) {
         </View>
 
         <HowMatchingWorksCard onUpdateCapabilities={props.onUpdateCapabilities} />
+        </>}
       </View>
     </ScreenScroll>
     <ChatWidget
@@ -1304,6 +1348,9 @@ const fixedOnWeb: ViewStyle =
 function WideHomeFeed(props: HomeFeedProps) {
   const st = useHomeFeed(props);
   const { viewer, myRequirements, recentlyClosed, requirementBuyers, messageThreads, messagesByThread } = props;
+  // Buyers get their own requirements and the post CTA; sellers get the
+  // opportunities feed, closing-soon rail, and matching explainer instead.
+  const isSeller = viewer.role !== 'buyer';
   const [categoryHeight, setCategoryHeight] = useState(0);
   const sidebarTop: ViewStyle = Platform.OS === 'web' ? { top: categoryHeight } : {};
 
@@ -1315,7 +1362,7 @@ function WideHomeFeed(props: HomeFeedProps) {
         onLayout={(e) => setCategoryHeight(e.nativeEvent.layout.height)}
       >
         <View style={styles.pageWide}>
-          <CategoryPills categories={st.categories} active={st.categoryFilter} onSelect={st.setCategoryFilter} />
+          {isSeller && <CategoryPills categories={st.categories} active={st.categoryFilter} onSelect={st.setCategoryFilter} />}
         </View>
       </View>
 
@@ -1327,14 +1374,9 @@ function WideHomeFeed(props: HomeFeedProps) {
           </View>
 
           <View style={styles.mainColumnWide}>
-            <CtaBanner
-          verified={viewer.credibility.status === 'VERIFIED'}
-          onPostRequirement={props.onPostRequirement}
-          onCompleteVerification={props.onCompleteVerification}
-          hasPreviousRequirement={myRequirements.length > 0 || recentlyClosed.length > 0}
-          onUsePreviousRequirement={props.onUsePreviousRequirement}
-        />
+            <RoleBanner {...props} />
 
+            {isSeller && <>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionHeading}>Business Opportunities</Text>
               <Text style={styles.microLabel}>{st.resultLabel}</Text>
@@ -1356,7 +1398,9 @@ function WideHomeFeed(props: HomeFeedProps) {
                 />
               ))}
             </View>
+            </>}
 
+            {!isSeller && (
             <View style={styles.sectionBlock}>
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionHeading}>Your requirements</Text>
@@ -1368,6 +1412,7 @@ function WideHomeFeed(props: HomeFeedProps) {
                 ))}
               </View>
             </View>
+            )}
 
             <View style={styles.sectionBlock}>
               <View style={styles.sectionHeaderRow}>
@@ -1386,6 +1431,7 @@ function WideHomeFeed(props: HomeFeedProps) {
             </View>
           </View>
 
+          {isSeller && (
           <View style={[styles.sideColumn, stickyOnWeb, sidebarTop]}>
             <View style={styles.statsCard}>
               <Text style={styles.microLabel}>Closing within 24 hours</Text>
@@ -1403,6 +1449,7 @@ function WideHomeFeed(props: HomeFeedProps) {
             </View>
             <HowMatchingWorksCard onUpdateCapabilities={props.onUpdateCapabilities} />
           </View>
+          )}
         </View>
       </View>
     </ScreenScroll>

@@ -71,17 +71,17 @@ async def google_callback(code: str):
     route with our JWT in the URL — the frontend stores it exactly like a
     normal login and decides where to go next (home vs. complete-profile)."""
     try:
-        token, needs_mobile_number = await auth_service.handle_google_callback(code)
+        token, needs_profile = await auth_service.handle_google_callback(code)
     except GoogleAuthError as exc:
         error_params = urlencode({"googleError": str(exc)})
         return RedirectResponse(f"{settings.FRONTEND_URL}/login?{error_params}")
-    params = urlencode({"token": token.access_token, "needsMobile": str(needs_mobile_number).lower()})
+    params = urlencode({"token": token.access_token, "needsProfile": str(needs_profile).lower()})
     return RedirectResponse(f"{settings.FRONTEND_URL}/auth-callback?{params}")
 
 
 @router.post("/complete-profile", response_model=UserRead)
 def complete_profile(data: CompleteProfile, current_user=Depends(get_current_user)):
-    return auth_service.complete_profile(current_user.id, data.mobile_number)
+    return auth_service.complete_profile(current_user.id, data.mobile_number, data.role)
 
 
 @router.post("/password/request-otp")

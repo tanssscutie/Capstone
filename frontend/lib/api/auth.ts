@@ -1,6 +1,7 @@
 // lib/api/auth.ts
 // Maps to backend app/api/routes/auth.py (prefix /auth).
 import { api, tokenStore, API_BASE_URL } from './client';
+import type { AccountRole } from '../types';
 
 export interface BackendUser {
   id: number;
@@ -9,6 +10,8 @@ export interface BackendUser {
   mobile_number: string | null;
   email: string | null;
   is_admin: boolean;
+  // Null for admins and for a Google sign-up that hasn't completed its profile.
+  role: AccountRole | null;
   notify_messages: boolean;
   notify_activity: boolean;
 }
@@ -18,6 +21,7 @@ export interface RegisterInput {
   mobileNumber: string;
   email: string;
   password: string;
+  role: AccountRole;
 }
 
 export interface LoginInput {
@@ -34,6 +38,7 @@ export async function register(input: RegisterInput): Promise<BackendUser> {
       mobile_number: input.mobileNumber,
       email: input.email,
       password: input.password,
+      role: input.role,
     },
     { auth: false },
   );
@@ -104,10 +109,14 @@ export function googleLoginUrl(): string {
   return `${API_BASE_URL}/auth/google/login`;
 }
 
-/** POST /auth/complete-profile — the one-time mobile number a fresh Google
- *  sign-up still needs. Rejected by the backend if one is already set. */
-export async function completeProfile(mobileNumber: string): Promise<BackendUser> {
-  return api.post<BackendUser>('/auth/complete-profile', { mobile_number: mobileNumber });
+/** POST /auth/complete-profile — the one-time mobile number and/or account
+ *  type a Google sign-up still needs. Pass only what's missing; the backend
+ *  rejects setting either one a second time. */
+export async function completeProfile(input: { mobileNumber?: string; role?: AccountRole }): Promise<BackendUser> {
+  return api.post<BackendUser>('/auth/complete-profile', {
+    mobile_number: input.mobileNumber || null,
+    role: input.role ?? null,
+  });
 }
 
 export function logout() {

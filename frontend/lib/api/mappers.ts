@@ -27,6 +27,7 @@ import type {
   MessageThread,
   Message,
   ClarificationQuestion,
+  AccountRole,
 } from '../types';
 import type { RequirementOut, MyRequirementOut, PosterOut, MyQuotationOut, QuotationDetailOut, LedgerEntryOut, ClarificationQuestionOut, LineItemOut } from './requirements';
 import type { VerificationStatusOut, DashboardStatsOut, PublicBusinessProfileOut } from './business';
@@ -163,6 +164,7 @@ export function mapMyRequirement(r: MyRequirementOut, ownerId: BusinessId): Requ
 export function mapPosterToBusiness(poster: PosterOut): Business {
   return {
     id: String(poster.id),
+    role: null, // not in PosterOut — callers only need the name/credentials
     registeredName: poster.registered_name ?? poster.business_name,
     displayName: poster.display_name,
     businessType: 'SOLE_PROP', // BACKEND GAP — not in PosterOut
@@ -186,6 +188,7 @@ export function mapPosterToBusiness(poster: PosterOut): Business {
  *  deliberately excludes. */
 export interface PublicBusinessProfile {
   id: BusinessId;
+  role: AccountRole | null;
   registeredName: string;
   businessType: string;
   category: string;
@@ -201,6 +204,7 @@ export interface PublicBusinessProfile {
 export function mapPublicBusinessProfile(p: PublicBusinessProfileOut): PublicBusinessProfile {
   return {
     id: String(p.id),
+    role: p.role,
     registeredName: p.display_name ?? p.registered_name ?? '',
     businessType: p.business_type ?? '',
     category: p.industry_category ?? '',
@@ -434,6 +438,7 @@ export function mapViewerBusiness(
 ): Business {
   return {
     id: String(user.id),
+    role: user.role,
     registeredName: verification.registered_name ?? user.business_name,
     displayName: verification.display_name,
     businessType: (verification.business_type as BusinessType) ?? 'SOLE_PROP',

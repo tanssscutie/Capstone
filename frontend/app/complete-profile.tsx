@@ -1,26 +1,43 @@
 // app/complete-profile.tsx
-// A brand-new Google sign-up lands here once (auth-callback routes here only
-// when the backend says mobile_number is still null). The rest of the app —
-// contact display, admin roster, etc. — assumes every business has one, so
-// this is required before Home, not a skippable step.
-import { useState } from 'react';
+// A Google sign-up lands here once (auth-callback / _layout route here only
+// when the backend says the mobile number or the buyer/seller account type is
+// still missing). The rest of the app — contact display, which nav and actions
+// to show, admin roster, etc. — assumes every business has both, so this is
+// required before Home, not a skippable step. Only the missing fields show.
+import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { color, font, fontSize, space, radius } from '../components/ui/tokens';
-import { completeProfile } from '../lib/api/auth';
+import { RolePicker } from '../components/ui/RolePicker';
+import { completeProfile, me, type BackendUser } from '../lib/api/auth';
 import { errorMessage } from '../lib/api/client';
+import type { AccountRole } from '../lib/types';
 
 export default function CompleteProfileRoute() {
   const router = useRouter();
+  const [user, setUser] = useState<BackendUser | null>(null);
   const [mobileNumber, setMobileNumber] = useState('');
+  const [role, setRole] = useState<AccountRole | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    me()
+      .then(setUser)
+      .catch(() => router.replace('/login'));
+  }, []);
+
+  const needsMobile = !!user && !user.mobile_number;
+  const needsRole = !!user && !user.role && !user.is_admin;
 
   async function handleSubmit() {
     setError(null);
     setLoading(true);
     try {
-      await completeProfile(mobileNumber.trim());
+      await completeProfile({
+        mobileNumber: needsMobile ? mobileNumber.trim() : undefined,
+        role: needsRole ? role ?? undefined : undefined,
+      });
       router.replace('/home');
     } catch (e: any) {
       setError(errorMessage(e, 'Something went wrong. Please try again.'));
@@ -29,7 +46,15 @@ export default function CompleteProfileRoute() {
     }
   }
 
-  const canSubmit = mobileNumber.trim().length >= 7;
+  const canSubmit = (!needsMobile || mobileNumber.trim().length >= 7) && (!needsRole || role !== null);
+
+  if (!user) {
+    return (
+      <View style={styles.screen}>
+        <ActivityIndicator color={color.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -38,23 +63,29 @@ export default function CompleteProfileRoute() {
           <Image source={require('../assets/logo.jpg')} style={styles.brandLogo} resizeMode="contain" />
           <Text style={styles.title}>TrustLink</Text>
         </View>
-        <Text style={styles.subtitle}>One more thing — what's your mobile number?</Text>
+        <Text style={styles.subtitle}>One more step before you continue</Text>
         <Text style={styles.helper}>
-          We use this for contact and account recovery. You can add it once here.
+          {needsMobile
+            ? 'We use your mobile number for contact and account recovery. You can add it once here.'
+            : 'Tell us how you will use TrustLink.'}
         </Text>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Mobile number</Text>
-          <TextInput
-            style={styles.input}
-            value={mobileNumber}
-            onChangeText={setMobileNumber}
-            placeholder="+63 917 555 0118"
-            placeholderTextColor={color.inkFaint}
-            keyboardType="phone-pad"
-            autoCapitalize="none"
-          />
-        </View>
+        {needsRole && <RolePicker value={role} onChange={setRole} />}
+
+        {needsMobile && (
+          <View style={styles.field}>
+            <Text style={styles.label}>Mobile number</Text>
+            <TextInput
+              style={styles.input}
+              value={mobileNumber}
+              onChangeText={setMobileNumber}
+              placeholder="+63 917 555 0118"
+              placeholderTextColor={color.inkFaint}
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+            />
+          </View>
+        )}
 
         {error && <Text style={styles.error}>{error}</Text>}
 

@@ -160,24 +160,15 @@ const SPEC_VALUE_MAX = 200;
 const SITE_ADDRESS_MAX = 300;
 
 /** One example label/value pair per category, shown as the Specifications
- *  row's placeholder text once a category is picked — before that, a
- *  generic fabrication-flavored example (kept as the literal default so
- *  existing behavior is unchanged when nothing's selected yet). Purely
+ *  row's placeholder text once a category is picked — before that, the
+ *  Printing example. Purely
  *  illustrative: never prefilled into the actual fields, and picking a
  *  different category doesn't touch specs the buyer already typed. */
 const SPEC_EXAMPLE_BY_CATEGORY: Record<string, { label: string; value: string }> = {
   'Printing': { label: 'e.g. Paper size and stock', value: 'e.g. A4, 80gsm bond paper' },
-  'Construction Supply': { label: 'e.g. Material grade', value: 'e.g. Portland cement Type 1, 50kg bags' },
-  'Fabrication & Manufacturing': { label: 'e.g. Platform area', value: 'e.g. 240 sqm (20.0 m × 12.0 m)' },
-  'Industrial Services': { label: 'e.g. Service frequency', value: 'e.g. Quarterly preventive maintenance' },
-  'Food Supply & Catering': { label: 'e.g. Menu style', value: 'e.g. Buffet, 3 main dishes + dessert' },
-  'Medical & Clinic Supplies': { label: 'e.g. Product standard', value: 'e.g. Surgical grade, ISO 13485' },
-  'IT Equipment & Hardware': { label: 'e.g. Spec requirement', value: 'e.g. Intel i5, 16GB RAM, 512GB SSD' },
-  'Vehicle Parts & Services': { label: 'e.g. Part and model fit', value: 'e.g. Brake pads, Toyota Hilux 2020' },
   'Packaging & Labeling': { label: 'e.g. Box dimensions', value: 'e.g. 30 cm × 20 cm × 15 cm, corrugated' },
-  'Office & Janitorial Supplies': { label: 'e.g. Item spec', value: 'e.g. A4 bond paper, 500 sheets/ream' },
 };
-const DEFAULT_SPEC_EXAMPLE = SPEC_EXAMPLE_BY_CATEGORY['Fabrication & Manufacturing'];
+const DEFAULT_SPEC_EXAMPLE = SPEC_EXAMPLE_BY_CATEGORY['Printing'];
 
 /** Typical qualifying documents per category — a starting suggestion for
  *  the (optional, per the study's own Scope and Delimitation) Required
@@ -187,15 +178,7 @@ const DEFAULT_SPEC_EXAMPLE = SPEC_EXAMPLE_BY_CATEGORY['Fabrication & Manufacturi
  *  every other suggestion feature in this app. */
 const REQUIRED_DOCS_BY_CATEGORY: Record<string, string[]> = {
   'Printing': ['DENR Permit'],
-  'Construction Supply': ['BPS Product/Import Certificate (PS/ICC)'],
-  'Fabrication & Manufacturing': ['DENR Permit'],
-  'Industrial Services': ['DTI Accreditation', 'DOLE Registration', 'PCAB License'],
-  'Food Supply & Catering': ['Sanitary Permit', 'Health Certificate', 'FDA License to Operate'],
-  'Medical & Clinic Supplies': ['FDA License to Operate'],
-  'IT Equipment & Hardware': ['NTC Permit', 'BPS Certification'],
-  'Vehicle Parts & Services': ['DTI Service & Repair Accreditation'],
   'Packaging & Labeling': ['DENR Permit', 'FDA License to Operate'],
-  'Office & Janitorial Supplies': ['DOLE Registration', 'FDA License to Operate'],
 };
 
 /** Same convention as SPEC_EXAMPLE_BY_CATEGORY, extended to Title, Scope,
@@ -207,53 +190,13 @@ const DETAILS_EXAMPLE_BY_CATEGORY: Record<string, { title: string; scope: string
     scope: 'e.g. Full-color tarpaulin printing, weatherproof, with grommets every 50cm.',
     quantity: 'e.g. 20 pieces, 3ft × 8ft each',
   },
-  'Construction Supply': {
-    title: 'e.g. Supply of cement and rebar for a warehouse slab',
-    scope: 'e.g. Ready-mix concrete and reinforcing steel delivered to site, per the attached plan.',
-    quantity: 'e.g. 80 cu.m. concrete, 5 tons rebar',
-  },
-  'Fabrication & Manufacturing': {
-    title: 'e.g. Fabrication and installation of steel mezzanine platform',
-    scope: 'What is included and what is not — the boundaries of the work.',
-    quantity: 'e.g. 1 platform',
-  },
-  'Industrial Services': {
-    title: 'e.g. Quarterly preventive maintenance for production line equipment',
-    scope: 'e.g. Scheduled inspection, lubrication, and part replacement for 5 machines.',
-    quantity: 'e.g. 5 units',
-  },
-  'Food Supply & Catering': {
-    title: 'e.g. Catering services for a company annual event',
-    scope: 'e.g. Buffet-style catering including setup and service staff for 200 guests.',
-    quantity: 'e.g. 200 pax',
-  },
-  'Medical & Clinic Supplies': {
-    title: 'e.g. Supply of PPE and consumables for a clinic',
-    scope: 'e.g. Monthly supply of gloves, masks, and surgical consumables per the attached list.',
-    quantity: 'e.g. 50 boxes gloves, 100 boxes masks',
-  },
-  'IT Equipment & Hardware': {
-    title: 'e.g. Supply and setup of office computers and network equipment',
-    scope: 'e.g. 10 desktop units, a managed switch, and setup/configuration on site.',
-    quantity: 'e.g. 10 units, 1 switch',
-  },
-  'Vehicle Parts & Services': {
-    title: 'e.g. Supply of brake parts for a fleet of delivery vans',
-    scope: 'e.g. Brake pads and rotors for 5 vans, Toyota Hiace 2019-2022 models.',
-    quantity: 'e.g. 5 sets',
-  },
   'Packaging & Labeling': {
     title: 'e.g. Custom corrugated boxes for product shipping',
     scope: 'e.g. Printed corrugated boxes, double-wall, sized for a specific product line.',
     quantity: 'e.g. 5,000 pieces',
   },
-  'Office & Janitorial Supplies': {
-    title: 'e.g. Monthly supply of office and cleaning supplies',
-    scope: 'e.g. Bond paper, cleaning chemicals, and janitorial consumables, delivered monthly.',
-    quantity: 'e.g. Monthly, per attached list',
-  },
 };
-const DEFAULT_DETAILS_EXAMPLE = DETAILS_EXAMPLE_BY_CATEGORY['Fabrication & Manufacturing'];
+const DEFAULT_DETAILS_EXAMPLE = DETAILS_EXAMPLE_BY_CATEGORY['Printing'];
 
 const TIME_OPTIONS: { value: string; label: string }[] = [
   { value: '09:00', label: '9:00 AM' },

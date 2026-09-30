@@ -17,6 +17,8 @@ import {
   EmailNotVerifiedError,
 } from '../lib/api/auth';
 import { errorMessage } from '../lib/api/client';
+import { RolePicker } from '../components/ui/RolePicker';
+import type { AccountRole } from '../lib/types';
 
 // VERIFY is the OTP step: reached right after REGISTER, or from LOGIN when the
 // account's email was never confirmed. Kept as a mode of this screen, not its
@@ -34,6 +36,7 @@ export default function LoginRoute() {
   const { googleError } = useLocalSearchParams<{ googleError?: string }>();
   const [mode, setMode] = useState<Mode>('LOGIN');
   const [businessName, setBusinessName] = useState('');
+  const [role, setRole] = useState<AccountRole | null>(null);
   const [mobileNumber, setMobileNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -81,7 +84,8 @@ export default function LoginRoute() {
     setLoading(true);
     try {
       if (mode === 'REGISTER') {
-        await register({ businessName, mobileNumber, email, password });
+        if (!role) return; // canSubmit already requires one
+        await register({ businessName, mobileNumber, email, password, role });
         // A code was just emailed; they log in by confirming it, not by
         // typing the password again.
         goToVerify(email.trim().toLowerCase(), RESEND_COOLDOWN_SECONDS);
@@ -185,7 +189,7 @@ export default function LoginRoute() {
   const canSubmit =
     mobileNumber.trim().length > 0 &&
     password.length >= 8 &&
-    (mode === 'LOGIN' || (businessName.trim().length > 1 && emailValid && passwordsMatch));
+    (mode === 'LOGIN' || (role !== null && businessName.trim().length > 1 && emailValid && passwordsMatch));
 
   const resetEmailValid = EMAIL_PATTERN.test(resetEmail.trim());
   const newPasswordsMatch = newPassword === confirmNewPassword;
@@ -412,6 +416,8 @@ export default function LoginRoute() {
           <Text style={styles.title}>TrustLink</Text>
         </View>
         <Text style={styles.subtitle}>{mode === 'LOGIN' ? 'Log in to your account' : 'Create your account'}</Text>
+
+        {mode === 'REGISTER' && <RolePicker value={role} onChange={setRole} />}
 
         {mode === 'REGISTER' && (
           <View style={styles.field}>

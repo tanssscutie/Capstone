@@ -44,6 +44,9 @@ interface RespondentNotSubmitted {
   requirement: Requirement;
   buyer: Business;
   hasSubmitted: false;
+  /** A buyer account looking at another buyer's requirement — it can read
+   *  everything a seller can, but can't quote, ask, or save. */
+  readOnly?: boolean;
   onSubmitQuotation?: () => void;
   questions: ClarificationQuestion[];
   onAskQuestion?: (question: string) => void;
@@ -589,11 +592,18 @@ function RespondentSideContent(props: RespondentNotSubmitted | RespondentSubmitt
           onAcceptAward={props.onAcceptAward}
           onDeclineAward={props.onDeclineAward}
         />
+      ) : props.readOnly ? (
+        <Text style={styles.mutedSmall}>Only seller accounts can submit quotations.</Text>
       ) : (
         <ActionButton label="Submit quotation" variant="primary" onPress={props.onSubmitQuotation} />
       )}
     </>
   );
+}
+
+/** True for a buyer account viewing another buyer's requirement. */
+function isReadOnlyRespondent(props: RespondentNotSubmitted | RespondentSubmitted): boolean {
+  return !props.hasSubmitted && !!props.readOnly;
 }
 
 /* ─── Pre-closing clarification Q&A ──────────────────────
@@ -712,7 +722,7 @@ function RespondentPanel(props: RespondentNotSubmitted | RespondentSubmitted) {
   return (
     <View style={{ gap: space.xxl }}>
       <RespondentSideContent {...props} />
-      <QASection questions={props.questions} canAsk canAnswer={false} onAskQuestion={props.onAskQuestion} />
+      <QASection questions={props.questions} canAsk={!isReadOnlyRespondent(props)} canAnswer={false} onAskQuestion={props.onAskQuestion} />
     </View>
   );
 }
@@ -2168,7 +2178,7 @@ export default function RequirementDetail(props: RequirementDetailProps) {
               requirement={requirement}
               buyer={props.state === 'RESPONDENT' ? props.buyer : null}
               showRespondentFacts={props.state === 'RESPONDENT'}
-              showActions={props.state === 'RESPONDENT'}
+              showActions={props.state === 'RESPONDENT' && !isReadOnlyRespondent(props)}
               showSubmit={props.state === 'RESPONDENT' && !props.hasSubmitted}
               onSubmitQuotation={props.state === 'RESPONDENT' && !props.hasSubmitted ? props.onSubmitQuotation : undefined}
               onViewBuyerProfile={props.state === 'RESPONDENT' ? props.onViewBuyerProfile : undefined}
@@ -2184,7 +2194,7 @@ export default function RequirementDetail(props: RequirementDetailProps) {
             {props.state === 'OWNER_SEALED' && <WideSealedHero requirement={requirement} onViewLedger={props.onViewLedger} />}
             <WideScopeCard requirement={requirement} />
             {props.state === 'RESPONDENT' && (
-              <QASection questions={props.questions} canAsk canAnswer={false} onAskQuestion={props.onAskQuestion} />
+              <QASection questions={props.questions} canAsk={!isReadOnlyRespondent(props)} canAnswer={false} onAskQuestion={props.onAskQuestion} />
             )}
             {props.state === 'OWNER_SEALED' && (
               <QASection questions={props.questions} canAsk={false} canAnswer onAnswerQuestion={props.onAnswerQuestion} />

@@ -2,7 +2,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
-from app.core.security import get_current_user, require_admin, require_verified
+from app.core.security import get_current_user, require_admin, require_buyer, require_seller, require_verified
 from app.models.user import User
 from app.services import requirement_service as req_service_module
 from app.services.requirement_service import requirement_service
@@ -29,6 +29,15 @@ from app.schemas.requirement import (
 )
 
 router = APIRouter()
+
+
+def require_seller_role(current_user: User = Depends(get_current_user)) -> User:
+    """Bookmarking opportunities is a seller's feature, but unlike quoting it
+    doesn't need verification — an unverified seller can still browse and
+    save. Unsave stays open to anyone so a stale bookmark can always go."""
+    if current_user.role != "seller":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only seller accounts can save requirements.")
+    return current_user
 
 
 def _handle_service_errors(exc: Exception):
@@ -115,7 +124,7 @@ def get_requirement(requirement_id: int, current_user=Depends(get_current_user))
 
 
 @router.post("/{requirement_id}/save", status_code=status.HTTP_204_NO_CONTENT)
-def save_requirement(requirement_id: int, current_user=Depends(get_current_user)):
+def save_requirement(requirement_id: int, current_user=Depends(require_seller_role)):
     try:
         requirement_service.save(requirement_id, current_user.id)
     except Exception as exc:
@@ -137,7 +146,7 @@ def suggest_category(payload: CategorySuggestionRequest, current_user: User = De
 
 
 @router.post("", response_model=RequirementOut, status_code=status.HTTP_201_CREATED)
-def create_requirement(payload: RequirementCreate, current_user=Depends(require_verified)):
+def create_requirement(payload: RequirementCreate, current_user=Depends(require_buyer)):
     return requirement_service.create(owner_id=current_user.id, data=payload)
 
 
@@ -174,7 +183,7 @@ def cancel_requirement(requirement_id: int, current_user=Depends(require_verifie
 
 
 @router.post("/{requirement_id}/quotations", response_model=QuotationSealedReceipt, status_code=status.HTTP_201_CREATED)
-def submit_quotation(requirement_id: int, payload: QuotationCreate, current_user=Depends(require_verified)):
+def submit_quotation(requirement_id: int, payload: QuotationCreate, current_user=Depends(require_seller)):
     try:
         return requirement_service.submit_quotation(
             requirement_id=requirement_id, business_id=current_user.id, data=payload
@@ -189,7 +198,7 @@ async def upload_quotation_attachment(
     quotation_id: int,
     file: UploadFile = File(...),
     document_label: Optional[str] = Form(default=None),
-    current_user=Depends(require_verified),
+    current_user=Depends(require_seller),
 ):
     try:
         return await requirement_service.upload_quotation_attachment(
@@ -282,7 +291,7 @@ def list_questions(requirement_id: int, current_user=Depends(get_current_user)):
 
 
 @router.post("/{requirement_id}/questions", response_model=ClarificationQuestionOut, status_code=status.HTTP_201_CREATED)
-def ask_question(requirement_id: int, payload: QuestionCreate, current_user=Depends(require_verified)):
+def ask_question(requirement_id: int, payload: QuestionCreate, current_user=Depends(require_seller)):
     try:
         return requirement_service.ask_question(requirement_id, current_user.id, payload.question)
     except Exception as exc:

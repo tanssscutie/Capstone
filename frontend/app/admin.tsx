@@ -124,6 +124,8 @@ export default function AdminRoute() {
     ? [
         { label: 'Pending review', value: stats.pending_review_count, emphasis: true },
         { label: 'Total businesses', value: stats.total_businesses },
+        { label: 'Buyers', value: stats.total_buyers },
+        { label: 'Sellers', value: stats.total_sellers },
         { label: 'Verified businesses', value: stats.verified_businesses },
         { label: 'Open requirements', value: stats.open_requirements },
         { label: 'Total quotations', value: stats.total_quotations },
@@ -183,7 +185,10 @@ export default function AdminRoute() {
               <View key={b.user_id} style={styles.card}>
                 <View style={styles.cardHeaderRow}>
                   <Text style={styles.businessName}>{b.registered_name || b.business_name}</Text>
-                  {b.business_type && <Text style={styles.badge}>{b.business_type}</Text>}
+                  <View style={{ flexDirection: 'row', gap: space.xs }}>
+                    {b.role && <Text style={styles.badge}>{b.role}</Text>}
+                    {b.business_type && <Text style={styles.badge}>{b.business_type}</Text>}
+                  </View>
                 </View>
                 <Text style={styles.metaLine}>
                   {[b.industry_category, [b.city, b.province].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || '—'}

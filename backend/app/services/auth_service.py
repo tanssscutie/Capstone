@@ -68,6 +68,7 @@ class AuthService:
                 mobile_number=user_in.mobile_number,
                 email=email,
                 hashed_password=get_password_hash(user_in.password),
+                role=user_in.role,
             )
             user = create_user(session, user)
             try:
@@ -204,8 +205,8 @@ class AuthService:
     async def handle_google_callback(self, code: str) -> tuple[Token, bool]:
         """Exchanges the authorization code for Google's tokens, reads the
         profile off them, and finds-or-creates the matching User. Returns our
-        own JWT plus whether this account still needs a mobile number (true
-        for a brand-new Google sign-up, false for a returning one)."""
+        own JWT plus whether this account still has to complete its profile
+        (true for a brand-new Google sign-up — see needs_profile)."""
         async with httpx.AsyncClient(timeout=10.0) as client:
             token_resp = await client.post(GOOGLE_TOKEN_URL, data={
                 "code": code,
@@ -264,26 +265,43 @@ class AuthService:
 
             access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
             jwt_token = create_access_token({"sub": str(user.id)}, expires_delta=access_token_expires)
-            return Token(access_token=jwt_token), user.mobile_number is None
+            return Token(access_token=jwt_token), self.needs_profile(user)
 
-    def complete_profile(self, user_id: int, mobile_number: str) -> User:
-        """One-time mobile number for a Google sign-up. Refuses once a number
-        is already on file — that's PUT /auth/mobile-number's job instead,
-        which re-verifies the account's password (this endpoint never asks
-        for one, since a Google-only account doesn't have one)."""
+    @staticmethod
+    def needs_profile(user: User) -> bool:
+        """Whether a (Google) account still has to visit complete-profile
+        before it can use the app: no mobile number yet, or no buyer/seller
+        account type yet. Admins never pick a role."""
+        return user.mobile_number is None or (user.role is None and not user.is_admin)
+
+    def complete_profile(self, user_id: int, mobile_number: Optional[str], role: Optional[str]) -> User:
+        """One-time mobile number and account type for a Google sign-up. Each
+        can only be set while still missing — changing a number is PUT
+        /auth/mobile-number's job instead, which re-verifies the account's
+        password (this endpoint never asks for one, since a Google-only
+        account doesn't have one), and the account type never changes."""
         with Session(engine) as session:
             user = get_user(session, user_id)
             if not user:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-            if user.mobile_number:
+            if mobile_number and user.mobile_number:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Mobile number is already set. Use Account Settings to change it.",
                 )
-            existing = get_user_by_mobile(session, mobile_number)
-            if existing and existing.id != user_id:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this mobile number already exists")
-            user.mobile_number = mobile_number
+            if role and user.role:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Account type is already set.")
+            if not (mobile_number or user.mobile_number):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mobile number is required.")
+            if not (role or user.role or user.is_admin):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose whether this is a buyer or seller account.")
+            if mobile_number:
+                existing = get_user_by_mobile(session, mobile_number)
+                if existing and existing.id != user_id:
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this mobile number already exists")
+                user.mobile_number = mobile_number
+            if role:
+                user.role = role
             session.add(user)
             session.commit()
             session.refresh(user)

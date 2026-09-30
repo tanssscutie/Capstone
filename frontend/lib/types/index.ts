@@ -36,8 +36,15 @@ export interface CredibilityBlock {
   quotationsAwarded: number;
 }
 
+/** Fixed at sign-up. A buyer posts requirements and awards them; a seller
+ *  (supplier) browses open requirements and submits quotations. Admins are a
+ *  separate login entirely and never carry one. */
+export type AccountRole = 'buyer' | 'seller';
+
 export interface Business {
   id: BusinessId;
+  /** Null only for a Google sign-up that hasn't finished complete-profile. */
+  role: AccountRole | null;
   registeredName: string;
   displayName: string | null;
   businessType: BusinessType;
@@ -288,6 +295,3 @@ export type QuotationSubmissionState = 'FORM' | 'SEALED_RECEIPT';
 export type OnboardingStep = 'IDENTITY' | 'OPERATIONS' | 'DOCUMENTS' | 'ARRIVAL';
 
 export type PostRequirementState = 'DETAILS' | 'DELIVERY' | 'CLOSING' | 'REVIEW';
-
-/** Segmented control on the identity step. Decays; never a profile label. */
-export type SignupIntent = 'FIND_SUPPLIERS' | 'FIND_WORK' | 'BOTH';

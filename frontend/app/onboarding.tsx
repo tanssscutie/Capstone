@@ -3,7 +3,7 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Onboarding, { pickedDocumentFiles } from '../features/onboarding/Onboarding';
 import type { IdentityDraft, OperationsDraft, DocumentsDraft } from '../features/onboarding/Onboarding';
-import type { Business, OnboardingStep, SignupIntent } from '../lib/types';
+import type { AccountRole, Business, OnboardingStep } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
 import { submitOnboarding, uploadDocument, submitForVerification, getVerificationStatus, extractDocumentFields, suggestDescription } from '../lib/api/business';
 import { mapViewerBusiness } from '../lib/api/mappers';
@@ -26,6 +26,7 @@ export default function OnboardingRoute() {
   const [operations, setOperations] = useState<OperationsDraft | null>(null);
   const [documents, setDocuments] = useState<DocumentsDraft | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
+  const [role, setRole] = useState<AccountRole | null>(null);
   const [seeding, setSeeding] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -42,10 +43,10 @@ export default function OnboardingRoute() {
   useEffect(() => {
     (async () => {
       try {
-        const status = await getVerificationStatus();
+        const [status, user] = await Promise.all([getVerificationStatus(), me()]);
+        setRole(user.role);
         if (!status.onboarding_completed) return;
         setIdentity({
-          signupIntent: (status.signup_intent as SignupIntent) ?? 'BOTH',
           registeredName: status.registered_name ?? '',
           displayName: status.display_name ?? '',
           businessType: (status.business_type as IdentityDraft['businessType']) ?? 'SOLE_PROP',
@@ -161,6 +162,7 @@ export default function OnboardingRoute() {
           step="OPERATIONS"
           identity={identity}
           initial={operations ?? undefined}
+          operationsOptional={role === 'buyer'}
           editMode={editMode}
           onContinue={(draft) => {
             if (editMode) {

@@ -24,6 +24,14 @@ class User(SQLModel, table=True):
     email: Optional[str] = Field(default=None, index=True, unique=True)
     is_active: bool = True
     is_admin: bool = False
+    # Account type, fixed at sign-up: a "buyer" posts requirements and awards
+    # them, a "seller" (supplier) browses open requirements and submits
+    # quotations — never both on one account. Admins are is_admin accounts and
+    # leave this null. Also null for a brand-new Google sign-up until it picks
+    # one on the complete-profile screen (see auth_service.complete_profile).
+    # Added after launch, so existing databases get the column from
+    # database._migrate_user_role at startup rather than from create_all.
+    role: Optional[str] = Field(default=None, max_length=10)  # buyer | seller
 
     # Business onboarding (filled in during the onboarding step, separate
     # from registration — see BusinessDocument for the supporting files)
@@ -53,11 +61,9 @@ class User(SQLModel, table=True):
     # ordering either way, same convention as every other AI feature here.
     capability_embedding: str = Field(default="", sa_type=Text)
     onboarding_completed: bool = False
-    # What this business said brought them here, from onboarding's first question.
-    # Every verified business can post AND quote regardless of this — it's not an
-    # account type, just a hint for ordering their own open-requirements feed:
-    # FIND_WORK/BOTH get their category/capability matches surfaced first, then
-    # everyone (including FIND_SUPPLIERS-only) is ordered by closing time.
+    # Superseded by `role` — kept only because existing databases have this
+    # as a NOT NULL column, so the model must keep supplying a value on insert.
+    # Nothing reads it anymore except the one-time role backfill.
     signup_intent: str = "BOTH"  # FIND_SUPPLIERS | FIND_WORK | BOTH
 
     # Notification preferences, editable from Account Settings. "activity" covers

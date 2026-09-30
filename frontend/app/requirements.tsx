@@ -24,6 +24,13 @@ export default function MyRequirementsRoute() {
     setError(null);
     try {
       const [user, rows] = await Promise.all([me(), requirementsApi.listMine()]);
+      // Buyer-only page. A seller who types the URL goes Home — unless it
+      // still owns requirements posted before buyer/seller accounts were
+      // split, which it has to be able to keep managing until they finish.
+      if (user.role === 'seller' && rows.length === 0) {
+        router.replace('/home');
+        return;
+      }
       const ownerId = String(user.id);
       setRequirements(rows.map((r) => mapMyRequirement(r, ownerId)));
     } catch (e: any) {
@@ -31,7 +38,7 @@ export default function MyRequirementsRoute() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   // useFocusEffect fires on initial mount too (no separate plain useEffect
   // needed), then again every time this screen regains focus — e.g. back from

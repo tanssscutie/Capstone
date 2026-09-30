@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import MyQuotations from '../features/my-quotations/MyQuotations';
 import { requirementsApi } from '../lib/api/requirements';
+import { me } from '../lib/api/auth';
 import { mapMyQuotation, mapMyQuotationRequirement, mapPosterToBusiness } from '../lib/api/mappers';
 import type { Quotation, Requirement, Business, BusinessId } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
@@ -20,7 +21,13 @@ export default function MyQuotationsRoute() {
     setLoading(true);
     setError(null);
     try {
-      const rows = await requirementsApi.listMyQuotations();
+      // Seller-only page (the buyer nav never links here) — a buyer who types
+      // the URL goes back to their own Home instead of an always-empty list.
+      const [user, rows] = await Promise.all([me(), requirementsApi.listMyQuotations()]);
+      if (user.role === 'buyer') {
+        router.replace('/home');
+        return;
+      }
       setQuotations(rows.map(mapMyQuotation));
 
       const reqMap: Record<string, Requirement> = {};

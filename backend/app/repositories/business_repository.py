@@ -66,6 +66,11 @@ def count_all_users(session: Session) -> int:
     return session.exec(statement).one()
 
 
+def count_users_by_role(session: Session, role: str) -> int:
+    statement = select(func.count()).select_from(User).where(User.is_admin == False, User.role == role)  # noqa: E712
+    return session.exec(statement).one()
+
+
 def count_verified_users(session: Session) -> int:
     statement = select(func.count()).select_from(User).where(User.is_verified == True)  # noqa: E712
     return session.exec(statement).one()

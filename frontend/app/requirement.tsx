@@ -43,6 +43,7 @@ export default function RequirementRoute() {
   const [releasedQuotations, setReleasedQuotations] = useState<Quotation[]>([]);
   const [respondents, setRespondents] = useState<Record<BusinessId, Respondent>>({});
   const [questions, setQuestions] = useState<ClarificationQuestion[]>([]);
+  const [viewerIsBuyer, setViewerIsBuyer] = useState(false);
 
   async function load(forceRefresh = false) {
     if (!id) {
@@ -72,6 +73,7 @@ export default function RequirementRoute() {
       setRequirement(mapped);
       const owner = raw.poster.id === user.id;
       setIsOwner(owner);
+      setViewerIsBuyer(user.role === 'buyer');
 
       // Q&A only matters before closing — RESPONDENT and OWNER_SEALED are the two
       // states that render it; OWNER_RELEASED never does, so skip the fetch there.
@@ -357,6 +359,7 @@ export default function RequirementRoute() {
       requirement={requirement}
       buyer={buyer}
       hasSubmitted={false}
+      readOnly={viewerIsBuyer}
       questions={questions}
       onAskQuestion={onAskQuestion}
       onSubmitQuotation={() => router.push({ pathname: '/submit-quotation', params: { id } })}

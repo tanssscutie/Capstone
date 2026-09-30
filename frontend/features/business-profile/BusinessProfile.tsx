@@ -136,6 +136,7 @@ export default function BusinessProfile({ profile, onBack }: BusinessProfileProp
         <View style={styles.card}>
           <SectionLabel>Business details</SectionLabel>
           <View style={{ gap: space.sm, marginTop: space.sm }}>
+            {profile.role && <FactRow label="Account type" value={profile.role === 'buyer' ? 'Buyer' : 'Seller'} />}
             <FactRow label="Business type" value={businessTypeLabel(profile.businessType)} />
             <FactRow label="Industry category" value={profile.category} />
             <FactRow label="Location" value={[profile.city, profile.province].filter(Boolean).join(', ')} />

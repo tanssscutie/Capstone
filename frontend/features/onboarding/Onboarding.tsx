@@ -33,7 +33,7 @@ import {
   elevation,
   layout,
 } from '../../components/ui/tokens';
-import type { Business, BusinessType, SignupIntent, OnboardingStep, Attachment } from '../../lib/types';
+import type { Business, BusinessType, OnboardingStep, Attachment } from '../../lib/types';
 import { isRecognizedCity, isRecognizedProvince } from '../../lib/data/philippines';
 import { CATEGORIES as SHARED_CATEGORIES } from '../../lib/data/categories';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
@@ -43,7 +43,6 @@ import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
  * only once verification documents are submitted, mirroring QuotationDraftInput. */
 
 export interface IdentityDraft {
-  signupIntent: SignupIntent;
   registeredName: string;
   /** Optional trading name shown instead of registeredName wherever this
    *  business's name appears to someone else. Blank means registeredName
@@ -94,6 +93,9 @@ interface OperationsProps {
   step: Extract<OnboardingStep, 'OPERATIONS'>;
   identity: IdentityDraft;
   initial?: Partial<OperationsDraft>;
+  /** True for a buyer account — capabilities and service areas only drive
+   *  matching sellers to requirements, so a buyer may leave them empty. */
+  operationsOptional?: boolean;
   onContinue: (draft: OperationsDraft) => void;
   onBack: () => void;
   /** AI profile assistant — drafts a short bio from what's already known
@@ -135,16 +137,6 @@ export type OnboardingProps = IdentityProps | OperationsProps | DocumentsProps |
 
 /* ─── Constants ─────────────────────────────────────── */
 
-// Verb-phrase labels ("Find suppliers"), not identity statements ("I'm buying") —
-// this decides feed ORDER only (see requirement_service.list_open's wants_work),
-// never what a business is allowed to do. Every verified business can post
-// requirements and submit quotations either way; this only ranks yours.
-const SIGNUP_INTENTS: { value: SignupIntent; label: string }[] = [
-  { value: 'FIND_SUPPLIERS', label: 'Find suppliers' },
-  { value: 'FIND_WORK', label: 'Find opportunities' },
-  { value: 'BOTH', label: 'Both' },
-];
-
 const BUSINESS_TYPES: { value: BusinessType; label: string }[] = [
   { value: 'SOLE_PROP', label: 'Sole proprietorship' },
   { value: 'PARTNERSHIP', label: 'Partnership' },
@@ -160,15 +152,7 @@ function businessTypeLabel(type: BusinessType): string {
  *  list (see lib/data/categories.ts) so the two never drift apart again. */
 const CAPABILITIES_BY_CATEGORY: Record<string, string[]> = {
   'Printing': ['Offset printing', 'Digital printing', 'Large format printing', 'Bookbinding', 'Signage & banners', 'Screen printing'],
-  'Construction Supply': ['Cement & aggregates', 'Steel & rebar supply', 'Hardware supply', 'Lumber & plywood', 'Roofing materials', 'Plumbing supplies', 'Electrical supplies'],
-  'Fabrication & Manufacturing': ['Steel fabrication', 'Welding', 'Metal works', 'CNC machining', 'Sheet metal works', 'Custom manufacturing', 'Injection molding'],
-  'Industrial Services': ['Equipment repair & maintenance', 'Industrial cleaning', 'Calibration services', 'Installation services', 'Industrial painting', 'Scaffolding'],
-  'Food Supply & Catering': ['Bulk grains supply', 'Fresh produce', 'Meat & poultry', 'Cold storage', 'Catering services', 'Food processing', 'Beverage supply'],
-  'Medical & Clinic Supplies': ['Medical equipment', 'Pharmaceutical supply', 'PPE & consumables', 'Laboratory supplies', 'Dental supplies', 'Clinic furniture'],
-  'IT Equipment & Hardware': ['Computer hardware', 'Networking equipment', 'Printers & peripherals', 'Server equipment', 'CCTV & security systems', 'POS systems'],
-  'Vehicle Parts & Services': ['Auto parts supply', 'Tires & batteries', 'Vehicle maintenance', 'Fleet servicing', 'Heavy equipment parts', 'Towing services'],
   'Packaging & Labeling': ['Corrugated boxes', 'Labels & stickers', 'Shrink wrap & film', 'Packaging design', 'Custom packaging', 'Pallets & crates'],
-  'Office & Janitorial Supplies': ['Office supplies', 'Cleaning supplies', 'Janitorial services', 'Furniture supply', 'Pest control', 'Waste management'],
 };
 const CATEGORIES = SHARED_CATEGORIES;
 const CATEGORY_VISIBLE_COUNT = 4;
@@ -467,7 +451,6 @@ function CategoryChips({ category, onSelect }: { category: string; onSelect: (c:
 }
 
 function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps & { reportContinue: (fn: () => void) => void }) {
-  const [signupIntent, setSignupIntent] = useState<SignupIntent>(initial?.signupIntent ?? 'BOTH');
   const [registeredName, setRegisteredName] = useState(initial?.registeredName ?? '');
   const [displayName, setDisplayName] = useState(initial?.displayName ?? '');
   const [businessType, setBusinessType] = useState<BusinessType | ''>(initial?.businessType ?? '');
@@ -506,7 +489,6 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
       return;
     }
     onContinue({
-      signupIntent,
       registeredName: registeredName.trim(),
       displayName: displayName.trim(),
       businessType,
@@ -526,24 +508,6 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
     <View style={styles.stepContent}>
       <ScreenTitle title="Tell us about your business" />
       {attempted && missing.length > 0 && <SummaryBanner message={`Still needed before you continue: ${listOut(missing)}.`} />}
-      <View style={styles.intentBlock}>
-        <Text style={styles.fieldLabel}>What are you here to do first?</Text>
-        <Text style={styles.fieldCaption}>
-          A feed preference, not an account type — it only orders what shows up first in your feed. Every verified
-          business can post requirements and submit quotations either way, any time. Never shown on your profile.
-        </Text>
-        <View style={styles.segmentGroup}>
-          {SIGNUP_INTENTS.map((opt) => {
-            const active = signupIntent === opt.value;
-            return (
-              <Pressable key={opt.value} onPress={() => setSignupIntent(opt.value)} style={[styles.segment, active ? styles.segmentActive : null]}>
-                <Text style={[styles.segmentLabel, active ? styles.segmentLabelActive : null]}>{opt.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
       <FormSection heading="About your business">
         <View style={{ gap: space.md }}>
           <View>
@@ -671,7 +635,7 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
 
 /* ─── OPERATIONS ────────────────────────────────────── */
 
-function OperationsScreen({ identity, initial, onContinue, onSuggestDescription, reportContinue }: OperationsProps & { reportContinue: (fn: () => void) => void }) {
+function OperationsScreen({ identity, initial, operationsOptional, onContinue, onSuggestDescription, reportContinue }: OperationsProps & { reportContinue: (fn: () => void) => void }) {
   const [capabilities, setCapabilities] = useState<string[]>(initial?.capabilities ?? []);
   const [capQuery, setCapQuery] = useState('');
   const [serviceAreas, setServiceAreas] = useState<string[]>(initial?.serviceAreas ?? (identity.province ? [identity.province] : []));
@@ -739,8 +703,10 @@ function OperationsScreen({ identity, initial, onContinue, onSuggestDescription,
   }
 
   const missing: string[] = [];
-  if (capabilities.length < CAPABILITY_MIN) missing.push(`at least ${CAPABILITY_MIN} capabilities`);
-  if (serviceAreas.length === 0) missing.push('at least one service area');
+  if (!operationsOptional) {
+    if (capabilities.length < CAPABILITY_MIN) missing.push(`at least ${CAPABILITY_MIN} capabilities`);
+    if (serviceAreas.length === 0) missing.push('at least one service area');
+  }
   const ready = missing.length === 0;
 
   const handleContinue = () => {
@@ -765,7 +731,11 @@ function OperationsScreen({ identity, initial, onContinue, onSuggestDescription,
             {capabilities.length} of {CAPABILITY_MAX} selected
           </Text>
         </View>
-        <Text style={styles.fieldCaption}>Pick between {CAPABILITY_MIN} and {CAPABILITY_MAX}. Choosing everything you could possibly do makes your feed worse, not better.</Text>
+        <Text style={styles.fieldCaption}>
+          {operationsOptional
+            ? `Optional for buyers — up to ${CAPABILITY_MAX}, shown on your profile.`
+            : `Pick between ${CAPABILITY_MIN} and ${CAPABILITY_MAX}. Choosing everything you could possibly do makes your feed worse, not better.`}
+        </Text>
 
         <TextInput
           value={capQuery}
@@ -1518,7 +1488,6 @@ const styles = StyleSheet.create({
   stepContent: { gap: space.lg },
 
   /* "what brought you here" — keeps its original weight, unlike the plain sections below */
-  intentBlock: { ...elevation.cardRaised, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.md, gap: space.sm },
 
   /* plain field groups: headings + dividers, no nested cards */
   formSection: { gap: space.sm },
@@ -1575,12 +1544,6 @@ const styles = StyleSheet.create({
   optionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginTop: space.sm },
   optionGridItem: { flexBasis: '48%', flexGrow: 0, flexShrink: 0 },
 
-  /* segmented signup-intent control */
-  segmentGroup: { flexDirection: 'row', marginTop: space.sm, backgroundColor: color.surfaceSunken, borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, padding: 2 },
-  segment: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.sm, paddingVertical: space.sm, borderRadius: radius.pill },
-  segmentActive: { backgroundColor: color.primary },
-  segmentLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
-  segmentLabelActive: { fontFamily: font.bodySemi, color: color.onPrimary },
 
   /* capability count */
   capCount: { fontFamily: font.mono, fontSize: fontSize.micro, color: color.inkFaint },

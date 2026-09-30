@@ -1,5 +1,5 @@
 // components/ui/MobileNavMenu.tsx
-// Primary nav (Home / My Quotations / My Requirements / Saved) collapsed into a
+// Primary nav (Home plus the buyer- or seller-side pages) collapsed into a
 // dropdown for narrow screens — AppHeader.tsx hides the full nav row below
 // breakpoint.desktop, and until this existed there was no fallback at all: a
 // business on a phone-width screen had no way to reach any of those four pages

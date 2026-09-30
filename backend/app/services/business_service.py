@@ -53,6 +53,14 @@ class BusinessService:
             user = session.get(User, user_id)
             if not user:
                 raise HTTPException(status_code=404, detail="User not found")
+            if user.role == "seller":
+                capabilities = [c for c in data.capabilities if c.strip()]
+                service_areas = [a for a in data.service_areas if a.strip()]
+                if len(capabilities) < 3 or not service_areas:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail="Sellers need at least 3 capabilities and 1 service area — they're how buyers' requirements get matched to you.",
+                    )
 
             user.registered_name = data.registered_name.strip()
             user.display_name = data.display_name.strip() if data.display_name and data.display_name.strip() else None
@@ -64,7 +72,6 @@ class BusinessService:
             user.contact_mobile = data.contact_mobile.strip()
             user.capabilities = ",".join(c.strip() for c in data.capabilities if c.strip())
             user.service_areas = ",".join(a.strip() for a in data.service_areas if a.strip())
-            user.signup_intent = data.signup_intent
             user.business_description = data.business_description.strip() if data.business_description and data.business_description.strip() else None
             # Semantic matching (Specific Objective #4) — recomputed whenever
             # capabilities/service areas/category change, since those are
@@ -440,7 +447,6 @@ class BusinessService:
                 contact_mobile=user.contact_mobile,
                 capabilities=[c for c in (user.capabilities or "").split(",") if c],
                 service_areas=[a for a in (user.service_areas or "").split(",") if a],
-                signup_intent=user.signup_intent,
                 business_description=user.business_description,
             )
 
@@ -453,6 +459,7 @@ class BusinessService:
                 raise HTTPException(status_code=404, detail="Business not found")
             return PublicBusinessProfileOut(
                 id=user.id,
+                role=user.role,
                 registered_name=user.registered_name or user.business_name,
                 display_name=user.display_name,
                 business_type=user.business_type,
@@ -477,6 +484,7 @@ class BusinessService:
             documents = repo.list_documents_for_user(session, user.id)
             out.append(AdminFlaggedBusinessOut(
                 user_id=user.id,
+                role=user.role,
                 business_name=user.business_name,
                 mobile_number=user.mobile_number,
                 registered_name=user.registered_name,
@@ -497,6 +505,7 @@ class BusinessService:
             return [
                 AdminBusinessOut(
                     user_id=user.id,
+                    role=user.role,
                     business_name=user.business_name,
                     mobile_number=user.mobile_number,
                     registered_name=user.registered_name,
@@ -541,6 +550,8 @@ class BusinessService:
 
             return AdminStatsOut(
                 total_businesses=repo.count_all_users(session),
+                total_buyers=repo.count_users_by_role(session, "buyer"),
+                total_sellers=repo.count_users_by_role(session, "seller"),
                 verified_businesses=repo.count_verified_users(session),
                 pending_review_count=len(repo.list_flagged_users(session)),
                 total_requirements=req_repo.count_all_requirements(session),
@@ -578,8 +589,15 @@ class BusinessService:
             bool(user.industry_category),
             bool(user.city and user.province),
             bool(user.contact_person and user.contact_mobile),
-            len([c for c in (user.capabilities or "").split(",") if c]) >= 3,
-            len([a for a in (user.service_areas or "").split(",") if a]) >= 1,
+        ]
+        # Capabilities/service areas only count toward a seller's profile —
+        # a buyer isn't asked for them (see submit_onboarding).
+        if user.role != "buyer":
+            checklist += [
+                len([c for c in (user.capabilities or "").split(",") if c]) >= 3,
+                len([a for a in (user.service_areas or "").split(",") if a]) >= 1,
+            ]
+        checklist += [
             bool(doc_types & REQUIRED_ONE_OF_TIER_1),
             "BIR" in doc_types,
             "MAYORS_PERMIT" in doc_types,
@@ -590,7 +608,15 @@ class BusinessService:
         if user.tier >= 3:
             return "You've reached the highest trust tier."
         if user.tier == 1:
-            return "Add your Mayor's permit to work toward Tier 3."
+            return (
+                "Add your Mayor's permit to reach Tier 2."
+                if user.role == "buyer"
+                else "Add your Mayor's permit to work toward Tier 3."
+            )
+        if user.role == "buyer":
+            # Tier 3 counts awards won as a supplier, which a buyer account
+            # never receives — Tier 2 is as far as a buyer goes.
+            return "Tier 2 is the highest tier for buyer accounts."
 
         from app.repositories import requirement_repository as req_repo
         awarded = req_repo.count_awarded_quotations_for_business(session, user.id)

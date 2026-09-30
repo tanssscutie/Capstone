@@ -96,8 +96,8 @@ function BellIcon({ tone }: IconProps) {
   );
 }
 
-/** Below breakpoint.desktop, the full nav row (Home/My Quotations/My
- *  Requirements/Saved) has nowhere to go — this opens MobileNavMenu instead. */
+/** Below breakpoint.desktop, the full nav row (Home plus the viewer's
+ *  buyer- or seller-side pages) has nowhere to go — this opens MobileNavMenu instead. */
 function HamburgerIcon({ tone }: IconProps) {
   return (
     <View style={styles.hamburgerStack}>
@@ -204,12 +204,19 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0 }: Ap
     ? progress.interpolate({ inputRange: [0, 0.7], outputRange: [1, 0], extrapolate: 'clamp' })
     : 1;
 
-  const primaryNav: NavItem[] = [
-    { label: 'Home', href: '/home', Icon: HouseIcon },
-    { label: 'My Quotations', href: '/quotations', Icon: DocumentIcon },
-    { label: 'My Requirements', href: '/requirements', Icon: CalendarIcon },
-    { label: 'Saved', href: '/saved', Icon: SavedIcon },
-  ];
+  // Buyers and sellers are separate account types — each only sees the pages
+  // for its own side of a transaction.
+  const primaryNav: NavItem[] =
+    viewer?.role === 'buyer'
+      ? [
+          { label: 'Home', href: '/home', Icon: HouseIcon },
+          { label: 'My Requirements', href: '/requirements', Icon: CalendarIcon },
+        ]
+      : [
+          { label: 'Home', href: '/home', Icon: HouseIcon },
+          { label: 'My Quotations', href: '/quotations', Icon: DocumentIcon },
+          { label: 'Saved', href: '/saved', Icon: SavedIcon },
+        ];
   const alertsNav: NavItem = { label: 'Alerts', href: '/alerts', Icon: BellIcon, badge: alertCount };
 
   // Account dropdown: anchor the menu under the profile chip using the
@@ -320,7 +327,11 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0 }: Ap
           </View>
         </View>
 
+        {/* Search filters the Business Opportunities feed, which only sellers
+         *  get — a buyer's Home has no feed for it to act on. The container
+         *  stays either way so the nav keeps its place on the right. */}
         <Animated.View style={[styles.headerCenter, { maxHeight: searchHeight, opacity: searchOpacity }]}>
+          {viewer?.role !== 'buyer' && (
           <Animated.View style={[styles.searchField, { opacity: searchVisible }]}>
             <TextInput
               value={searchDraft}
@@ -332,6 +343,7 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0 }: Ap
               style={styles.searchInput}
             />
           </Animated.View>
+          )}
         </Animated.View>
 
         <View style={styles.headerRight}>

@@ -34,6 +34,12 @@ export default function PostRequirementRoute() {
     (async () => {
       const [user, verification, stats] = await Promise.all([me(), getVerificationStatus(), getDashboardStats()]);
       const business = mapViewerBusiness(user, verification, stats);
+      // Only buyer accounts post (backend: require_buyer) — a seller who lands
+      // here by URL goes back to their own Home instead of a form they can't submit.
+      if (user.role !== 'buyer') {
+        router.replace('/home');
+        return;
+      }
       // Backend already 403s an unverified POST /requirements (require_verified) —
       // this just catches it before the user fills out a whole four-step form only
       // to hit that wall at the very end. Never sets `poster`, so the loading

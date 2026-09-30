@@ -70,10 +70,11 @@ export default function RootLayout() {
           getVerificationStatus(),
           getDashboardStats(),
         ]);
-        // A Google sign-up that never finished setting a mobile number — every
-        // other screen assumes one exists (contact display, admin roster, etc.),
-        // so this is required before anything else, not a skippable step.
-        if (!cancelled && !user.mobile_number) {
+        // A Google sign-up that never finished setting a mobile number or
+        // picking buyer/seller — every other screen assumes both exist
+        // (contact display, which nav/actions to show, etc.), so this is
+        // required before anything else, not a skippable step.
+        if (!cancelled && (!user.mobile_number || (!user.role && !user.is_admin))) {
           router.replace('/complete-profile');
           return;
         }

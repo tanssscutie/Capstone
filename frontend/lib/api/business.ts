@@ -1,6 +1,7 @@
 // lib/api/business.ts
 // Maps to backend app/api/routes/business.py (prefix /business).
 import { api } from './client';
+import type { AccountRole } from '../types';
 import type { IdentityDraft, OperationsDraft } from '../../features/onboarding/Onboarding';
 
 export interface DocumentUploadOut {
@@ -36,7 +37,6 @@ export interface VerificationStatusOut {
   contact_mobile: string | null;
   capabilities: string[];
   service_areas: string[];
-  signup_intent: string;
   business_description: string | null;
 }
 
@@ -51,6 +51,7 @@ export interface DashboardStatsOut {
 
 export interface PublicBusinessProfileOut {
   id: number;
+  role: AccountRole | null;
   registered_name: string | null;
   display_name: string | null;
   business_type: string | null;
@@ -82,7 +83,6 @@ export async function submitOnboarding(identity: IdentityDraft, operations: Oper
     contact_mobile: identity.contactMobile,
     capabilities: operations.capabilities,
     service_areas: operations.serviceAreas,
-    signup_intent: identity.signupIntent,
     business_description: operations.businessDescription.trim() || null,
   });
 }

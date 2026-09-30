@@ -49,6 +49,12 @@ export default function QuotationRoute() {
           setError("Couldn't find that requirement.");
           return;
         }
+        // Only seller accounts quote (backend: require_seller) — a buyer who
+        // lands here by URL sees the read-only requirement page instead.
+        if (user.role !== 'seller') {
+          router.replace({ pathname: '/requirement', params: { id } });
+          return;
+        }
         // Backend already 403s this (can't quote your own requirement — see
         // CannotQuoteOwnRequirement) — this catches it before they fill out
         // the whole sealed-quotation form, same as the verification gate

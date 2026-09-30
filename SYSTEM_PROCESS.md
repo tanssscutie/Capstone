@@ -7,6 +7,21 @@ plano lang — kung babaguhin ang logic, dito rin dapat i-update.
 
 ---
 
+## Tatlong uri ng user
+
+| User | Ano ang ginagawa |
+|---|---|
+| **Admin** | Hiwalay na login. Nagre-review/nag-a-approve ng documents, nakikita lahat ng businesses at requirements. |
+| **Buyer** | Nagpo-post ng requirement, nagde-desisyon (shortlist, Notice of Award, close without award). |
+| **Seller** (supplier) | Nagba-browse ng open requirements, nagsa-submit ng sealed quotation, nagtatanong sa Q&A, nagse-save. |
+
+Pinipili ang **buyer o seller** sa mismong pag-register at **hindi na mapapalitan**
+pagkatapos. Hindi na puwedeng pareho ang isang account. Naka-enforce ito sa
+backend (`require_buyer` / `require_seller` sa `security.py`), hindi lang
+tinatago sa UI.
+
+---
+
 ## Ang buong loop, maikling bersyon
 
 ```
@@ -19,25 +34,28 @@ Register → (opt-in) Mag-verify → Mag-post ng requirement / Mag-quote
 
 ## Phase 0 — Pag-register
 
-1. Business account: business name, mobile number, password. **O** "Continue
-   with Google" — bagong account kaagad kung first time (walang password,
-   Google email/pangalan ang gagamitin), tapos hihingin ang mobile number nang
-   isang beses lang bago makapasok sa Home (kailangan pa rin ito — ginagamit sa
-   buong system, contact info, atbp.).
+1. Business account: **account type (buyer o seller)**, business name, mobile
+   number, password. **O** "Continue with Google" — bagong account kaagad kung
+   first time (walang password, Google email/pangalan ang gagamitin), tapos
+   hihingin ang account type at mobile number nang isang beses lang bago
+   makapasok sa Home.
 2. Diretso sa **Home** pagkatapos mag-register — **hindi na** sapilitang
    onboarding. Verification ay opt-in, pipindutin na lang sa Home kapag ready na.
-3. Sa Home, makikita agad ang listahan ng OPEN na requirements (business
-   opportunities) — pwede nang mag-browse kahit hindi pa verified.
+3. Magkaiba ang Home depende sa account type:
+   - **Seller** — listahan ng OPEN na requirements (business opportunities),
+     closing soon, matching — pwede nang mag-browse kahit hindi pa verified.
+   - **Buyer** — "Post a Requirement" / "Use Previous Requirement" at ang
+     sarili niyang mga requirement.
 
 ---
 
 ## Phase 1 — Pag-verify (kailangan bago makapag-post o makapag-quote)
 
 1. **Onboarding** — 3 hakbang:
-   - **Identity**: bakit ka nandito (maghahanap ng supplier / maghahanap ng
-     trabaho / pareho), registered name, business type, category, city/province,
+   - **Identity**: registered name, business type, category, city/province,
      contact person + mobile.
-   - **Operations**: capabilities, service areas.
+   - **Operations**: capabilities, service areas — **required sa seller**
+     (dito naka-base ang matching), optional sa buyer.
    - **Documents**: DTI (sole proprietorship) o SEC (partnership/corporation)
      certificate + BIR certificate of registration — **required**. Mayor's
      permit — optional. Bawat document may kasamang **totoong ID/certificate
@@ -64,7 +82,7 @@ Register → (opt-in) Mag-verify → Mag-post ng requirement / Mag-quote
 |---|---|
 | **1** | DTI/SEC + BIR — parehong pumasa |
 | **2** | Tier 1 + Mayor's permit pumasa |
-| **3** | Tier 2 + naka-**10 beses nang na-award** bilang supplier |
+| **3** | Tier 2 + naka-**10 beses nang na-award** bilang supplier (seller lang — Tier 2 ang pinakamataas para sa buyer) |
 
 Ang "10 beses na-award" ay binibilang lang mula sa mga Notice of Award na
 talagang **na-Accept** na (`status = "awarded"`) — hindi kasama ang mga
@@ -90,14 +108,14 @@ onboarding wizard.
 
 ## Phase 2 — Pag-post ng Requirement (Buyer)
 
-1. Verified na business lang ang makakapag-post.
+1. Verified na **buyer** account lang ang makakapag-post.
 2. Fields: category, scope, quantity, budget range (min/max), delivery site +
    window, closing date/time, attachments, **required documents** (opsyonal —
    listahan ng qualifying documents na hihingin sa bawat respondent, hal. PCAB
    License, Sanitary Permit — "soft" na requirement lang, hindi hard block sa
    pag-submit ng quotation).
 3. Status: **OPEN.**
-4. Habang OPEN: pwedeng magtanong ang ibang businesses (clarification Q&A) —
+4. Habang OPEN: pwedeng magtanong ang mga seller (clarification Q&A) —
    ang sagot ng buyer ay **public**, makikita ng LAHAT ng nakikinig, hindi
    lang ng nagtanong.
 5. Habang OPEN, ang buyer mismo — kasama na siya — ay **hindi makikita** kung
@@ -119,8 +137,9 @@ onboarding wizard.
 
 ## Phase 3 — Pag-submit ng Quotation (Supplier)
 
-1. Kahit sinong ibang verified na business ay pwedeng mag-submit — **isa**
-   lang na sealed quotation bawat requirement.
+1. Kahit sinong verified na **seller** ay pwedeng mag-submit — **isa**
+   lang na sealed quotation bawat requirement. Ang buyer na tumitingin sa
+   requirement ng ibang buyer ay read-only lang (walang Submit/Ask/Save).
 2. Fields: total price (o **itemized line items** — description/qty/unit
    price per row, kung pinili ang "Line items" mode sa halip na "Total price
    only"), lead time, payment terms, validity, notes, attachments — kasama
@@ -208,11 +227,12 @@ din pansamantala ang shortlist at close-without-award, pero hindi pa
   sent/Award declined/Awarded/Closed without award) na may sequence number,
   actor, at hash chain — hiwalay ito sa pag-verify ng integrity ng sariling
   quotation.
-- **Saved** — pwedeng mag-bookmark ng open requirement kahit kanino.
+- **Saved** — pwedeng mag-bookmark ng open requirement ang seller.
 - **Search** — hinahanap sa title, category, scope, delivery site, at
   pangalan/lokasyon ng business — sa Business Opportunities list sa Home.
 - **Admin** — hiwalay na login. Nakikita LAHAT ng businesses at requirements
-  (hindi lang flagged), approve/reject ng documents, at pwedeng buksan ang
+  (hindi lang flagged) — may filter na All / Buyers / Sellers at bilang ng
+  bawat isa sa dashboard — approve/reject ng documents, at pwedeng buksan ang
   aktwal na uploaded file ng isang business — decrypted on the fly, dahil
   naka-encrypt (Fernet) ang mga ito habang naka-imbak sa disk.
 - **Display name** — opsyonal na trading name (Onboarding, IDENTITY step).

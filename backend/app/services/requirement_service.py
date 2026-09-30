@@ -67,10 +67,10 @@ class AlreadyQuoted(Exception):
 
 class CannotQuoteOwnRequirement(Exception):
     """Raised on submit_quotation when the caller is the requirement's own
-    owner. A business can freely post requirements and quote on other
-    businesses' requirements with the same account — that's the platform's
-    normal dual role — but quoting on its own posting would make it both
-    buyer and seller in the same sealed-bidding transaction."""
+    owner. Normally unreachable now that only buyers post and only sellers
+    quote (see security.require_seller), but a business whose account type
+    was backfilled to seller may still own requirements it posted before the
+    buyer/seller split — this keeps it from quoting on those."""
 
 
 class AlreadyAwarded(Exception):
@@ -199,7 +199,7 @@ class RequirementService:
         deliberately simple placeholder (category + location + keyword
         overlap) that gives an honest reason rather than a fabricated one,
         while the embeddings-based matcher remains future work."""
-        if not viewer or not viewer.industry_category:
+        if not viewer or viewer.role != "seller" or not viewer.industry_category:
             return None
 
         req_tags = [t for t in req.tags.split(",") if t]
@@ -236,11 +236,10 @@ class RequirementService:
 
             # Feed ordering: match first, then closing time — never popularity
             # or recency (Specific Objective #4 / Scope: Semantic Matching).
-            # The match-boost only applies for a viewer here to find work
-            # (FIND_WORK/BOTH, or no signup_intent recorded) — a
-            # FIND_SUPPLIERS-only viewer isn't looking for their own
-            # capability match, so their feed is ordered by closing time alone.
-            wants_work = viewer is None or viewer.signup_intent != "FIND_SUPPLIERS"
+            # The match-boost only applies to a seller — a buyer isn't looking
+            # for work matching their own capabilities, so their feed is
+            # ordered by closing time alone.
+            wants_work = viewer is not None and viewer.role == "seller"
             if wants_work and viewer and viewer.capability_embedding:
                 # Real vector-database ranking, not the rule-based match_note
                 # text (that stays as the honest, legible "why" shown on the

@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import List, Literal, Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -16,9 +16,11 @@ class OnboardingSubmit(BaseModel):
     province: str = Field(min_length=2, max_length=100)
     contact_person: str = Field(min_length=2, max_length=120)
     contact_mobile: str = Field(min_length=7, max_length=20)
-    capabilities: List[str] = Field(min_length=3, max_length=8)
-    service_areas: List[str] = Field(min_length=1)
-    signup_intent: Literal["FIND_SUPPLIERS", "FIND_WORK", "BOTH"] = "BOTH"
+    # Required (3-8 capabilities, 1+ service area) for sellers only — they
+    # drive matching sellers to requirements, which a buyer never needs. See
+    # business_service.submit_onboarding.
+    capabilities: List[str] = Field(default=[], max_length=8)
+    service_areas: List[str] = []
     # Optional public-facing bio — the business can leave it blank, type
     # their own, or accept an AI-suggested draft (see /business/suggest-description).
     business_description: Optional[str] = Field(default=None, max_length=500)
@@ -89,7 +91,6 @@ class VerificationStatusOut(BaseModel):
     contact_mobile: Optional[str] = None
     capabilities: List[str] = []
     service_areas: List[str] = []
-    signup_intent: str = "BOTH"
     business_description: Optional[str] = None
 
 
@@ -100,6 +101,7 @@ class PublicBusinessProfileOut(BaseModel):
     login mobile number, contact person/mobile, and everything document- or
     admin-facing — those stay private to the business itself and to admin."""
     id: int
+    role: Optional[str] = None  # buyer | seller
     registered_name: Optional[str]
     display_name: Optional[str]
     business_type: Optional[str]
@@ -124,6 +126,7 @@ class AdminReviewAction(BaseModel):
 
 class AdminFlaggedBusinessOut(BaseModel):
     user_id: int
+    role: Optional[str] = None  # buyer | seller
     business_name: str
     mobile_number: str
     registered_name: Optional[str]
@@ -141,6 +144,7 @@ class AdminBusinessOut(BaseModel):
     """One row of the admin's full business roster — every registered
     business, not just the ones currently waiting on review."""
     user_id: int
+    role: Optional[str] = None  # buyer | seller
     business_name: str
     mobile_number: str
     registered_name: Optional[str]
@@ -173,6 +177,8 @@ class RegistrationsByDay(BaseModel):
 
 class AdminStatsOut(BaseModel):
     total_businesses: int
+    total_buyers: int
+    total_sellers: int
     verified_businesses: int
     pending_review_count: int
     total_requirements: int

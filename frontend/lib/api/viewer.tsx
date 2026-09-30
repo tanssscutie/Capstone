@@ -60,6 +60,7 @@ function toBusiness(
 
   return {
     id: String(user.id),
+    role: user.role,
     registeredName: user.business_name,
     displayName: null,
     businessType: ((status.business_type as Business['businessType']) || 'SOLE_PROP'),
@@ -82,6 +83,7 @@ function toBusiness(
  *  fetched). Empty strings, not a hardcoded business name. */
 const EMPTY_VIEWER: Business = {
   id: '',
+  role: null,
   registeredName: '',
   displayName: null,
   businessType: 'SOLE_PROP',

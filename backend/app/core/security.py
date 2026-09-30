@@ -71,6 +71,29 @@ def require_verified(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
+def require_buyer(current_user: User = Depends(require_verified)) -> User:
+    """Gate for starting a buyer-side action — posting a requirement. Managing
+    a requirement you already own (extend, cancel, award, answer Q&A) stays
+    gated by ownership alone, see requirement_service.NotOwner."""
+    if current_user.role != "buyer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only buyer accounts can post requirements.",
+        )
+    return current_user
+
+
+def require_seller(current_user: User = Depends(require_verified)) -> User:
+    """Gate for seller-side actions on someone else's requirement —
+    submitting a quotation, asking a clarification question."""
+    if current_user.role != "seller":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only seller accounts can submit quotations or ask questions on a requirement.",
+        )
+    return current_user
+
+
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")

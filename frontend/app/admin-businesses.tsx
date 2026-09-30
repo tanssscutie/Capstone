@@ -43,6 +43,22 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function RoleBadge({ role }: { role: string | null }) {
+  if (!role) return null;
+  return (
+    <View style={[styles.badge, styles.badgeNeutral]}>
+      <Text style={[styles.badgeText, styles.badgeLabelNeutral]}>{role}</Text>
+    </View>
+  );
+}
+
+type RoleFilter = 'all' | 'buyer' | 'seller';
+const ROLE_FILTERS: { value: RoleFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'buyer', label: 'Buyers' },
+  { value: 'seller', label: 'Sellers' },
+];
+
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -96,6 +112,8 @@ export default function AdminBusinessesRoute() {
   const [businesses, setBusinesses] = useState<AdminBusinessOut[]>([]);
   const [notesByUser, setNotesByUser] = useState<Record<number, string>>({});
   const [actingOn, setActingOn] = useState<number | null>(null);
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const shown = roleFilter === 'all' ? businesses : businesses.filter((b) => b.role === roleFilter);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -182,17 +200,36 @@ export default function AdminBusinessesRoute() {
             <Text style={styles.sectionSubtitle}>
               {businesses.length} business{businesses.length === 1 ? '' : 'es'} registered
             </Text>
+            <View style={styles.filterRow}>
+              {ROLE_FILTERS.map((f) => {
+                const active = roleFilter === f.value;
+                return (
+                  <Pressable
+                    key={f.value}
+                    onPress={() => setRoleFilter(f.value)}
+                    style={[styles.filterChip, active && styles.filterChipActive]}
+                  >
+                    <Text style={[styles.filterLabel, active && styles.filterLabelActive]}>{f.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
-            {businesses.length === 0 ? (
+            {shown.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No businesses registered yet.</Text>
+                <Text style={styles.emptyText}>
+                  {businesses.length === 0 ? 'No businesses registered yet.' : 'No businesses match this filter.'}
+                </Text>
               </View>
             ) : (
-              businesses.map((b) => (
+              shown.map((b) => (
                 <View key={b.user_id} style={styles.card}>
                   <View style={styles.cardHeaderRow}>
                     <Text style={styles.businessName}>{b.registered_name || b.business_name}</Text>
-                    <StatusBadge status={b.verification_status} />
+                    <View style={{ flexDirection: 'row', gap: space.xs }}>
+                      <RoleBadge role={b.role} />
+                      <StatusBadge status={b.verification_status} />
+                    </View>
                   </View>
                   <Text style={styles.metaLine}>
                     {[b.business_type, b.industry_category, [b.city, b.province].filter(Boolean).join(', ')]
@@ -398,6 +435,19 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     color: color.danger,
   },
+
+  filterRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.lg },
+  filterChip: {
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs,
+    backgroundColor: color.surface,
+  },
+  filterChipActive: { borderColor: color.primary, backgroundColor: color.primaryFaint },
+  filterLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
+  filterLabelActive: { color: color.primary },
 
   badge: { borderRadius: radius.sm, paddingHorizontal: space.sm, paddingVertical: 2 },
   badgePrimary: { backgroundColor: color.primaryFaint },

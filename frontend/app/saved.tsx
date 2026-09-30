@@ -7,6 +7,7 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import Saved from '../features/saved/Saved';
 import { requirementsApi } from '../lib/api/requirements';
+import { me } from '../lib/api/auth';
 import { mapRequirement, mapPosterToFeedBuyer } from '../lib/api/mappers';
 import type { Requirement, BusinessId } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
@@ -23,7 +24,12 @@ export default function SavedRoute() {
     setLoading(true);
     setError(null);
     try {
-      const rows = await requirementsApi.listSaved();
+      // Seller-only page, same as /quotations — see app/quotations.tsx.
+      const [user, rows] = await Promise.all([me(), requirementsApi.listSaved()]);
+      if (user.role === 'buyer') {
+        router.replace('/home');
+        return;
+      }
       const buyerMap: Record<BusinessId, ReturnType<typeof mapPosterToFeedBuyer>> = {};
       rows.forEach((r) => {
         buyerMap[String(r.poster.id)] = mapPosterToFeedBuyer(r.poster);
@@ -35,7 +41,7 @@ export default function SavedRoute() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     load();
