@@ -36,6 +36,17 @@ def _run_award_expiry_check():
         logger.exception("Award-expiry check failed")
 
 
+def _run_fulfillment_check():
+    try:
+        # Local import: fulfillment_service imports requirement_service.
+        from app.services.fulfillment_service import fulfillment_service
+        done = fulfillment_service.run_due()
+        if any(done.values()):
+            logger.info("Order status check: %s", done)
+    except Exception:
+        logger.exception("Order status check failed")
+
+
 def start_scheduler(interval_seconds: int = 15, closing_soon_interval_seconds: int = 300) -> BackgroundScheduler:
     """Starts the background jobs that release sealed quotations once a
     requirement's closing time has passed (the only thing that can move a
@@ -54,6 +65,8 @@ def start_scheduler(interval_seconds: int = 15, closing_soon_interval_seconds: i
     scheduler.add_job(_run_release_check, "interval", seconds=interval_seconds, id="release_due_requirements")
     scheduler.add_job(_run_closing_soon_check, "interval", seconds=closing_soon_interval_seconds, id="notify_closing_soon")
     scheduler.add_job(_run_award_expiry_check, "interval", seconds=interval_seconds, id="expire_due_award_notices")
+    # Reminders / auto-confirm / Unconfirmed work in days, so every 5 minutes is plenty.
+    scheduler.add_job(_run_fulfillment_check, "interval", seconds=closing_soon_interval_seconds, id="order_status_check")
     scheduler.start()
     _scheduler = scheduler
     return scheduler

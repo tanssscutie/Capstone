@@ -138,6 +138,8 @@ class PublicBusinessProfileOut(BaseModel):
     # Confirmed by both parties (closeout_service), as buyer or as supplier.
     transactions_completed_count: int = 0
     transactions_not_pushed_through_count: int = 0
+    transactions_unconfirmed_count: int = 0  # orders nobody updated (fulfillment_service)
+    completion_rate: Optional[float] = None  # completed ÷ awarded (0–1)
     includes_sealed_activity: bool = False
     contact_details_visible: bool = False
     contact_person: Optional[str] = None

@@ -28,6 +28,9 @@ def create_db_and_tables():
     _add_column_if_missing("user", "suspended_until", "DATETIME NULL")
     _add_column_if_missing("requirement", "auto_extended_at", "DATETIME NULL")
     _add_column_if_missing("user", "banned_at", "DATETIME NULL")
+    _add_column_if_missing("requirement", "fulfillment_status", "VARCHAR(30) NOT NULL DEFAULT 'awarded'")
+    _add_column_if_missing("requirement", "fulfillment_updated_at", "DATETIME NULL")
+    _add_column_if_missing("requirement", "fulfillment_reminders", "INTEGER NOT NULL DEFAULT 0")
 
 
 def _migrate_user_role():

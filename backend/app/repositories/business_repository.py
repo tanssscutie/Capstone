@@ -72,7 +72,20 @@ def profile_activity_counts(session: Session, business_id: int, *, include_seale
             (Requirement.owner_id == business_id) | (Quotation.business_id == business_id),
         )
     ).one()
+    # Orders nobody updated (fulfillment_service): neither completed nor failed.
+    unconfirmed = session.exec(
+        select(func.count()).select_from(Requirement)
+        .join(Quotation, Quotation.id == Requirement.awarded_quotation_id)
+        .where(
+            Requirement.status == "awarded", Requirement.fulfillment_status == "unconfirmed",
+            (Requirement.owner_id == business_id) | (Quotation.business_id == business_id),
+        )
+    ).one()
+    deals = awarded + won
     return dict(
+        transactions_unconfirmed_count=unconfirmed,
+        # completed ÷ awarded, as buyer or supplier; None until there's an award.
+        completion_rate=round(completed / deals, 2) if deals else None,
         requirements_posted_count=posted, requirements_awarded_count=awarded,
         requirements_cancelled_count=cancelled, quotations_submitted_count=submitted,
         quotations_awarded_count=won, quotations_withdrawn_count=withdrawn,

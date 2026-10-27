@@ -11,6 +11,7 @@ from app.services.requirement_service import requirement_service
 from app.services import category_suggestion_service
 from app.services.document_request_service import document_request_service
 from app.services.closeout_service import closeout_service
+from app.services.fulfillment_service import fulfillment_service
 from app.schemas.requirement import (
     CategorySuggestionRequest,
     CategorySuggestionOut,
@@ -33,6 +34,9 @@ from app.schemas.requirement import (
     DocumentRequestCreate,
     DocumentRequestOut,
     CloseoutOut,
+    FulfillmentConfirmIn,
+    FulfillmentOut,
+    FulfillmentUpdateIn,
     CloseoutProposeIn,
     CloseoutRespondIn,
 )
@@ -376,6 +380,33 @@ def get_requested_document_file(requirement_id: int, request_id: int, current_us
     except Exception as exc:
         _handle_service_errors(exc)
     return _file_response(content, filename)
+
+
+@router.get("/{requirement_id}/fulfillment", response_model=FulfillmentOut)
+def get_fulfillment(requirement_id: int, current_user=Depends(get_current_user)):
+    """Order status and timeline — buyer, awarded supplier, admin. See fulfillment_service."""
+    try:
+        return fulfillment_service.get(requirement_id, current_user.id)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/fulfillment", response_model=FulfillmentOut)
+def update_fulfillment(requirement_id: int, payload: FulfillmentUpdateIn, current_user=Depends(require_verified)):
+    """Awarded supplier: In production / Out for delivery / Delivered (forward only)."""
+    try:
+        return fulfillment_service.update(requirement_id, current_user.id, payload.status, payload.note)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/fulfillment/confirm", response_model=FulfillmentOut)
+def confirm_fulfillment(requirement_id: int, payload: FulfillmentConfirmIn, current_user=Depends(require_verified)):
+    """Buyer: confirm receipt of a delivered order — completes the transaction."""
+    try:
+        return fulfillment_service.confirm_received(requirement_id, current_user.id, payload.note)
+    except Exception as exc:
+        _handle_service_errors(exc)
 
 
 @router.get("/{requirement_id}/closeout", response_model=CloseoutOut)

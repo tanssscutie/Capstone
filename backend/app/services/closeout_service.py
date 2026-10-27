@@ -21,6 +21,7 @@ from sqlmodel import Session, select
 
 from app.core.clock import now_ph
 from app.core.database import engine
+from app.models.order_update import OrderUpdate
 from app.models.quotation import Quotation
 from app.models.requirement import Requirement
 from app.models.transaction_closeout import TransactionCloseout
@@ -200,6 +201,13 @@ class CloseoutService:
             pending.response_note = note
             pending.responded_at = now_ph()
             session.add(pending)
+            if confirm:
+                # The order timeline ends here too (fulfillment_service).
+                req.fulfillment_status = pending.outcome
+                req.fulfillment_updated_at = now_ph()
+                session.add(req)
+                session.add(OrderUpdate(requirement_id=req.id, status=pending.outcome, actor_id=actor_id,
+                                        actor_role=role, note=pending.note))
             session.commit()
             session.refresh(pending)
 

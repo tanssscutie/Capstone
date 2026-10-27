@@ -66,6 +66,12 @@ class Requirement(SQLModel, table=True):
     delivery_start: Optional[datetime] = None
     delivery_end: Optional[datetime] = None
 
+    # Order status once awarded (fulfillment_service): awarded -> in_production ->
+    # out_for_delivery -> delivered -> completed, or not_pushed_through / unconfirmed.
+    fulfillment_status: str = Field(default="awarded", max_length=30)
+    fulfillment_updated_at: Optional[datetime] = None  # last step; reminders count from here
+    fulfillment_reminders: int = 0  # 0 none, 1 = 3-day sent, 2 = 7-day sent; reset on each step
+
     match_note: Optional[str] = None
 
     # Qualifying documents the buyer wants each respondent to attach to their

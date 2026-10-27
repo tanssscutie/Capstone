@@ -495,6 +495,7 @@ class RequirementService:
                     awarded_quotation_id=req.awarded_quotation_id,
                     award_response_deadline=req.award_response_deadline,
                     created_at=req.created_at,
+                    fulfillment_status=self._order_status(session, req),
                 ))
             return out
 
@@ -1227,7 +1228,8 @@ class RequirementService:
     @staticmethod
     def _seller_progress(session: Session, req: Requirement, q: Quotation) -> dict:
         """The next-step facts My Quotations shows for this seller's quotation."""
-        out = {"award_response_deadline": None, "thread_id": None, "closeout_state": None, "closeout_awaiting_me": False}
+        out = {"award_response_deadline": None, "thread_id": None, "closeout_state": None, "closeout_awaiting_me": False,
+               "fulfillment_status": None}
         if req.awarded_quotation_id != q.id:
             return out
         if req.status == "award_pending":
@@ -1240,7 +1242,17 @@ class RequirementService:
             pending = next((r for r in rows if r.status == "pending"), None)
             out["closeout_state"] = final.outcome if final else "pending" if pending else "open"
             out["closeout_awaiting_me"] = bool(pending and pending.proposed_by_role == "buyer")
+            out["fulfillment_status"] = final.outcome if final else req.fulfillment_status
         return out
+
+    @staticmethod
+    def _order_status(session: Session, req: Requirement) -> Optional[str]:
+        """Same rule as fulfillment_service.effective_status, for list views."""
+        if req.status != "awarded":
+            return None
+        final = session.exec(select(TransactionCloseout).where(
+            TransactionCloseout.requirement_id == req.id, TransactionCloseout.status == "confirmed")).first()
+        return final.outcome if final else req.fulfillment_status
 
     def list_my_quotations(self, business_id: int) -> List[MyQuotationOut]:
         with Session(engine) as session:
@@ -1359,6 +1371,9 @@ class RequirementService:
 
             req.status = "awarded"
             req.award_response_deadline = None
+            req.fulfillment_status = "awarded"
+            req.fulfillment_updated_at = now_ph()
+            req.fulfillment_reminders = 0
             updated = repo.update_requirement(session, req)
 
             # The Tier 3 award count just changed for this business — tier is

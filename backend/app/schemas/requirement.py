@@ -346,6 +346,38 @@ class CloseoutOut(BaseModel):
     history: List[CloseoutProposalOut] = []
 
 
+class OrderUpdateOut(BaseModel):
+    status: str
+    actor_role: str  # buyer | supplier | system
+    note: Optional[str]
+    created_at: datetime
+
+
+class FulfillmentOut(BaseModel):
+    """Order status of an awarded requirement (fulfillment_service)."""
+    requirement_id: int
+    # awarded | in_production | out_for_delivery | delivered | completed | not_pushed_through | unconfirmed
+    status: str
+    viewer_role: str  # buyer | supplier | admin
+    # seller_update | buyer_confirm | None (finished, or waiting on a "did not push through" answer)
+    next_action: Optional[str] = None
+    next_action_by: Optional[str] = None  # buyer | supplier
+    next_status: Optional[str] = None  # the supplier's next step
+    auto_confirm_at: Optional[datetime] = None  # while delivered
+    auto_confirmed: bool = False
+    timeline: List[OrderUpdateOut] = []
+    closeout: Optional[CloseoutOut] = None  # "did not push through" proposals
+
+
+class FulfillmentUpdateIn(BaseModel):
+    status: str
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class FulfillmentConfirmIn(BaseModel):
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
 class DocumentRequestCreate(BaseModel):
     document_label: str = Field(min_length=2, max_length=120)
     note: Optional[str] = Field(default=None, max_length=500)
@@ -389,6 +421,7 @@ class MyRequirementOut(BaseModel):
     awarded_quotation_id: Optional[int] = None
     award_response_deadline: Optional[datetime] = None
     created_at: datetime
+    fulfillment_status: Optional[str] = None  # once awarded — see FulfillmentOut.status
 
 
 # ---------- admin: every requirement on the platform ----------
@@ -427,6 +460,8 @@ class MyQuotationOut(BaseModel):
     # Close-out once awarded: open | pending | completed | not_pushed_through
     closeout_state: Optional[str] = None
     closeout_awaiting_me: bool = False  # the buyer proposed it; this seller has to confirm
+    # Order status once awarded (fulfillment_service) — see FulfillmentOut.status
+    fulfillment_status: Optional[str] = None
     total_price: Optional[float]
     line_items: List[LineItem] = []
     delivery_lead_time: Optional[str]
