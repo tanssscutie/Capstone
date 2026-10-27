@@ -282,7 +282,11 @@ export type LedgerEntryType =
   | 'CLOSEOUT_PROPOSED'
   | 'CLOSEOUT_CONFIRMED'
   | 'CLOSEOUT_REJECTED'
-  | 'CLOSEOUT_WITHDRAWN';
+  | 'CLOSEOUT_WITHDRAWN'
+  | 'FULFILLMENT_UPDATED'
+  | 'ORDER_RECEIVED'
+  | 'ORDER_AUTO_CONFIRMED'
+  | 'ORDER_UNCONFIRMED';
 
 export interface LedgerEntry {
   id: string;

@@ -84,6 +84,23 @@ npx expo start --web
   - `ConversationPane` (galing sa dati nang `ConversationWindow` sa `HomeFeed.tsx`): ginagamit ng dock at ng page
   - `lib/useMessaging.ts`: ang dating chat logic ng `app/home.tsx`, para iisa ang pinagkukunan ng dalawang screen
 
+**Order status (parang LinkedIn), kapalit ng "Mark as completed" sa chat**
+- **Seller (My Quotations):** "Mark in production" → "Mark out for delivery" → "Mark delivered". May opsyonal na note. Pasulong lang, puwedeng lumaktaw, at hindi na maibabalik.
+- **Buyer (My Requirements at Requirement Detail):** "Confirm received" kapag Delivered na → **Completed**. Gumagawa ito ng confirmed na `TransactionCloseout(outcome="completed")`, kaya gumagana pa rin ang dating profile counts.
+- **"Did not push through":** may dahilan, at kailangang i-confirm ng kabila ("Confirm" / "Not yet" / "Withdraw"). Gamit pa rin ang `closeout_service`. Habang naghihintay ito, hindi muna puwedeng mag-update ng status.
+- **"Report a problem":** nasa panel ng My Quotations at Requirement Detail.
+- **Chat:** wala nang button. Read-only na linya na lang: "Status: Out for delivery · Update in My Quotations". Bawat hakbang ay may TrustLink notice sa chat, alert (`DECISION`, may email), at ledger entry (`FULFILLMENT_UPDATED`, `ORDER_RECEIVED`, `ORDER_AUTO_CONFIRMED`, `ORDER_UNCONFIRMED`).
+- **Kapag walang nag-a-update** (scheduler kada 5 minuto, `fulfillment_service.run_due`):
+  - **3 at 7 araw** na walang update: may paalala sa may susunod na aksyon (seller, o buyer kapag Delivered na). Tig-iisa lang.
+  - **Delivered at 14 araw na tahimik ang buyer:** auto-confirmed bilang Completed. Hanggang doon, puwede pang mag-"Did not push through" o mag-report ang buyer.
+  - **14 araw na walang update at lampas 14 araw pagkatapos ng delivery window:** **Unconfirmed**. Hindi ito completed at hindi rin failed. Final na ito.
+- **Profile:** may "Unconfirmed (no order updates)" at "Completion rate" na (completed ÷ awarded, bilang buyer o supplier).
+- **Para sa demo:** walang shortcut sa 3/7/14 araw. Ipakita sa `test_fulfillment.py`, o baguhin muna ang `fulfillment_updated_at` sa DB.
+- Code:
+  - backend: `models/order_update.py`, `services/fulfillment_service.py`, `GET/POST /requirements/{id}/fulfillment`, `POST /requirements/{id}/fulfillment/confirm`, at bagong columns `requirement.fulfillment_status / fulfillment_updated_at / fulfillment_reminders` (auto-migrate)
+  - frontend: `components/ui/OrderStatusPanel.tsx` (`OrderStatusPanel` at `OrderStatusLine`)
+- Tests: `backend/tests/test_fulfillment.py`.
+
 # Latest update (branch `trustlink-updates`, base: `e3b21e5`)
 
 **Feedback batch bago ang final defense**

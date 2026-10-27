@@ -77,6 +77,10 @@ export interface PublicBusinessProfileOut {
   quotations_withdrawn_count: number;
   transactions_completed_count: number;
   transactions_not_pushed_through_count: number;
+  /** Orders nobody updated — neither completed nor failed. */
+  transactions_unconfirmed_count?: number;
+  /** Completed ÷ awarded (0–1); null until there's an award. */
+  completion_rate?: number | null;
   includes_sealed_activity: boolean;
   contact_details_visible: boolean;
   contact_person: string | null;

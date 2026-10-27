@@ -394,6 +394,8 @@ export default function BusinessProfile({
             <FactRow label="Requirements cancelled · As buyer" value={String(profile.requirementsCancelled)} />
             <FactRow label="Quotations withdrawn · As supplier" value={String(profile.quotationsWithdrawn)} />
             <FactRow label="Transactions that did not push through" value={String(profile.transactionsNotPushedThrough)} />
+            <FactRow label="Unconfirmed (no order updates)" value={String(profile.transactionsUnconfirmed)} />
+            <FactRow label="Completion rate · Completed ÷ awarded" value={profile.completionRate === null ? 'No awards yet' : `${Math.round(profile.completionRate * 100)}%`} />
             <FactRow label="Authorized contact person" value={profile.contactDetailsVisible ? (profile.contactPerson || 'Not provided') : 'Visible once your account is verified'} />
             <FactRow label="Business contact number" value={profile.contactDetailsVisible ? (profile.contactMobile || 'Not provided') : 'Visible once your account is verified'} />
           </View>

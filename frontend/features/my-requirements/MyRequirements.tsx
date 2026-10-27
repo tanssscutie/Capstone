@@ -23,6 +23,7 @@ import {
 import type { ISODateTime, Requirement, RequirementStatus } from '../../lib/types';
 import { specDisplayValue } from '../../lib/data/categories';
 import ScreenScroll from '../../components/ui/ScreenScroll';
+import { OrderStatusPanel } from '../../components/ui/OrderStatusPanel';
 
 /* ─── Props ─────────────────────────────────────────── */
 
@@ -210,6 +211,7 @@ function RequirementRow({
   const open = () => onOpenRequirement?.(requirement.id);
 
   return (
+    <View style={{ gap: space.sm }}>
     <Pressable
       {...hoverHandlers}
       onPress={open}
@@ -256,6 +258,9 @@ function RequirementRow({
         <ActionButton label="Open" onPress={open} />
       </View>
     </Pressable>
+    {/* Outside the row's Pressable so its buttons and note field don't open the requirement. */}
+    {requirement.status === 'AWARDED' && <OrderStatusPanel requirementId={requirement.id} />}
+    </View>
   );
 }
 

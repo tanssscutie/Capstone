@@ -1,13 +1,14 @@
 // lib/useMessaging.ts
 // Award-conversation data shared by the Home chat dock and the full /messages
 // page: thread list (polled), each thread's messages, its close-out state, and
-// the handlers both screens pass straight into their chat components.
+// the handlers both screens pass straight into their chat components. The order
+// status shown in a conversation is read-only (fulfillment_service).
 import { useCallback, useEffect, useState } from 'react';
 import { messagesApi, openMessageAttachment } from './api/messages';
-import { requirementsApi, type CloseoutOut } from './api/requirements';
-import { mapMessage, mapMessageThread, mapCloseout } from './api/mappers';
+import { requirementsApi, type FulfillmentOut } from './api/requirements';
+import { mapMessage, mapMessageThread } from './api/mappers';
 import { errorMessage } from './api/client';
-import type { CloseoutOutcome, Message, MessageThread, TransactionCloseout } from './types';
+import type { Message, MessageThread } from './types';
 
 const MESSAGE_THREADS_POLL_MS = 15_000;
 
@@ -15,8 +16,8 @@ export function useMessaging() {
   const [threads, setThreads] = useState<MessageThread[]>([]);
   const [threadsLoaded, setThreadsLoaded] = useState(false);
   const [messagesByThread, setMessagesByThread] = useState<Record<string, Message[]>>({});
-  // Transaction close-out per thread — every thread is an awarded deal.
-  const [closeoutByThread, setCloseoutByThread] = useState<Record<string, TransactionCloseout | null>>({});
+  // Order status per thread — every thread is an awarded deal.
+  const [fulfillmentByThread, setFulfillmentByThread] = useState<Record<string, FulfillmentOut | null>>({});
 
   const refreshThreads = useCallback(async () => {
     try {
@@ -48,26 +49,13 @@ export function useMessaging() {
     }
   }
 
-  /** Runs one close-out call, stores the new state, and pulls in the TrustLink
-   *  message it posted. Resolves to an error message for the bar, or null. */
-  async function closeoutAction(threadId: string, call: (requirementId: number) => Promise<CloseoutOut>, fallback: string) {
-    try {
-      const out = await call(requirementIdOf(threadId));
-      setCloseoutByThread((prev) => ({ ...prev, [threadId]: mapCloseout(out) }));
-      await reloadThreadMessages(threadId);
-      return null;
-    } catch (e: any) {
-      return errorMessage(e, fallback);
-    }
-  }
-
   const onOpenThread = async (threadId: string) => {
     await reloadThreadMessages(threadId);
-    // A failed fetch just leaves the bar out of this conversation.
+    // A failed fetch just leaves the status line out of this conversation.
     const requirementId = requirementIdOf(threadId);
     if (requirementId) {
-      const closeout = await requirementsApi.getCloseout(requirementId).then(mapCloseout).catch(() => null);
-      setCloseoutByThread((prev) => ({ ...prev, [threadId]: closeout }));
+      const fulfillment = await requirementsApi.getFulfillment(requirementId).catch(() => null);
+      setFulfillmentByThread((prev) => ({ ...prev, [threadId]: fulfillment }));
     }
     try {
       await messagesApi.markRead(Number(threadId));
@@ -118,19 +106,9 @@ export function useMessaging() {
     refreshThreads,
     reloadThreadMessages,
     messagesByThread,
-    closeoutByThread,
+    fulfillmentByThread,
     onOpenThread,
     onOpenAttachment,
     onSendMessage,
-    onProposeCloseout: (threadId: string, outcome: CloseoutOutcome, note: string) =>
-      closeoutAction(
-        threadId,
-        (rid) => requirementsApi.proposeCloseout(rid, outcome === 'COMPLETED' ? 'completed' : 'not_pushed_through', note),
-        'Could not mark this transaction.',
-      ),
-    onRespondCloseout: (threadId: string, confirm: boolean, note: string) =>
-      closeoutAction(threadId, (rid) => requirementsApi.respondCloseout(rid, confirm, note), 'Could not send your response.'),
-    onWithdrawCloseout: (threadId: string) =>
-      closeoutAction(threadId, (rid) => requirementsApi.withdrawCloseout(rid), 'Could not withdraw.'),
   };
 }

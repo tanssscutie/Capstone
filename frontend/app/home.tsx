@@ -164,10 +164,7 @@ export default function HomeRoute() {
           setRequirements((prev) => prev.map((r) => (r.id === requirementId ? { ...r, isSaved: !nextSaved } : r)));
         }
       }}
-      closeoutByThread={chat.closeoutByThread}
-      onProposeCloseout={chat.onProposeCloseout}
-      onRespondCloseout={chat.onRespondCloseout}
-      onWithdrawCloseout={chat.onWithdrawCloseout}
+      fulfillmentByThread={chat.fulfillmentByThread}
       onOpenThread={chat.onOpenThread}
       onOpenAttachment={chat.onOpenAttachment}
       onSendMessage={chat.onSendMessage}

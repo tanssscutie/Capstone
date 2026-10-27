@@ -230,6 +230,8 @@ export interface PublicBusinessProfile {
   quotationsWithdrawn: number;
   transactionsCompleted: number;
   transactionsNotPushedThrough: number;
+  transactionsUnconfirmed: number;
+  completionRate: number | null;
   includesSealedActivity: boolean;
   contactDetailsVisible: boolean;
   contactPerson: string | null;
@@ -265,6 +267,8 @@ export function mapPublicBusinessProfile(p: PublicBusinessProfileOut): PublicBus
     quotationsWithdrawn: p.quotations_withdrawn_count,
     transactionsCompleted: p.transactions_completed_count ?? 0,
     transactionsNotPushedThrough: p.transactions_not_pushed_through_count ?? 0,
+    transactionsUnconfirmed: p.transactions_unconfirmed_count ?? 0,
+    completionRate: p.completion_rate ?? null,
     includesSealedActivity: p.includes_sealed_activity,
     contactDetailsVisible: p.contact_details_visible,
     contactPerson: p.contact_person,
@@ -305,6 +309,10 @@ const LEDGER_EVENT_MAP: Record<string, LedgerEntryType> = {
   CLOSEOUT_CONFIRMED: 'CLOSEOUT_CONFIRMED',
   CLOSEOUT_REJECTED: 'CLOSEOUT_REJECTED',
   CLOSEOUT_WITHDRAWN: 'CLOSEOUT_WITHDRAWN',
+  FULFILLMENT_UPDATED: 'FULFILLMENT_UPDATED',
+  ORDER_RECEIVED: 'ORDER_RECEIVED',
+  ORDER_AUTO_CONFIRMED: 'ORDER_AUTO_CONFIRMED',
+  ORDER_UNCONFIRMED: 'ORDER_UNCONFIRMED',
 };
 
 // The chain's starting point — see backend app/services/ledger_service.py GENESIS_HASH.

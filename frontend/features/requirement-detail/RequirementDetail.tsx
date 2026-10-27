@@ -40,6 +40,7 @@ import type {
 import { PREFERRED_BRAND_ID, specDisplayValue } from '../../lib/data/categories';
 import { useMarketRules } from '../../lib/data/marketRules';
 import { ReportLink } from '../../components/ui/ReportBusinessModal';
+import { OrderStatusPanel } from '../../components/ui/OrderStatusPanel';
 import { CaptionOrHint, InfoHint } from '../../components/ui/InfoHint';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 
@@ -1452,6 +1453,20 @@ function DecisionReminderBanner({ releasedAt }: { releasedAt: ISODateTime | null
   );
 }
 
+/** Buyer's order status for an awarded requirement (fulfillment_service). */
+function AwardedOrderStatus({ st, requirement }: { st: ReturnType<typeof useOwnerReleased>; requirement: Requirement }) {
+  if (requirement.status !== 'AWARDED' || !st.awardedId) return null;
+  const winner = st.sorted.find((q) => q.id === st.awardedId);
+  const supplier = winner ? st.respondents[winner.respondentId] : undefined;
+  return (
+    <OrderStatusPanel
+      requirementId={requirement.id}
+      counterpartyId={supplier?.id}
+      counterpartyName={supplier?.registeredName}
+    />
+  );
+}
+
 /** State + business logic for OWNER_RELEASED, shared by the phone stack and the
  *  wide layout's rebuilt cards so both render the same underlying decisions. */
 function useOwnerReleased({
@@ -1580,6 +1595,7 @@ function OwnerReleasedPanel(props: OwnerReleasedProps) {
         <AwardPendingBanner respondentName={st.awardPendingName} deadline={st.awardResponseDeadline} />
       )}
       {!st.locked && <DecisionReminderBanner releasedAt={st.releasedAt} />}
+      <AwardedOrderStatus st={st} requirement={props.requirement} />
       <SectionLabel>{`${st.visible.length} quotation${st.visible.length === 1 ? '' : 's'} released`}</SectionLabel>
       <SortBar activeKey={st.sortKey} activeDir={st.sortDir} onPress={st.handleSortPress} />
       <SpecComparisonTable requirement={props.requirement} quotations={st.sorted} respondents={st.respondents} />
@@ -2467,7 +2483,7 @@ function WideDecisionCard({ st }: { st: ReturnType<typeof useOwnerReleased> }) {
           ? 'Shortlist in progress'
           : 'No decision recorded';
   const body = awarded
-    ? 'The award is written to the ledger. Contact details have been exchanged — Trustlink does not handle payment, delivery, or contracts, and observes nothing beyond this point.'
+    ? 'The award is written to the ledger and contact details were exchanged. The supplier posts order updates; confirm receipt once it arrives. TrustLink does not handle payment or contracts.'
     : pending
       ? `Waiting on ${st.awardPendingName ?? 'the proposed business'} to accept or decline. Nothing else changes until they respond.`
       : st.closedNoAward
@@ -2533,6 +2549,7 @@ function WideOwnerReleasedScreen(props: OwnerReleasedProps) {
               <AwardPendingBanner respondentName={st.awardPendingName} deadline={st.awardResponseDeadline} />
             )}
             {!st.locked && <DecisionReminderBanner releasedAt={st.releasedAt} />}
+            <AwardedOrderStatus st={st} requirement={requirement} />
             <WideReleasedHeaderCard st={st} requirement={requirement} />
             <SpecComparisonTable requirement={requirement} quotations={st.sorted} respondents={st.respondents} />
             <View style={{ gap: space.lg }}>

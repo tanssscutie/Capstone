@@ -61,12 +61,7 @@ export default function MessagesRoute() {
       }}
       onOpenAttachment={chat.onOpenAttachment}
       onOpenRequirement={(requirementId) => router.push({ pathname: '/requirement', params: { id: requirementId } })}
-      paneProps={(threadId) => ({
-        closeout: chat.closeoutByThread[threadId],
-        onProposeCloseout: (outcome, note) => chat.onProposeCloseout(threadId, outcome, note),
-        onRespondCloseout: (confirm, note) => chat.onRespondCloseout(threadId, confirm, note),
-        onWithdrawCloseout: () => chat.onWithdrawCloseout(threadId),
-      })}
+      fulfillmentByThread={chat.fulfillmentByThread}
       onBack={() => (router.canGoBack() ? router.back() : router.push('/home'))}
     />
   );

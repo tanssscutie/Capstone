@@ -31,6 +31,7 @@ import {
 } from '../../components/ui/tokens';
 import { AvatarChip, initials } from '../../components/ui/AvatarChip';
 import ScreenScroll from '../../components/ui/ScreenScroll';
+import { OrderStatusPanel } from '../../components/ui/OrderStatusPanel';
 import type {
   Business,
   BusinessId,
@@ -275,6 +276,9 @@ function QuotationRow({
         onDeclineAward={onDeclineAward}
         onOpenChat={onOpenChat}
       />
+      {quotation.status === 'AWARDED' && (
+        <OrderStatusPanel requirementId={requirement.id} counterpartyId={buyer.id} counterpartyName={buyerName} />
+      )}
 
       {withdrawn && replacement && (
         <Pressable onPress={() => onOpenRequirement?.(requirement.id)} hitSlop={4} style={{ alignSelf: 'flex-start' }}>
@@ -303,7 +307,7 @@ function stepReached(quotation: Quotation): number | null {
     case 'RELEASED':
     case 'SHORTLISTED': return 1;
     case 'AWARD_PENDING': return 2;
-    case 'AWARDED': return quotation.progress?.closeoutState === 'COMPLETED' ? 4 : 3;
+    // Once awarded, OrderStatusPanel shows the order's own tracker instead.
     default: return null;
   }
 }
@@ -366,14 +370,10 @@ function NextStep({ quotation, requirement, onAcceptAward, onDeclineAward, onOpe
       );
       break;
     case 'AWARDED':
-      highlight = p?.closeoutState !== 'COMPLETED';
-      if (p?.closeoutState === 'COMPLETED') text = '✓ Transaction completed — confirmed by you and the buyer.';
-      else if (p?.closeoutState === 'NOT_PUSHED_THROUGH') { text = 'Both of you confirmed this did not push through.'; highlight = false; }
-      else if (p?.closeoutState === 'PENDING' && p.closeoutAwaitingMe) text = 'The buyer marked this transaction — confirm it in the chat.';
-      else if (p?.closeoutState === 'PENDING') text = 'Waiting for the buyer to confirm the transaction.';
-      else text = 'Awarded to you. Coordinate delivery with the buyer, then mark it completed in the chat.';
-      if (chat && p?.closeoutState !== 'COMPLETED' && p?.closeoutState !== 'NOT_PUSHED_THROUGH') {
-        actions = <ActionButton label="Open chat" variant="primary" onPress={chat} />;
+      // The order itself (updates, confirm, did not push through) is in OrderStatusPanel.
+      if (chat) {
+        text = 'Awarded to you. Coordinate the details with the buyer in the chat.';
+        actions = <ActionButton label="Open chat" variant="outline" onPress={chat} />;
       }
       break;
     case 'NOT_SELECTED':

@@ -37,6 +37,8 @@ import {
 import { AvatarChip, initials } from '../../components/ui/AvatarChip';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 import { ReportLink } from '../../components/ui/ReportBusinessModal';
+import { OrderStatusLine } from '../../components/ui/OrderStatusPanel';
+import type { FulfillmentOut } from '../../lib/api/requirements';
 import type {
   Business,
   BusinessId,
@@ -46,8 +48,6 @@ import type {
   ISODateTime,
   TrustTier,
   RequirementStatus,
-  TransactionCloseout,
-  CloseoutOutcome,
 } from '../../lib/types';
 
 /* ─── Props ─────────────────────────────────────────── */
@@ -99,15 +99,10 @@ export type HomeFeedProps = {
   searchQuery?: string;
 };
 
-/** Transaction close-out, done from inside the award conversation (backend
- *  closeout_service): either party marks it completed / did not push through,
- *  the other confirms. Keyed by thread id; each handler resolves to an error
- *  message, or null on success. */
+/** Order status per award thread (fulfillment_service) — read-only in the chat;
+ *  updates happen on My Quotations / My Requirements. Keyed by thread id. */
 interface CloseoutChatProps {
-  closeoutByThread?: Record<string, TransactionCloseout | null>;
-  onProposeCloseout?: (threadId: string, outcome: CloseoutOutcome, note: string) => Promise<string | null>;
-  onRespondCloseout?: (threadId: string, confirm: boolean, note: string) => Promise<string | null>;
-  onWithdrawCloseout?: (threadId: string) => Promise<string | null>;
+  fulfillmentByThread?: Record<string, FulfillmentOut | null>;
 }
 
 /* ─── Formatting helpers ────────────────────────────── */
@@ -502,129 +497,6 @@ function MessageBubble({ message, mine, onOpenAttachment }: { message: Message; 
   );
 }
 
-/* ─── Transaction close-out bar (top of a conversation) ─── */
-
-function closeoutPhrase(outcome: CloseoutOutcome): string {
-  return outcome === 'COMPLETED' ? 'completed' : 'not pushed through';
-}
-
-function ChatCloseoutBar({
-  closeout,
-  onPropose,
-  onRespond,
-  onWithdraw,
-}: {
-  closeout: TransactionCloseout | null | undefined;
-  onPropose?: (outcome: CloseoutOutcome, note: string) => Promise<string | null>;
-  onRespond?: (confirm: boolean, note: string) => Promise<string | null>;
-  onWithdraw?: () => Promise<string | null>;
-}) {
-  const [mode, setMode] = useState<CloseoutOutcome | 'REJECT' | null>(null);
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  if (!closeout || closeout.viewerRole === 'admin') return null;
-
-  const other = closeout.viewerRole === 'buyer' ? 'supplier' : 'buyer';
-  const noteRequired = mode === 'NOT_PUSHED_THROUGH' || mode === 'REJECT';
-  const canSubmit = !busy && (!noteRequired || note.trim().length >= 5);
-
-  const run = async (action: (() => Promise<string | null>) | undefined) => {
-    if (!action) return;
-    setBusy(true);
-    setError(null);
-    const err = await action().catch(() => 'Something went wrong. Try again.');
-    setBusy(false);
-    if (err) {
-      setError(err);
-    } else {
-      setMode(null);
-      setNote('');
-    }
-  };
-  const submit = () => {
-    if (!canSubmit || !mode) return;
-    run(mode === 'REJECT' ? () => onRespond!(false, note) : () => onPropose!(mode, note));
-  };
-
-  const { final, pending } = closeout;
-
-  if (final) {
-    const done = final.outcome === 'COMPLETED';
-    return (
-      <View style={[styles.closeoutBar, done ? styles.closeoutBarDone : null]}>
-        <Text style={[styles.closeoutTitle, done ? { color: color.primary } : null]}>
-          {done ? '✓ Transaction completed' : 'Transaction did not push through'}
-        </Text>
-        <Text style={styles.closeoutMuted}>Confirmed by both parties.</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.closeoutBar}>
-      {mode !== null ? (
-        <View style={{ gap: space.sm }}>
-          <Text style={styles.closeoutTitle}>
-            {mode === 'COMPLETED' ? 'Mark as completed?' : mode === 'NOT_PUSHED_THROUGH' ? 'Did not push through?' : "Why isn't it done yet?"}
-          </Text>
-          <TextInput
-            value={note}
-            onChangeText={setNote}
-            placeholder={mode === 'COMPLETED' ? 'Note (optional)' : 'Reason (required)'}
-            placeholderTextColor={color.inkFaint}
-            maxLength={500}
-            style={styles.closeoutInput}
-          />
-          {mode !== 'REJECT' && <Text style={styles.closeoutMuted}>The {other} will be asked to confirm.</Text>}
-          <View style={styles.closeoutActions}>
-            <Pressable onPress={submit} disabled={!canSubmit} style={[styles.closeoutPrimary, !canSubmit ? { opacity: 0.4 } : null]}>
-              <Text style={styles.closeoutPrimaryLabel}>{busy ? 'Sending…' : 'Submit'}</Text>
-            </Pressable>
-            <Pressable onPress={() => { setMode(null); setNote(''); setError(null); }} hitSlop={6}>
-              <Text style={styles.closeoutLink}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : pending && closeout.awaitingViewer ? (
-        <View style={{ gap: space.sm }}>
-          <Text style={styles.closeoutTitle}>
-            The {pending.proposedByRole} marked this transaction as {closeoutPhrase(pending.outcome)}.
-          </Text>
-          {pending.note && <Text style={styles.closeoutMuted}>Note: {pending.note}</Text>}
-          <View style={styles.closeoutActions}>
-            <Pressable onPress={() => run(() => onRespond!(true, ''))} disabled={busy} style={[styles.closeoutPrimary, busy ? { opacity: 0.4 } : null]}>
-              <Text style={styles.closeoutPrimaryLabel}>{busy ? 'Confirming…' : 'Confirm'}</Text>
-            </Pressable>
-            <Pressable onPress={() => setMode('REJECT')} disabled={busy} style={styles.closeoutSecondary}>
-              <Text style={styles.closeoutSecondaryLabel}>Not yet</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : pending ? (
-        <View style={styles.closeoutActions}>
-          <Text style={[styles.closeoutMuted, { flex: 1 }]}>
-            Marked as {closeoutPhrase(pending.outcome)} — waiting for the {other} to confirm.
-          </Text>
-          <Pressable onPress={() => run(onWithdraw)} disabled={busy} hitSlop={6}>
-            <Text style={styles.closeoutLink}>Withdraw</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.closeoutActions}>
-          <Pressable onPress={() => setMode('COMPLETED')} style={styles.closeoutPrimary}>
-            <Text style={styles.closeoutPrimaryLabel}>Mark as completed</Text>
-          </Pressable>
-          <Pressable onPress={() => setMode('NOT_PUSHED_THROUGH')} hitSlop={6}>
-            <Text style={styles.closeoutLink}>Did not push through</Text>
-          </Pressable>
-        </View>
-      )}
-      {error && <Text style={styles.closeoutError}>{error}</Text>}
-    </View>
-  );
-}
-
 export function TrustlinkMark() {
   return <Image source={require('../../assets/logo.jpg')} style={styles.dockMark} resizeMode="contain" />;
 }
@@ -739,10 +611,7 @@ function ConversationWindow({
   onSend,
   onExpand,
   width,
-  closeout,
-  onProposeCloseout,
-  onRespondCloseout,
-  onWithdrawCloseout,
+  fulfillment,
   onOpenAttachment,
 }: ConversationPaneProps & {
   thread: MessageThread;
@@ -786,10 +655,7 @@ function ConversationWindow({
           viewerId={viewerId}
           onSend={onSend}
           onOpenAttachment={onOpenAttachment}
-          closeout={closeout}
-          onProposeCloseout={onProposeCloseout}
-          onRespondCloseout={onRespondCloseout}
-          onWithdrawCloseout={onWithdrawCloseout}
+          fulfillment={fulfillment}
         />
       </GrowPanel>
     </View>
@@ -801,10 +667,8 @@ export interface ConversationPaneProps {
   viewerId: BusinessId;
   onSend: (body: string, file?: File) => Promise<string | null> | void;
   onOpenAttachment?: (messageId: string) => void;
-  closeout?: TransactionCloseout | null;
-  onProposeCloseout?: (outcome: CloseoutOutcome, note: string) => Promise<string | null>;
-  onRespondCloseout?: (confirm: boolean, note: string) => Promise<string | null>;
-  onWithdrawCloseout?: () => Promise<string | null>;
+  /** Read-only order status line at the top. */
+  fulfillment?: FulfillmentOut | null;
 }
 
 /** The body of one conversation — status bar, messages, composer. Used by the
@@ -814,10 +678,7 @@ export function ConversationPane({
   viewerId,
   onSend,
   onOpenAttachment,
-  closeout,
-  onProposeCloseout,
-  onRespondCloseout,
-  onWithdrawCloseout,
+  fulfillment,
 }: ConversationPaneProps) {
   const [draft, setDraft] = useState('');
   // One file per message — picked here, sent with whatever text is in the draft.
@@ -861,12 +722,7 @@ export function ConversationPane({
 
   return (
     <View style={{ flex: 1 }}>
-      <ChatCloseoutBar
-        closeout={closeout}
-        onPropose={onProposeCloseout}
-        onRespond={onRespondCloseout}
-        onWithdraw={onWithdrawCloseout}
-      />
+      <OrderStatusLine fulfillment={fulfillment} />
       <ScrollView
         ref={scrollRef}
         style={styles.dockScroll}
@@ -954,10 +810,7 @@ function ChatWidget({
   onOpenAttachment,
   autoOpenThreadId,
   onExpandMessages,
-  closeoutByThread,
-  onProposeCloseout,
-  onRespondCloseout,
-  onWithdrawCloseout,
+  fulfillmentByThread,
 }: CloseoutChatProps & {
   onExpandMessages?: (threadId?: string) => void;
   threads: MessageThread[];
@@ -1081,10 +934,7 @@ function ChatWidget({
             onExpand={onExpandMessages && (() => onExpandMessages(id))}
             onOpenAttachment={onOpenAttachment && ((messageId) => onOpenAttachment(id, messageId))}
             width={panelWidth}
-            closeout={closeoutByThread?.[id]}
-            onProposeCloseout={onProposeCloseout && ((outcome, note) => onProposeCloseout(id, outcome, note))}
-            onRespondCloseout={onRespondCloseout && ((confirm, note) => onRespondCloseout(id, confirm, note))}
-            onWithdrawCloseout={onWithdrawCloseout && (() => onWithdrawCloseout(id))}
+            fulfillment={fulfillmentByThread?.[id]}
           />
         );
       })}
@@ -1832,10 +1682,7 @@ function PhoneHomeFeed(props: HomeFeedProps) {
       onOpenAttachment={props.onOpenAttachment}
       autoOpenThreadId={props.autoOpenThreadId}
       onExpandMessages={props.onExpandMessages}
-      closeoutByThread={props.closeoutByThread}
-      onProposeCloseout={props.onProposeCloseout}
-      onRespondCloseout={props.onRespondCloseout}
-      onWithdrawCloseout={props.onWithdrawCloseout}
+      fulfillmentByThread={props.fulfillmentByThread}
     />
     </View>
   );
@@ -1990,10 +1837,7 @@ function WideHomeFeed(props: HomeFeedProps) {
       onOpenAttachment={props.onOpenAttachment}
       autoOpenThreadId={props.autoOpenThreadId}
       onExpandMessages={props.onExpandMessages}
-      closeoutByThread={props.closeoutByThread}
-      onProposeCloseout={props.onProposeCloseout}
-      onRespondCloseout={props.onRespondCloseout}
-      onWithdrawCloseout={props.onWithdrawCloseout}
+      fulfillmentByThread={props.fulfillmentByThread}
     />
     </View>
   );
@@ -2041,19 +1885,7 @@ const styles = StyleSheet.create({
   threadPreview: { fontFamily: font.body, fontSize: fontSize.sm },
   threadRef: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkFaint },
 
-  /* transaction close-out bar, top of a conversation */
-  closeoutBar: { gap: space.xs, paddingHorizontal: space.md, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.border, backgroundColor: color.surfaceSunken },
-  closeoutBarDone: { backgroundColor: color.primaryFaint },
-  closeoutTitle: { fontFamily: font.bodySemi, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.ink },
-  closeoutMuted: { fontFamily: font.body, fontSize: fontSize.micro, lineHeight: lineHeight.sm, color: color.inkMuted },
   closeoutError: { fontFamily: font.body, fontSize: fontSize.micro, color: color.danger },
-  closeoutActions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.md },
-  closeoutPrimary: { backgroundColor: color.primary, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs },
-  closeoutPrimaryLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.onPrimary },
-  closeoutSecondary: { borderWidth: 1, borderColor: color.border, backgroundColor: color.surface, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs },
-  closeoutSecondaryLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
-  closeoutLink: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted, textDecorationLine: 'underline' },
-  closeoutInput: { minHeight: 34, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, backgroundColor: color.surface, paddingHorizontal: space.sm, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
 
   /* conversation view */
   bubbleList: { padding: space.md, gap: space.sm, flexGrow: 1 },

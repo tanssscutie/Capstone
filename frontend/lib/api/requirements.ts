@@ -110,6 +110,31 @@ export interface CloseoutOut {
   history: CloseoutProposalOut[];
 }
 
+export type OrderStatus =
+  | 'awarded' | 'in_production' | 'out_for_delivery' | 'delivered'
+  | 'completed' | 'not_pushed_through' | 'unconfirmed';
+
+export interface OrderUpdateOut {
+  status: OrderStatus;
+  actor_role: 'buyer' | 'supplier' | 'system';
+  note: string | null;
+  created_at: string;
+}
+
+/** Order status of an awarded requirement (backend fulfillment_service). */
+export interface FulfillmentOut {
+  requirement_id: number;
+  status: OrderStatus;
+  viewer_role: 'buyer' | 'supplier' | 'admin';
+  next_action: 'seller_update' | 'buyer_confirm' | null;
+  next_action_by: 'buyer' | 'supplier' | null;
+  next_status: OrderStatus | null;
+  auto_confirm_at: string | null;
+  auto_confirmed: boolean;
+  timeline: OrderUpdateOut[];
+  closeout: CloseoutOut | null;
+}
+
 export interface MyRequirementOut {
   id: number;
   ref_code: string;
@@ -361,6 +386,21 @@ export const requirementsApi = {
 
   answerQuestion: (requirementId: number, questionId: number, answer: string) =>
     api.post<ClarificationQuestionOut>(`/requirements/${requirementId}/questions/${questionId}/answer`, { answer }),
+
+  // ---- order status (awarded requirements) ----
+
+  getFulfillment: (requirementId: number) => api.get<FulfillmentOut>(`/requirements/${requirementId}/fulfillment`),
+
+  updateFulfillment: (requirementId: number, status: OrderStatus, note?: string) =>
+    api.post<FulfillmentOut>(`/requirements/${requirementId}/fulfillment`, {
+      status,
+      note: note && note.trim().length > 0 ? note.trim() : null,
+    }),
+
+  confirmReceived: (requirementId: number, note?: string) =>
+    api.post<FulfillmentOut>(`/requirements/${requirementId}/fulfillment/confirm`, {
+      note: note && note.trim().length > 0 ? note.trim() : null,
+    }),
 
   // ---- transaction close-out (awarded requirements, both parties confirm) ----
 

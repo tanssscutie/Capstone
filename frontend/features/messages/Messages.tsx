@@ -7,10 +7,11 @@ import { useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { color, font, fontSize, lineHeight, letterSpacing, space, radius, elevation, layout } from '../../components/ui/tokens';
 import { ReportLink } from '../../components/ui/ReportBusinessModal';
-import { ConversationPane, ThreadRow, TrustlinkMark, type ConversationPaneProps } from '../home-feed/HomeFeed';
+import { ConversationPane, ThreadRow, TrustlinkMark } from '../home-feed/HomeFeed';
+import type { FulfillmentOut } from '../../lib/api/requirements';
 import type { BusinessId, Message, MessageThread } from '../../lib/types';
 
-export interface MessagesProps extends Omit<ConversationPaneProps, 'messages' | 'onSend' | 'onOpenAttachment' | 'onProposeCloseout' | 'onRespondCloseout' | 'onWithdrawCloseout' | 'closeout'> {
+export interface MessagesProps {
   viewerId: BusinessId;
   threads: MessageThread[];
   loading: boolean;
@@ -20,7 +21,7 @@ export interface MessagesProps extends Omit<ConversationPaneProps, 'messages' | 
   onSend: (threadId: string, body: string, file?: File) => Promise<string | null> | void;
   onOpenAttachment?: (threadId: string, messageId: string) => void;
   onOpenRequirement?: (requirementId: string) => void;
-  paneProps: (threadId: string) => Pick<ConversationPaneProps, 'closeout' | 'onProposeCloseout' | 'onRespondCloseout' | 'onWithdrawCloseout'>;
+  fulfillmentByThread: Record<string, FulfillmentOut | null>;
   onBack?: () => void;
 }
 
@@ -37,7 +38,7 @@ export default function Messages({
   onSend,
   onOpenAttachment,
   onOpenRequirement,
-  paneProps,
+  fulfillmentByThread,
   onBack,
 }: MessagesProps) {
   const { width } = useWindowDimensions();
@@ -113,7 +114,7 @@ export default function Messages({
                     viewerId={viewerId}
                     onSend={(body, file) => onSend(selected.id, body, file)}
                     onOpenAttachment={onOpenAttachment && ((messageId) => onOpenAttachment(selected.id, messageId))}
-                    {...paneProps(selected.id)}
+                    fulfillment={fulfillmentByThread[selected.id]}
                   />
                 </>
               ) : (
