@@ -120,6 +120,7 @@ npx expo start --web
   - JPG, PNG o WebP, hanggang 5 MB.
 - **Links:** http/https lang. Kapag walang scheme, idinadagdag ang `https://`. Tinatanggihan ang `javascript:` at iba pang scheme.
 - **Header:** ang larawan na rin ang nasa account chip, kung mayroon.
+- **Business transparency bilang slides:** 3 slide (Verification → Track record → Contact) na may ‹ ›, mga tuldok, at "1 / 3". Malalaking numero sa Track record, at naka-highlight ang 0. Nasa "ⓘ More info" na ang mahabang paliwanag. Component: `TransparencySlides` sa `BusinessProfile.tsx`.
 - **Daan papunta rito:** sa account menu, ang **"My Profile"** ay bumubukas na sa bagong profile (`/business-profile?id=<sarili>`). Ang dating page (business name, contact, capabilities, "Update in onboarding") ay nasa **"Business details"** na (`/account`).
 - **"Request a quote":** buyer na tumitingin sa seller.
   - Bubukas ang Post a Requirement na may banner na "Inviting {name} to quote — still open to every matching supplier and sealed until closing". Puwedeng "Remove".

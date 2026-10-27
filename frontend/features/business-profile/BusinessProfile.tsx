@@ -9,10 +9,12 @@
 // Contact details stay private to the account owner and administrators.
 
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { View, Text, Pressable, Modal, TextInput, Image, Linking, StyleSheet, useWindowDimensions } from 'react-native';
 import type { ViewStyle } from 'react-native';
 import { PORTFOLIO_MAX_ITEMS, type ReportReason, type PortfolioItemOut, type ProfileDetailsIn, type ProfileImageKind } from '../../lib/api/business';
 import { ReportBusinessModal } from '../../components/ui/ReportBusinessModal';
+import { InfoHint } from '../../components/ui/InfoHint';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 import { itemsFor, useCategoryTree } from '../../lib/data/categories';
 import ScreenScroll from '../../components/ui/ScreenScroll';
@@ -411,6 +413,88 @@ function EditProfileModal({ profile, onSave, onClose }: {
   );
 }
 
+/* ─── Business transparency, as slides ─────────────────── */
+
+function SlideStat({ value, label }: { value: number; label: string }) {
+  const clean = value === 0;
+  return (
+    <View style={[styles.slideStat, clean ? styles.slideStatClean : null]}>
+      <Text style={[styles.slideStatValue, clean ? { color: color.primary } : null]}>{value}</Text>
+      <Text style={styles.slideStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function TransparencySlides({ profile, verified }: { profile: PublicBusinessProfile; verified: boolean }) {
+  const [index, setIndex] = useState(0);
+  const docs = profile.registrationDocumentTypes.join(' · ');
+  const slides: { title: string; body: ReactNode }[] = [
+    {
+      title: 'Verification',
+      body: (
+        <View style={styles.slideCenter}>
+          <Text style={[styles.slideHero, verified ? { color: color.primary } : null]}>{verified ? '✓ Verified' : 'Not yet verified'}</Text>
+          <Text style={styles.slideSub}>{docs ? `Registration: ${docs}` : 'No passing registration document yet'}</Text>
+          <Text style={styles.mutedSmall}>{verified ? 'Confirmed by a TrustLink administrator' : profile.verificationStatus.replace(/_/g, ' ')}</Text>
+        </View>
+      ),
+    },
+    {
+      title: 'Track record',
+      body: (
+        <View style={styles.slideStatGrid}>
+          <SlideStat value={profile.requirementsCancelled} label="Requirements cancelled" />
+          <SlideStat value={profile.quotationsWithdrawn} label="Quotations withdrawn" />
+          <SlideStat value={profile.transactionsNotPushedThrough} label="Did not push through" />
+          <SlideStat value={profile.transactionsUnconfirmed} label="Unconfirmed orders" />
+        </View>
+      ),
+    },
+    {
+      title: 'Contact',
+      body: profile.contactDetailsVisible ? (
+        <View style={styles.slideCenter}>
+          <Text style={styles.slideHero}>{profile.contactPerson || 'Not provided'}</Text>
+          <Text style={styles.slideSub}>{profile.contactMobile || 'No contact number'}</Text>
+          <Text style={styles.mutedSmall}>Authorized contact person</Text>
+        </View>
+      ) : (
+        <View style={styles.slideCenter}>
+          <Text style={styles.slideSub}>🔒 Visible once your account is verified</Text>
+        </View>
+      ),
+    },
+  ];
+  const last = slides.length - 1;
+  const go = (i: number) => setIndex(Math.max(0, Math.min(last, i)));
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.portfolioHeader}>
+        <SectionLabel>{`Business transparency · ${slides[index].title}`}</SectionLabel>
+        <Text style={styles.slideCount}>{index + 1} / {slides.length}</Text>
+      </View>
+      <View style={styles.slideBody}>{slides[index].body}</View>
+      <View style={styles.slideNav}>
+        <Pressable onPress={() => go(index - 1)} disabled={index === 0} hitSlop={8} style={[styles.slideArrow, index === 0 ? { opacity: 0.3 } : null]} accessibilityLabel="Previous">
+          <Text style={styles.slideArrowLabel}>‹</Text>
+        </Pressable>
+        <View style={styles.slideDots}>
+          {slides.map((s, i) => (
+            <Pressable key={s.title} onPress={() => go(i)} hitSlop={6} accessibilityLabel={s.title}>
+              <View style={[styles.slideDot, i === index ? styles.slideDotActive : null]} />
+            </Pressable>
+          ))}
+        </View>
+        <Pressable onPress={() => go(index + 1)} disabled={index === last} hitSlop={8} style={[styles.slideArrow, index === last ? { opacity: 0.3 } : null]} accessibilityLabel="Next">
+          <Text style={styles.slideArrowLabel}>›</Text>
+        </Pressable>
+      </View>
+      <InfoHint text="TrustLink administrators review uploaded documents; verification is not performed directly by DTI or SEC. Document contents and registration numbers stay private. Track record counts what this business cancelled, withdrew, or did not complete." />
+    </View>
+  );
+}
+
 export default function BusinessProfile({
   profile,
   onBack,
@@ -614,22 +698,7 @@ export default function BusinessProfile({
           </Text>
         </View>
 
-        <View style={styles.card}>
-          <SectionLabel>Business transparency</SectionLabel>
-          <View style={{ gap: space.sm, marginTop: space.sm }}>
-            <FactRow label="Registration documents" value={profile.registrationDocumentTypes.join(', ') || 'No passing registration document recorded'} />
-            <FactRow label="Verification status" value={profile.verificationStatus.replace(/_/g, ' ')} />
-            <FactRow label="Registration verification" value={verified ? 'Administrator-confirmed' : 'Not Yet Verified'} />
-            <FactRow label="Requirements cancelled · As buyer" value={String(profile.requirementsCancelled)} />
-            <FactRow label="Quotations withdrawn · As supplier" value={String(profile.quotationsWithdrawn)} />
-            <FactRow label="Transactions that did not push through" value={String(profile.transactionsNotPushedThrough)} />
-            <FactRow label="Authorized contact person" value={profile.contactDetailsVisible ? (profile.contactPerson || 'Not provided') : 'Visible once your account is verified'} />
-            <FactRow label="Business contact number" value={profile.contactDetailsVisible ? (profile.contactMobile || 'Not provided') : 'Visible once your account is verified'} />
-          </View>
-          <Text style={[styles.mutedSmall, { marginTop: space.md }]}>
-            TrustLink administrators review uploaded documents. Verification is not performed directly by DTI or SEC. Document contents and registration numbers remain private.
-          </Text>
-        </View>
+        <TransparencySlides profile={profile} verified={verified} />
 
         <View style={styles.footerRow}>
           <Pressable
@@ -749,5 +818,21 @@ const styles = StyleSheet.create({
   meterPct: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
   meterTrack: { height: 8, borderRadius: radius.pill, backgroundColor: color.surfaceSunken, overflow: 'hidden', marginTop: space.sm },
   meterFill: { height: '100%', borderRadius: radius.pill, backgroundColor: color.primary },
+  slideBody: { minHeight: 150, justifyContent: 'center', paddingVertical: space.lg },
+  slideCenter: { alignItems: 'center', gap: space.xs },
+  slideHero: { fontFamily: font.display, fontSize: fontSize.xl, color: color.ink, textAlign: 'center' },
+  slideSub: { fontFamily: font.bodyMedium, fontSize: fontSize.base, color: color.ink, textAlign: 'center' },
+  slideStatGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  slideStat: { flexGrow: 1, flexBasis: 130, alignItems: 'center', gap: 2, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, paddingVertical: space.md, paddingHorizontal: space.sm },
+  slideStatClean: { borderColor: color.primaryBorder, backgroundColor: color.primaryFaint },
+  slideStatValue: { fontFamily: font.display, fontSize: fontSize.xl, color: color.ink },
+  slideStatLabel: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted, textAlign: 'center' },
+  slideCount: { fontFamily: font.mono, fontSize: fontSize.micro, color: color.inkFaint },
+  slideNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  slideArrow: { width: 36, height: 36, borderRadius: radius.pill, borderWidth: 1, borderColor: color.border, alignItems: 'center', justifyContent: 'center' },
+  slideArrowLabel: { fontFamily: font.bodySemi, fontSize: fontSize.lg, color: color.ink, lineHeight: fontSize.lg + 2 },
+  slideDots: { flexDirection: 'row', gap: space.sm },
+  slideDot: { width: 8, height: 8, borderRadius: radius.pill, backgroundColor: color.border },
+  slideDotActive: { width: 22, backgroundColor: color.primary },
   editInput: { minHeight: layout.minTouchTarget, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, paddingHorizontal: space.md, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
 });
