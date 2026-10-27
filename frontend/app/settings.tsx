@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import AccountSettings from '../features/settings/AccountSettings';
 import {
   me, changeMobileNumber, changePassword, requestPasswordChangeOtp, updateNotificationPreferences,
-  requestEmailChangeOtp, confirmEmailChange, type BackendUser,
+  requestEmailChangeOtp, confirmEmailChange, updateTheme, type BackendUser,
 } from '../lib/api/auth';
 import { color, font, fontSize, space } from '../components/ui/tokens';
 import { errorMessage } from '../lib/api/client';
@@ -76,6 +76,10 @@ export default function SettingsRoute() {
         await changePassword(currentPassword, newPassword, code);
         // Picks up the new cooldown date.
         setUser(await me());
+      }}
+      theme={user.theme ?? 'system'}
+      onChangeTheme={async (theme) => {
+        setUser(await updateTheme(theme));
       }}
       onChangeNotificationPreferences={async (notifyMessages, notifyActivity, notifyEmail) => {
         const updated = await updateNotificationPreferences(notifyMessages, notifyActivity, notifyEmail);

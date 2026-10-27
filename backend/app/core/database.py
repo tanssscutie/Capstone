@@ -40,6 +40,7 @@ def create_db_and_tables():
     _add_column_if_missing("user", "password_changed_at", "DATETIME NULL")
     _add_column_if_missing("user", "email_changed_at", "DATETIME NULL")
     _add_column_if_missing("user", "mobile_changed_at", "DATETIME NULL")
+    _add_column_if_missing("user", "theme", "VARCHAR(10) NOT NULL DEFAULT 'system'")
 
 
 def _migrate_user_role():

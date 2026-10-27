@@ -60,6 +60,7 @@ class UserRead(BaseModel):
     notify_messages: bool = True
     notify_activity: bool = True
     notify_email: bool = True
+    theme: str = "system"
     # The frontend sends an account here (complete-profile) while it's true.
     needs_privacy_consent: bool = False
     privacy_consent_at: Optional[datetime] = None
@@ -104,6 +105,10 @@ class NotificationPreferences(BaseModel):
     notify_activity: bool
     # Defaulted so a client that predates the email toggle doesn't switch it off.
     notify_email: bool = True
+
+
+class ThemePreference(BaseModel):
+    theme: Literal["system", "light", "dark"]
 
 
 class VerifyEmail(BaseModel):

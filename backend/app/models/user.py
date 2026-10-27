@@ -85,6 +85,9 @@ class User(SQLModel, table=True):
     # award decisions, closing-soon reminders.
     notify_messages: bool = True
     notify_activity: bool = True
+    # Appearance: system | light | dark (Account Settings). Stored on the account,
+    # not in the browser, so it follows the user to any device.
+    theme: str = Field(default="system", max_length=10)
     # Also email the important activity alerts (see notification_repository.
     # EMAIL_ALERT_TYPES). Only ever on top of notify_activity, never instead.
     notify_email: bool = True

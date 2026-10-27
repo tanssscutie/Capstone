@@ -18,6 +18,7 @@ import {
   layout,
   breakpoint,
 } from '../../components/ui/tokens';
+import { applyTheme, type ThemePreference } from '../../components/ui/tokens';
 import { errorMessage } from '../../lib/api/client';
 
 export interface AccountSettingsProps {
@@ -32,6 +33,9 @@ export interface AccountSettingsProps {
   onRequestPasswordOtp: () => Promise<void>;
   onChangePassword: (currentPassword: string, newPassword: string, code: string) => Promise<void>;
   onChangeNotificationPreferences: (notifyMessages: boolean, notifyActivity: boolean, notifyEmail: boolean) => Promise<void>;
+  /** Appearance. */
+  theme?: ThemePreference;
+  onChangeTheme?: (theme: ThemePreference) => Promise<void>;
   onRequestEmailOtp: (newEmail: string, currentPassword: string) => Promise<void>;
   onConfirmEmailChange: (code: string) => Promise<void>;
   /** Cooldown ends (ISO) — null = can change now. */
@@ -458,6 +462,60 @@ function PasswordCard({
   );
 }
 
+const THEME_OPTIONS: { value: ThemePreference; label: string; hint: string }[] = [
+  { value: 'system', label: 'System', hint: 'Match this device' },
+  { value: 'light', label: 'Light', hint: 'Always light' },
+  { value: 'dark', label: 'Dark', hint: 'Always dark' },
+];
+
+function AppearanceCard({ theme, onChangeTheme }: { theme: ThemePreference; onChangeTheme: (t: ThemePreference) => Promise<void> }) {
+  const [value, setValue] = useState<ThemePreference>(theme);
+  const [error, setError] = useState<string | null>(null);
+
+  const pick = async (next: ThemePreference) => {
+    if (next === value) return;
+    const previous = value;
+    setValue(next);
+    applyTheme(next); // instant; saved to the account below
+    setError(null);
+    try {
+      await onChangeTheme(next);
+    } catch (e: any) {
+      setValue(previous);
+      applyTheme(previous);
+      setError(toMessage(e, 'Could not save your appearance setting.'));
+    }
+  };
+
+  return (
+    <View style={styles.card}>
+      <SectionLabel>Appearance</SectionLabel>
+      <Text style={[styles.mutedSmall, { marginTop: space.xs }]}>Saved to your account, so it follows you to any device.</Text>
+      <View style={styles.themeRow}>
+        {THEME_OPTIONS.map((o) => {
+          const active = value === o.value;
+          return (
+            <Pressable
+              key={o.value}
+              onPress={() => pick(o.value)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: active }}
+              style={[styles.themeOption, active ? styles.themeOptionActive : null]}
+            >
+              <View style={[styles.themeSwatch, o.value === 'dark' ? styles.swatchDark : o.value === 'light' ? styles.swatchLight : styles.swatchSystem]}>
+                {o.value === 'system' && <View style={styles.swatchHalf} />}
+              </View>
+              <Text style={[styles.fieldLabel, active ? { color: color.primary } : null]}>{o.label}</Text>
+              <Text style={styles.mutedSmall}>{o.hint}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <FieldError>{error}</FieldError>
+    </View>
+  );
+}
+
 function NotificationsCard({
   email,
   notifyMessages,
@@ -538,6 +596,8 @@ export default function AccountSettings({
   passwordChangeAvailableAt,
   emailChangeAvailableAt,
   mobileChangeAvailableAt,
+  theme = 'system',
+  onChangeTheme,
 }: AccountSettingsProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= breakpoint.desktop;
@@ -555,7 +615,7 @@ export default function AccountSettings({
 
         <View style={styles.hero}>
           <Text style={styles.heroName}>Account Settings</Text>
-          <Text style={styles.mutedSmall}>Your login number, password, and what you get notified about.</Text>
+          <Text style={styles.mutedSmall}>Your login number, password, notifications and appearance.</Text>
         </View>
 
         <MobileNumberCard mobileNumber={mobileNumber} onChangeMobileNumber={onChangeMobileNumber} availableAt={mobileChangeAvailableAt ?? null} />
@@ -568,6 +628,7 @@ export default function AccountSettings({
           email={email}
           onChangeNotificationPreferences={onChangeNotificationPreferences}
         />
+        {onChangeTheme && <AppearanceCard theme={theme} onChangeTheme={onChangeTheme} />}
 
         <View style={styles.footerRow}>
           <ActionButton label="Back to home" variant="outline" onPress={onBack} />
@@ -578,6 +639,15 @@ export default function AccountSettings({
 }
 
 const styles = StyleSheet.create({
+  themeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, marginTop: space.md },
+  themeOption: { flexGrow: 1, flexBasis: 140, gap: 2, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, padding: space.md },
+  themeOptionActive: { borderColor: color.primary, backgroundColor: color.primaryFaint },
+  themeSwatch: { height: 44, borderRadius: radius.md, borderWidth: 1, borderColor: color.borderStrong, marginBottom: space.sm, overflow: 'hidden' },
+  // Fixed previews of each mode — deliberately not theme tokens.
+  swatchLight: { backgroundColor: '#FBFAF9' },
+  swatchDark: { backgroundColor: '#1B1B1A' },
+  swatchSystem: { backgroundColor: '#FBFAF9' },
+  swatchHalf: { position: 'absolute', top: 0, right: 0, bottom: 0, width: '50%', backgroundColor: '#1B1B1A' },
   root: { flex: 1, backgroundColor: color.canvas },
   scrollContent: { alignItems: 'center', paddingVertical: space.lg, paddingBottom: space.xxl },
 

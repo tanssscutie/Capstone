@@ -16,6 +16,7 @@ import { getVerificationStatus, getDashboardStats } from '../lib/api/business';
 import { notificationsApi } from '../lib/api/notifications';
 import { mapViewerBusiness } from '../lib/api/mappers';
 import type { Business } from '../lib/types';
+import { applyTheme } from '../components/ui/tokens';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -71,6 +72,7 @@ export default function RootLayout() {
           getVerificationStatus(),
           getDashboardStats(),
         ]);
+        if (!cancelled) applyTheme(user.theme);
         // A Google sign-up that never finished setting a mobile number or
         // picking buyer/seller — every other screen assumes both exist
         // (contact display, which nav/actions to show, etc.), so this is

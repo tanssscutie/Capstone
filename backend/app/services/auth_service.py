@@ -609,5 +609,16 @@ class AuthService:
             session.refresh(user)
             return user
 
+    def update_theme(self, user_id: int, theme: str) -> User:
+        with Session(engine) as session:
+            user = get_user(session, user_id)
+            if not user:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            user.theme = theme
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+            return user
+
 
 auth_service = AuthService()

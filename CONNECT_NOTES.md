@@ -76,6 +76,13 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Dark mode (Account Settings → Appearance)**
+- Tatlong pagpipilian: **System** (sumusunod sa device; ito ang default), **Light**, at **Dark**. Agad itong nag-a-apply, at naka-save sa account (`user.theme`), kaya nasusundan nito ang user sa ibang device. Hindi ito gumagamit ng localStorage.
+- **Paano:** sa web, CSS variable (`var(--tl-…)`) na ang bawat kulay sa `tokens.ts`. May light at dark na palette na ini-inject sa `<style id="tl-theme">`, kaya hindi kinailangang galawin ang bawat screen. Pinapalitan lang ng `applyTheme()` ang `data-theme` sa `<html>`. Sa native, light pa rin.
+- Ina-apply ito pagka-load (`app/_layout.tsx`, mula sa `/auth/me`). Sumusunod naman sa device ang mga page bago mag-login.
+- Code: `DARK` palette at `applyTheme` sa `components/ui/tokens.ts`, `AppearanceCard` sa `AccountSettings.tsx`, `PUT /auth/theme`, at bagong column na `user.theme` (auto-migrate). Tests: `backend/tests/test_theme.py`.
+- Ipaalam sa grupo: may dark na bersyon na ang bawat kulay. Kung magdadagdag ng token, lagyan din ng dark na value.
+
 **Naka-lock na business details + "Request a change"**
 - **Pagkatapos ng onboarding, naka-lock na ang:** registered name, display name, business type, category, city/province, contact person at contact mobile. Ang `submit_onboarding` ay pinapanatili ang nasa file, kahit iba ang ipinadala. Kung walang laman pa (lumang account), puwede pang punan.
 - **Puwede pa ring i-edit:** capabilities, service areas, items at description.

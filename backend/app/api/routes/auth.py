@@ -14,7 +14,7 @@ from app.schemas.auth import (
     Token,
     PasswordChange,
     MobileNumberChange,
-    NotificationPreferences,
+    NotificationPreferences, ThemePreference,
     CompleteProfile,
     VerifyEmail,
     ResendOtp,
@@ -132,6 +132,12 @@ def confirm_email_change(data: EmailChangeConfirm, current_user=Depends(get_curr
 @router.put("/mobile-number", response_model=UserRead)
 def change_mobile_number(data: MobileNumberChange, current_user=Depends(get_current_user)):
     return auth_service.change_mobile_number(current_user.id, data)
+
+
+@router.put("/theme", response_model=UserRead)
+def update_theme(data: ThemePreference, current_user=Depends(get_current_user)):
+    """Appearance: system, light or dark."""
+    return auth_service.update_theme(current_user.id, data.theme)
 
 
 @router.put("/notification-preferences", response_model=UserRead)

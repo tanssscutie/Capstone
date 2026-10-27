@@ -15,6 +15,8 @@ export interface BackendUser {
   notify_messages: boolean;
   notify_activity: boolean;
   notify_email: boolean;
+  /** Appearance — Account Settings. */
+  theme?: 'system' | 'light' | 'dark';
   /** Hasn't agreed to the current Privacy Notice — send to /complete-profile. */
   needs_privacy_consent: boolean;
   privacy_consent_at: string | null;
@@ -213,4 +215,8 @@ export async function updateNotificationPreferences(
     notify_activity: notifyActivity,
     notify_email: notifyEmail,
   });
+}
+
+export async function updateTheme(theme: 'system' | 'light' | 'dark'): Promise<BackendUser> {
+  return api.put<BackendUser>('/auth/theme', { theme });
 }

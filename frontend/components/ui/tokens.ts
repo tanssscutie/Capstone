@@ -2,7 +2,7 @@
 // Extracted from the Claude Design screens. Sizes raised for mobile legibility.
 // No new colours or fonts without a PR seen by all four.
 
-export const color = {
+const LIGHT = {
   // Text
   ink: '#0F0F0E',
   inkMuted: 'rgba(15,15,14,0.62)',
@@ -43,6 +43,68 @@ export const color = {
 
   onPrimary: '#FFFFFF',
 } as const;
+
+/** Dark mode — same keys. Navy and red are lifted so they read on a dark surface. */
+const DARK: Record<keyof typeof LIGHT, string> = {
+  ink: '#ECEAE6',
+  inkMuted: 'rgba(236,234,230,0.68)',
+  inkFaint: 'rgba(236,234,230,0.48)',
+  primary: '#3D86C4',
+  primaryPressed: '#2F6FA6',
+  primaryFaint: 'rgba(61,134,196,0.14)',
+  primaryBorder: 'rgba(61,134,196,0.45)',
+  danger: '#E0664F',
+  dangerFaint: 'rgba(224,102,79,0.10)',
+  dangerBorder: 'rgba(224,102,79,0.45)',
+  success: '#4FB37A',
+  successFaint: 'rgba(79,179,122,0.12)',
+  successBorder: 'rgba(79,179,122,0.45)',
+  warning: '#D9973D',
+  warningFaint: 'rgba(217,151,61,0.12)',
+  warningBorder: 'rgba(217,151,61,0.45)',
+  accent: '#2BB3A6',
+  accentFaint: 'rgba(43,179,166,0.12)',
+  accentBorder: 'rgba(43,179,166,0.45)',
+  canvas: '#121211',
+  surface: '#1B1B1A',
+  surfaceSunken: '#242422',
+  border: 'rgba(236,234,230,0.14)',
+  borderFaint: 'rgba(236,234,230,0.09)',
+  borderStrong: 'rgba(236,234,230,0.26)',
+  onPrimary: '#FFFFFF',
+};
+
+const IS_WEB = typeof document !== 'undefined';
+const cssVar = (key: string) => `--tl-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+
+/** On web every colour is a CSS variable, so switching theme restyles the
+ *  whole app without re-rendering it. Native keeps the light values. */
+export const color = (IS_WEB
+  ? Object.fromEntries(Object.keys(LIGHT).map((k) => [k, `var(${cssVar(k)})`]))
+  : LIGHT) as { readonly [K in keyof typeof LIGHT]: string };
+
+export type ThemePreference = 'system' | 'light' | 'dark';
+
+if (IS_WEB && !document.getElementById('tl-theme')) {
+  const vars = (palette: Record<string, string>) =>
+    Object.entries(palette).map(([k, v]) => `${cssVar(k)}:${v};`).join('');
+  const style = document.createElement('style');
+  style.id = 'tl-theme';
+  style.textContent =
+    `:root{${vars(LIGHT)}color-scheme:light;}` +
+    `:root[data-theme="dark"]{${vars(DARK)}color-scheme:dark;}` +
+    `@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${vars(DARK)}color-scheme:dark;}}` +
+    'html,body{background-color:var(--tl-canvas);}';
+  document.head.appendChild(style);
+}
+
+/** Applies Account Settings → Appearance. "system" follows the device. */
+export function applyTheme(pref: ThemePreference | null | undefined) {
+  if (!IS_WEB) return;
+  const root = document.documentElement;
+  if (pref === 'light' || pref === 'dark') root.setAttribute('data-theme', pref);
+  else root.removeAttribute('data-theme');
+}
 
 /** Every weight is a separate file in React Native. No font-weight: 500. */
 export const font = {
