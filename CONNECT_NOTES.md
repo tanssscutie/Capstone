@@ -120,6 +120,7 @@ npx expo start --web
   - JPG, PNG o WebP, hanggang 5 MB.
 - **Links:** http/https lang. Kapag walang scheme, idinadagdag ang `https://`. Tinatanggihan ang `javascript:` at iba pang scheme.
 - **Header:** ang larawan na rin ang nasa account chip, kung mayroon.
+- **Daan papunta rito:** sa account menu, ang **"My Profile"** ay bumubukas na sa bagong profile (`/business-profile?id=<sarili>`). Ang dating page (business name, contact, capabilities, "Update in onboarding") ay nasa **"Business details"** na (`/account`).
 - **"Request a quote":** buyer na tumitingin sa seller.
   - Bubukas ang Post a Requirement na may banner na "Inviting {name} to quote — still open to every matching supplier and sealed until closing". Puwedeng "Remove".
   - Pagka-publish, may alert ang inimbitahan ("{buyer} invited you to quote"), kung verified, active, at nasa parehong category ito. Hanggang 5.
