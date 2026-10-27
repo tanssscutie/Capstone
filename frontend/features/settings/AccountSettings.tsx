@@ -3,7 +3,7 @@
 // mobile number, password") made real. Same page shell as AccountProfile.tsx
 // (breadcrumb, hero, bordered cards) so the two feel like one settings area.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, Pressable, TextInput, StyleSheet, useWindowDimensions } from 'react-native';
 import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
@@ -471,6 +471,16 @@ const THEME_OPTIONS: { value: ThemePreference; label: string; hint: string }[] =
 function AppearanceCard({ theme, onChangeTheme }: { theme: ThemePreference; onChangeTheme: (t: ThemePreference) => Promise<void> }) {
   const [value, setValue] = useState<ThemePreference>(theme);
   const [error, setError] = useState<string | null>(null);
+  // What the browser reports for the device — "System" follows exactly this.
+  const [deviceDark, setDeviceDark] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const update = () => setDeviceDark(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
 
   const pick = async (next: ThemePreference) => {
     if (next === value) return;
@@ -506,11 +516,19 @@ function AppearanceCard({ theme, onChangeTheme }: { theme: ThemePreference; onCh
                 {o.value === 'system' && <View style={styles.swatchHalf} />}
               </View>
               <Text style={[styles.fieldLabel, active ? { color: color.primary } : null]}>{o.label}</Text>
-              <Text style={styles.mutedSmall}>{o.hint}</Text>
+              <Text style={styles.mutedSmall}>
+                {o.value === 'system' && deviceDark !== null ? `${o.hint} · now ${deviceDark ? 'Dark' : 'Light'}` : o.hint}
+              </Text>
             </Pressable>
           );
         })}
       </View>
+      {value === 'system' && (
+        <Text style={[styles.mutedSmall, { marginTop: space.sm }]}>
+          System uses the mode your browser reports. If it doesn't change with your device, set your browser's appearance
+          to "System default" (Edge) or "Device" (Chrome).
+        </Text>
+      )}
       <FieldError>{error}</FieldError>
     </View>
   );
