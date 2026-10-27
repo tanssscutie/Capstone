@@ -31,7 +31,8 @@ import {
 } from '../../components/ui/tokens';
 import { AvatarChip, initials } from '../../components/ui/AvatarChip';
 import ScreenScroll from '../../components/ui/ScreenScroll';
-import { OrderStatusPanel } from '../../components/ui/OrderStatusPanel';
+import { OrderStatusPanel, isChatClosed } from '../../components/ui/OrderStatusPanel';
+import type { OrderStatus } from '../../lib/api/requirements';
 import type {
   Business,
   BusinessId,
@@ -220,6 +221,7 @@ function QuotationRow({
   onResubmit?: (requirementId: string) => void;
 } & Pick<MyQuotationsProps, 'onAcceptAward' | 'onDeclineAward' | 'onOpenChat'>) {
   const reached = stepReached(quotation);
+  const [orderStatus, setOrderStatus] = useState<OrderStatus | null>(null);
   const buyerName = buyer.displayName ?? buyer.registeredName;
   const sealed = quotation.status === 'SUBMITTED';
   const withdrawn = quotation.status === 'WITHDRAWN';
@@ -275,9 +277,10 @@ function QuotationRow({
         onAcceptAward={onAcceptAward}
         onDeclineAward={onDeclineAward}
         onOpenChat={onOpenChat}
+        chatClosed={isChatClosed(orderStatus)}
       />
       {quotation.status === 'AWARDED' && (
-        <OrderStatusPanel requirementId={requirement.id} counterpartyId={buyer.id} counterpartyName={buyerName} />
+        <OrderStatusPanel requirementId={requirement.id} counterpartyId={buyer.id} counterpartyName={buyerName} onStatus={setOrderStatus} />
       )}
 
       {withdrawn && replacement && (
@@ -328,12 +331,14 @@ function StepTracker({ reached }: { reached: number }) {
 }
 
 /** One sentence and at most one or two actions — the only thing a seller needs to read. */
-function NextStep({ quotation, requirement, onAcceptAward, onDeclineAward, onOpenChat }: {
+function NextStep({ quotation, requirement, onAcceptAward, onDeclineAward, onOpenChat, chatClosed }: {
   quotation: Quotation;
   requirement: Requirement;
   onAcceptAward?: (requirementId: string) => Promise<string | null>;
   onDeclineAward?: (requirementId: string) => Promise<string | null>;
   onOpenChat?: (threadId: string) => void;
+  /** Completed or did not push through — the chat is a read-only record. */
+  chatClosed?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -371,7 +376,9 @@ function NextStep({ quotation, requirement, onAcceptAward, onDeclineAward, onOpe
       break;
     case 'AWARDED':
       // The order itself (updates, confirm, did not push through) is in OrderStatusPanel.
-      if (chat) {
+      if (chatClosed) {
+        text = 'Transaction finished. The chat stays as a record in Messages.';
+      } else if (chat) {
         text = 'Awarded to you. Coordinate the details with the buyer in the chat.';
         actions = <ActionButton label="Open chat" variant="outline" onPress={chat} />;
       }

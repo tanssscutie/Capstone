@@ -61,6 +61,22 @@ def _is_open(session: Session, thread: MessageThread) -> bool:
     return awarded is not None and awarded.business_id == thread.business_id
 
 
+READ_ONLY_DETAIL = "This transaction is completed. The conversation stays as a record."
+
+
+def _is_read_only(session: Session, thread: MessageThread) -> bool:
+    """Once the order is completed or did not push through, the thread is a
+    record: readable, but closed to new messages and files."""
+    from app.services import fulfillment_service
+    req = req_repo.get_requirement(session, thread.requirement_id)
+    return req is not None and fulfillment_service.effective_status(session, req) in ("completed", "not_pushed_through")
+
+
+def _ensure_writable(session: Session, thread: MessageThread) -> None:
+    if _is_read_only(session, thread):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=READ_ONLY_DETAIL)
+
+
 class MessageService:
     def _to_thread_out(self, session: Session, thread: MessageThread, viewer_id: int) -> MessageThreadOut:
         req = req_repo.get_requirement(session, thread.requirement_id)
@@ -77,6 +93,7 @@ class MessageService:
             last_message_preview=_preview(latest),
             last_message_at=latest.created_at if latest else None,
             unread=repo.has_unread(session, thread.id, viewer_id),
+            read_only=_is_read_only(session, thread),
         )
 
     def _notify_recipient(self, session: Session, thread: MessageThread, sender_id: int, text: str) -> None:
@@ -130,6 +147,7 @@ class MessageService:
     def send_message(self, thread_id: int, user_id: int, body: str) -> MessageOut:
         with Session(engine) as session:
             thread = self._require_participant(session, thread_id, user_id)
+            _ensure_writable(session, thread)
             m = repo.create_message(session, thread_id, user_id, body.strip())
             self._notify_recipient(session, thread, user_id, m.body)
 
@@ -153,6 +171,7 @@ class MessageService:
 
         with Session(engine) as session:
             thread = self._require_participant(session, thread_id, user_id)
+            _ensure_writable(session, thread)
             thread_dir = os.path.join(UPLOAD_ROOT, str(thread.id))
             os.makedirs(thread_dir, exist_ok=True)
             full_path = os.path.join(thread_dir, f"{uuid.uuid4().hex}{ext}")

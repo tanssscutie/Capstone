@@ -17,6 +17,9 @@ class MessageThreadOut(BaseModel):
     last_message_preview: str
     last_message_at: Optional[datetime]
     unread: bool
+    # The transaction is completed (or did not push through): the thread stays
+    # as a record and nobody can post in it.
+    read_only: bool = False
 
 
 class MessageOut(BaseModel):

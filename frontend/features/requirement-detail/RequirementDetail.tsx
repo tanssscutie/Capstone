@@ -40,7 +40,7 @@ import type {
 import { PREFERRED_BRAND_ID, specDisplayValue } from '../../lib/data/categories';
 import { useMarketRules } from '../../lib/data/marketRules';
 import { ReportLink } from '../../components/ui/ReportBusinessModal';
-import { OrderStatusPanel } from '../../components/ui/OrderStatusPanel';
+import { OrderStatusPanel, isChatClosed } from '../../components/ui/OrderStatusPanel';
 import { CaptionOrHint, InfoHint } from '../../components/ui/InfoHint';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 
@@ -1463,6 +1463,7 @@ function AwardedOrderStatus({ st, requirement }: { st: ReturnType<typeof useOwne
       requirementId={requirement.id}
       counterpartyId={supplier?.id}
       counterpartyName={supplier?.registeredName}
+      onStatus={(s) => st.setChatClosed(isChatClosed(s))}
     />
   );
 }
@@ -1491,6 +1492,8 @@ function useOwnerReleased({
   const [sortKey, setSortKey] = useState<SortKey>('submittedAt');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [awardTargetId, setAwardTargetId] = useState<string | null>(null);
+  // Completed / did not push through: the award chat is a read-only record.
+  const [chatClosed, setChatClosed] = useState(false);
   const locked = awardedId !== null || closedNoAward || awardPendingId !== null;
 
   const handleSortPress = (key: SortKey) => {
@@ -1583,6 +1586,8 @@ function useOwnerReleased({
     handleConfirmAward,
     handleCloseWithoutAward,
     setAwardTargetId,
+    chatClosed,
+    setChatClosed,
   };
 }
 
@@ -2292,7 +2297,8 @@ function WideQuotationCard({
   onToggleShortlist: () => void;
   onRequestAward: () => void;
   onViewProfile: () => void;
-  onMessage: () => void;
+  /** Absent once the chat is a read-only record. */
+  onMessage?: () => void;
   documentRequests: DocumentRequest[];
   documentHandlers: DocumentRequestHandlers;
 }) {
@@ -2410,7 +2416,7 @@ function WideQuotationCard({
         <View style={styles.wideQuoteFooterActions}>
           <ReportLink businessId={respondent.id} businessName={name} />
           <ActionButton label="View profile" variant="outline" onPress={onViewProfile} />
-          {isAwarded && <ActionButton label="Message" variant="outline" onPress={onMessage} />}
+          {isAwarded && onMessage && <ActionButton label="Message" variant="outline" onPress={onMessage} />}
           {!isAwardPending && (
             <ActionButton
               label={isShortlisted ? 'Shortlisted' : 'Shortlist'}
@@ -2566,7 +2572,7 @@ function WideOwnerReleasedScreen(props: OwnerReleasedProps) {
                     onToggleShortlist={() => st.handleToggleShortlist(q.id)}
                     onRequestAward={() => st.setAwardTargetId(q.id)}
                     onViewProfile={() => props.onViewRespondentProfile?.(q.respondentId)}
-                    onMessage={() => props.onMessageRespondent?.(q.respondentId)}
+                    onMessage={st.chatClosed ? undefined : () => props.onMessageRespondent?.(q.respondentId)}
                     documentRequests={props.documentRequests?.[q.id] ?? []}
                     documentHandlers={props}
                   />

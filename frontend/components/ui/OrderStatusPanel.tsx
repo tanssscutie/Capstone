@@ -22,6 +22,11 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   unconfirmed: 'Unconfirmed',
 };
 
+/** The transaction is over — the award chat becomes a read-only record. */
+export function isChatClosed(status: OrderStatus | null | undefined): boolean {
+  return status === 'completed' || status === 'not_pushed_through';
+}
+
 const TRACK: OrderStatus[] = ['awarded', 'in_production', 'out_for_delivery', 'delivered', 'completed'];
 
 function formatDate(iso: string): string {
@@ -55,6 +60,7 @@ export function OrderStatusPanel({
   counterpartyId,
   counterpartyName,
   onChanged,
+  onStatus,
 }: {
   requirementId: string | number;
   /** The other party — for "Report a problem". */
@@ -62,6 +68,8 @@ export function OrderStatusPanel({
   counterpartyName?: string;
   /** After any successful action, e.g. to refresh a list. */
   onChanged?: () => void;
+  /** Called with the order status every time it loads. */
+  onStatus?: (status: OrderStatus) => void;
 }) {
   const [data, setData] = useState<FulfillmentOut | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -73,7 +81,8 @@ export function OrderStatusPanel({
   const rid = Number(requirementId);
 
   const load = useCallback(() => {
-    requirementsApi.getFulfillment(rid).then((d) => { setData(d); setLoadFailed(false); }).catch(() => setLoadFailed(true));
+    requirementsApi.getFulfillment(rid).then((d) => { setData(d); setLoadFailed(false); onStatus?.(d.status); }).catch(() => setLoadFailed(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rid]);
   useEffect(load, [load]);
 

@@ -37,7 +37,7 @@ import {
 import { AvatarChip, initials } from '../../components/ui/AvatarChip';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 import { ReportLink } from '../../components/ui/ReportBusinessModal';
-import { OrderStatusLine } from '../../components/ui/OrderStatusPanel';
+import { OrderStatusLine, isChatClosed } from '../../components/ui/OrderStatusPanel';
 import type { FulfillmentOut } from '../../lib/api/requirements';
 import type {
   Business,
@@ -687,6 +687,7 @@ export function ConversationPane({
   const [sendError, setSendError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const canSend = !uploading && (draft.trim().length > 0 || file !== null);
+  const readOnly = isChatClosed(fulfillment?.status);
 
   const pickFile = async () => {
     if (uploading || !isWebFilePickerSupported()) return;
@@ -753,6 +754,12 @@ export function ConversationPane({
           );
         })}
       </ScrollView>
+      {readOnly ? (
+        <View style={styles.composerClosed}>
+          <Text style={styles.composerClosedText}>This transaction is completed. The conversation stays as a record.</Text>
+        </View>
+      ) : (
+      <>
       {(file || sendError) && (
         <View style={styles.composerStaged}>
           {file && (
@@ -796,6 +803,8 @@ export function ConversationPane({
           <Text style={styles.composerSendLabel}>{uploading ? 'Sending…' : 'Send'}</Text>
         </Pressable>
       </View>
+      </>
+      )}
     </View>
   );
 }
@@ -1927,6 +1936,8 @@ const styles = StyleSheet.create({
   attachmentCard: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, backgroundColor: color.surface, paddingHorizontal: space.sm, paddingVertical: space.xs, minWidth: 180 },
   attachmentIcon: { fontSize: fontSize.sm },
   attachmentName: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
+  composerClosed: { padding: space.md, borderTopWidth: 1, borderTopColor: color.border, backgroundColor: color.surfaceSunken },
+  composerClosedText: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted, textAlign: 'center' },
   composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm, padding: space.md, borderTopWidth: 1, borderTopColor: color.border },
   composerInput: { flex: 1, minHeight: 36, maxHeight: 80, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
   composerSend: { minHeight: 36, justifyContent: 'center', backgroundColor: color.primary, borderRadius: radius.pill, paddingHorizontal: space.lg, paddingVertical: space.sm },

@@ -101,6 +101,12 @@ npx expo start --web
   - frontend: `components/ui/OrderStatusPanel.tsx` (`OrderStatusPanel` at `OrderStatusLine`)
 - Tests: `backend/tests/test_fulfillment.py`.
 
+**Read-only na chat pagka-Completed o "Did not push through"**
+- Kapag tapos na ang transaction, nakatago na ang "Open chat" (My Quotations) at ang "Message" (Requirement Detail). Sa My Quotations: "Transaction finished. The chat stays as a record in Messages."
+- Nababasa pa rin ang thread sa Messages, pero kapalit ng composer ang "This transaction is completed. The conversation stays as a record."
+- **Backend:** 409 sa pagpadala ng text o file, at may bagong `read_only` sa `GET /messages/threads`. Habang naghihintay pa ng confirm ang "Did not push through", bukas pa ang chat.
+- Code: `message_service._is_read_only` at `_ensure_writable`, `isChatClosed` at `onStatus` sa `OrderStatusPanel.tsx`, at `ConversationPane` sa `HomeFeed.tsx`. Tests: `backend/tests/test_completed_chat.py`.
+
 **Cooldown sa pagpalit ng password, email at mobile number (15 araw)**
 - Isang beses lang kada 15 araw mapapalitan ang bawat isa. Habang naka-cooldown, nakatago ang "Change" at may "🔒 You can change this again on {date}". Sa backend, 429 kung susubukan pa rin.
 - **Hindi hinaharangan ang Forgot password**, para hindi ma-lock out ang user, pero nagsisimula ito ng bagong cooldown.
