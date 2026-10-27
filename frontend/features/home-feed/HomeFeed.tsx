@@ -81,6 +81,8 @@ export type HomeFeedProps = {
   onSendMessage?: (threadId: string, body: string, file?: File) => Promise<string | null> | void;
   onOpenThread?: (threadId: string) => void;
   onOpenAttachment?: (threadId: string, messageId: string) => void;
+  /** Opens the full /messages page — on a thread, or the inbox when none. */
+  onExpandMessages?: (threadId?: string) => void;
 } & CloseoutChatProps & {
   onCompleteVerification?: () => void;
   onAddMayorsPermit?: () => void;
@@ -400,7 +402,7 @@ function PulseDot({ dotColor, pulse }: { dotColor: string; pulse: boolean }) {
 
 /* ─── Header pieces ─────────────────────────────────── */
 
-function ThreadRow({ thread, now, onPress }: { thread: MessageThread; now: number; onPress: () => void }) {
+export function ThreadRow({ thread, now, onPress }: { thread: MessageThread; now: number; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.threadRow, pressed ? styles.threadRowPressed : null]}>
       <AvatarChip label={initials(thread.counterpartyName)} size={30} dark={!thread.unread} />
@@ -623,7 +625,7 @@ function ChatCloseoutBar({
   );
 }
 
-function TrustlinkMark() {
+export function TrustlinkMark() {
   return <Image source={require('../../assets/logo.jpg')} style={styles.dockMark} resizeMode="contain" />;
 }
 
@@ -634,6 +636,11 @@ function CloseGlyph() {
       <View style={[styles.closeGlyphBar, { transform: [{ rotate: '-45deg' }] }]} />
     </View>
   );
+}
+
+/** "Open in full page" — a small outlined square. */
+function ExpandGlyph() {
+  return <View style={styles.expandGlyph} />;
 }
 
 function ChevronGlyph({ up }: { up: boolean }) {
@@ -671,6 +678,7 @@ function ThreadListCard({
   open,
   onToggleOpen,
   onSelectThread,
+  onExpand,
   width,
 }: {
   threads: MessageThread[];
@@ -678,6 +686,7 @@ function ThreadListCard({
   open: boolean;
   onToggleOpen: () => void;
   onSelectThread: (id: string) => void;
+  onExpand?: () => void;
   width: number;
 }) {
   const unread = threads.filter((t) => t.unread).length;
@@ -691,6 +700,11 @@ function ThreadListCard({
           <View style={styles.chatBadge}>
             <Text style={styles.chatBadgeLabel}>{unread}</Text>
           </View>
+        )}
+        {open && onExpand && (
+          <Pressable onPress={onExpand} hitSlop={8} accessibilityLabel="Open Messages page">
+            <ExpandGlyph />
+          </Pressable>
         )}
       </Pressable>
 
@@ -723,36 +737,94 @@ function ConversationWindow({
   onClose,
   onClosed,
   onSend,
+  onExpand,
   width,
   closeout,
   onProposeCloseout,
   onRespondCloseout,
   onWithdrawCloseout,
   onOpenAttachment,
-}: {
+}: ConversationPaneProps & {
   thread: MessageThread;
-  closeout?: TransactionCloseout | null;
-  onProposeCloseout?: (outcome: CloseoutOutcome, note: string) => Promise<string | null>;
-  onRespondCloseout?: (confirm: boolean, note: string) => Promise<string | null>;
-  onWithdrawCloseout?: () => Promise<string | null>;
-  messages: Message[];
-  viewerId: BusinessId;
   collapsed: boolean;
   closing: boolean;
   onToggleCollapse: () => void;
   onClose: () => void;
   onClosed: () => void;
-  onSend: (body: string, file?: File) => Promise<string | null> | void;
-  onOpenAttachment?: (messageId: string) => void;
+  onExpand?: () => void;
   width: number;
 }) {
+  const open = !collapsed && !closing;
+
+  return (
+    <View style={[styles.dockPanel, { width }]}>
+      <View style={[styles.dockBar, open ? styles.dockBarOpen : null]}>
+        <Pressable onPress={onToggleCollapse} hitSlop={8} style={styles.dockHeaderPress}>
+          <ChevronGlyph up={!open} />
+          <View style={{ minWidth: 0 }}>
+            <Text style={styles.dockBarLabel} numberOfLines={1}>{thread.counterpartyName}</Text>
+            <Text style={styles.dockMeta}>{thread.requirementRef}</Text>
+          </View>
+        </Pressable>
+        <View style={{ flex: 1 }} />
+        {open && <ReportLink businessId={thread.counterpartyId} businessName={thread.counterpartyName} />}
+        {open && onExpand && (
+          <Pressable onPress={onExpand} hitSlop={8} accessibilityLabel="Open in Messages page">
+            <ExpandGlyph />
+          </Pressable>
+        )}
+        <Pressable onPress={onClose} hitSlop={8}>
+          <CloseGlyph />
+        </Pressable>
+      </View>
+
+      {/* onClosed only wired while an actual close is in flight — an ordinary collapse
+       *  also animates height to 0, but must not trigger the deferred unmount below. */}
+      <GrowPanel open={open} onClosed={closing ? onClosed : undefined}>
+        <ConversationPane
+          messages={messages}
+          viewerId={viewerId}
+          onSend={onSend}
+          onOpenAttachment={onOpenAttachment}
+          closeout={closeout}
+          onProposeCloseout={onProposeCloseout}
+          onRespondCloseout={onRespondCloseout}
+          onWithdrawCloseout={onWithdrawCloseout}
+        />
+      </GrowPanel>
+    </View>
+  );
+}
+
+export interface ConversationPaneProps {
+  messages: Message[];
+  viewerId: BusinessId;
+  onSend: (body: string, file?: File) => Promise<string | null> | void;
+  onOpenAttachment?: (messageId: string) => void;
+  closeout?: TransactionCloseout | null;
+  onProposeCloseout?: (outcome: CloseoutOutcome, note: string) => Promise<string | null>;
+  onRespondCloseout?: (confirm: boolean, note: string) => Promise<string | null>;
+  onWithdrawCloseout?: () => Promise<string | null>;
+}
+
+/** The body of one conversation — status bar, messages, composer. Used by the
+ *  dock's ConversationWindow and by the full /messages page. Fills its parent. */
+export function ConversationPane({
+  messages,
+  viewerId,
+  onSend,
+  onOpenAttachment,
+  closeout,
+  onProposeCloseout,
+  onRespondCloseout,
+  onWithdrawCloseout,
+}: ConversationPaneProps) {
   const [draft, setDraft] = useState('');
   // One file per message — picked here, sent with whatever text is in the draft.
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const open = !collapsed && !closing;
   const canSend = !uploading && (draft.trim().length > 0 || file !== null);
 
   const pickFile = async () => {
@@ -788,107 +860,86 @@ function ConversationWindow({
   };
 
   return (
-    <View style={[styles.dockPanel, { width }]}>
-      <View style={[styles.dockBar, open ? styles.dockBarOpen : null]}>
-        <Pressable onPress={onToggleCollapse} hitSlop={8} style={styles.dockHeaderPress}>
-          <ChevronGlyph up={!open} />
-          <View style={{ minWidth: 0 }}>
-            <Text style={styles.dockBarLabel} numberOfLines={1}>{thread.counterpartyName}</Text>
-            <Text style={styles.dockMeta}>{thread.requirementRef}</Text>
-          </View>
-        </Pressable>
-        <View style={{ flex: 1 }} />
-        {open && <ReportLink businessId={thread.counterpartyId} businessName={thread.counterpartyName} />}
-        <Pressable onPress={onClose} hitSlop={8}>
-          <CloseGlyph />
-        </Pressable>
-      </View>
-
-      {/* onClosed only wired while an actual close is in flight — an ordinary collapse
-       *  also animates height to 0, but must not trigger the deferred unmount below. */}
-      <GrowPanel open={open} onClosed={closing ? onClosed : undefined}>
-        <View style={{ flex: 1 }}>
-          <ChatCloseoutBar
-            closeout={closeout}
-            onPropose={onProposeCloseout}
-            onRespond={onRespondCloseout}
-            onWithdraw={onWithdrawCloseout}
-          />
-          <ScrollView
-            ref={scrollRef}
-            style={styles.dockScroll}
-            contentContainerStyle={styles.bubbleList}
-            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
-          >
-            {messages.length === 0 && (
-              <Text style={styles.dockEmptyText}>No messages yet. Say hello to start coordinating.</Text>
-            )}
-            {messages.map((m, i) => {
-              const day = dayLabel(m.sentAt);
-              const newDay = i === 0 || dayLabel(messages[i - 1].sentAt) !== day;
-              return (
-                <View key={m.id} style={{ gap: space.sm }}>
-                  {newDay && (
-                    <View style={styles.daySeparator}>
-                      <View style={styles.daySeparatorLine} />
-                      <Text style={styles.daySeparatorLabel}>{day}</Text>
-                      <View style={styles.daySeparatorLine} />
-                    </View>
-                  )}
-                  <MessageBubble
-                    message={m}
-                    mine={!m.isSystem && m.senderId === viewerId}
-                    onOpenAttachment={m.attachment && onOpenAttachment ? () => onOpenAttachment(m.id) : undefined}
-                  />
-                </View>
-              );
-            })}
-          </ScrollView>
-          {(file || sendError) && (
-            <View style={styles.composerStaged}>
-              {file && (
-                <View style={styles.stagedChip}>
-                  <Text style={styles.attachmentIcon}>📎</Text>
-                  <Text style={[styles.attachmentName, { flex: 1 }]} numberOfLines={1}>{file.name}</Text>
-                  <Text style={styles.bubbleTime}>{formatFileSize(file.size)}</Text>
-                  {!uploading && (
-                    <Pressable onPress={() => setFile(null)} hitSlop={8}>
-                      <CloseGlyph />
-                    </Pressable>
-                  )}
+    <View style={{ flex: 1 }}>
+      <ChatCloseoutBar
+        closeout={closeout}
+        onPropose={onProposeCloseout}
+        onRespond={onRespondCloseout}
+        onWithdraw={onWithdrawCloseout}
+      />
+      <ScrollView
+        ref={scrollRef}
+        style={styles.dockScroll}
+        contentContainerStyle={styles.bubbleList}
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+      >
+        {messages.length === 0 && (
+          <Text style={styles.dockEmptyText}>No messages yet. Say hello to start coordinating.</Text>
+        )}
+        {messages.map((m, i) => {
+          const day = dayLabel(m.sentAt);
+          const newDay = i === 0 || dayLabel(messages[i - 1].sentAt) !== day;
+          return (
+            <View key={m.id} style={{ gap: space.sm }}>
+              {newDay && (
+                <View style={styles.daySeparator}>
+                  <View style={styles.daySeparatorLine} />
+                  <Text style={styles.daySeparatorLabel}>{day}</Text>
+                  <View style={styles.daySeparatorLine} />
                 </View>
               )}
-              {sendError && <Text style={styles.closeoutError}>{sendError}</Text>}
+              <MessageBubble
+                message={m}
+                mine={!m.isSystem && m.senderId === viewerId}
+                onOpenAttachment={m.attachment && onOpenAttachment ? () => onOpenAttachment(m.id) : undefined}
+              />
+            </View>
+          );
+        })}
+      </ScrollView>
+      {(file || sendError) && (
+        <View style={styles.composerStaged}>
+          {file && (
+            <View style={styles.stagedChip}>
+              <Text style={styles.attachmentIcon}>📎</Text>
+              <Text style={[styles.attachmentName, { flex: 1 }]} numberOfLines={1}>{file.name}</Text>
+              <Text style={styles.bubbleTime}>{formatFileSize(file.size)}</Text>
+              {!uploading && (
+                <Pressable onPress={() => setFile(null)} hitSlop={8}>
+                  <CloseGlyph />
+                </Pressable>
+              )}
             </View>
           )}
-          <View style={styles.composerRow}>
-            <Pressable onPress={pickFile} disabled={uploading} hitSlop={6} style={styles.composerAttach} accessibilityLabel="Attach a file">
-              <Text style={styles.composerAttachIcon}>📎</Text>
-            </Pressable>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder={file ? 'Add a message (optional)' : 'Write a message'}
-              placeholderTextColor={color.inkFaint}
-              style={styles.composerInput}
-              multiline
-              maxLength={2000}
-              // Web: Enter sends, Shift+Enter adds a new line. onSubmitEditing never
-              // fires for a multiline input, which left Enter doing nothing useful.
-              onKeyPress={(e) => {
-                const ev = e.nativeEvent as unknown as { key: string; shiftKey?: boolean };
-                if (ev.key === 'Enter' && !ev.shiftKey) {
-                  (e as unknown as { preventDefault?: () => void }).preventDefault?.();
-                  handleSend();
-                }
-              }}
-            />
-            <Pressable onPress={handleSend} disabled={!canSend} style={[styles.composerSend, !canSend ? { opacity: 0.4 } : null]}>
-              <Text style={styles.composerSendLabel}>{uploading ? 'Sending…' : 'Send'}</Text>
-            </Pressable>
-          </View>
+          {sendError && <Text style={styles.closeoutError}>{sendError}</Text>}
         </View>
-      </GrowPanel>
+      )}
+      <View style={styles.composerRow}>
+        <Pressable onPress={pickFile} disabled={uploading} hitSlop={6} style={styles.composerAttach} accessibilityLabel="Attach a file">
+          <Text style={styles.composerAttachIcon}>📎</Text>
+        </Pressable>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          placeholder={file ? 'Add a message (optional)' : 'Write a message'}
+          placeholderTextColor={color.inkFaint}
+          style={styles.composerInput}
+          multiline
+          maxLength={2000}
+          // Web: Enter sends, Shift+Enter adds a new line. onSubmitEditing never
+          // fires for a multiline input, which left Enter doing nothing useful.
+          onKeyPress={(e) => {
+            const ev = e.nativeEvent as unknown as { key: string; shiftKey?: boolean };
+            if (ev.key === 'Enter' && !ev.shiftKey) {
+              (e as unknown as { preventDefault?: () => void }).preventDefault?.();
+              handleSend();
+            }
+          }}
+        />
+        <Pressable onPress={handleSend} disabled={!canSend} style={[styles.composerSend, !canSend ? { opacity: 0.4 } : null]}>
+          <Text style={styles.composerSendLabel}>{uploading ? 'Sending…' : 'Send'}</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -902,11 +953,13 @@ function ChatWidget({
   onOpenThread,
   onOpenAttachment,
   autoOpenThreadId,
+  onExpandMessages,
   closeoutByThread,
   onProposeCloseout,
   onRespondCloseout,
   onWithdrawCloseout,
 }: CloseoutChatProps & {
+  onExpandMessages?: (threadId?: string) => void;
   threads: MessageThread[];
   messagesByThread: Record<string, Message[]>;
   viewerId: BusinessId;
@@ -1025,6 +1078,7 @@ function ChatWidget({
             onClose={() => requestCloseThread(id)}
             onClosed={() => finalizeCloseThread(id)}
             onSend={(body, file) => sendMessage(id, body, file)}
+            onExpand={onExpandMessages && (() => onExpandMessages(id))}
             onOpenAttachment={onOpenAttachment && ((messageId) => onOpenAttachment(id, messageId))}
             width={panelWidth}
             closeout={closeoutByThread?.[id]}
@@ -1042,6 +1096,7 @@ function ChatWidget({
           open={listOpen}
           onToggleOpen={toggleList}
           onSelectThread={openThread}
+          onExpand={onExpandMessages && (() => onExpandMessages())}
           width={panelWidth}
         />
       )}
@@ -1776,6 +1831,7 @@ function PhoneHomeFeed(props: HomeFeedProps) {
       onOpenThread={props.onOpenThread}
       onOpenAttachment={props.onOpenAttachment}
       autoOpenThreadId={props.autoOpenThreadId}
+      onExpandMessages={props.onExpandMessages}
       closeoutByThread={props.closeoutByThread}
       onProposeCloseout={props.onProposeCloseout}
       onRespondCloseout={props.onRespondCloseout}
@@ -1933,6 +1989,7 @@ function WideHomeFeed(props: HomeFeedProps) {
       onOpenThread={props.onOpenThread}
       onOpenAttachment={props.onOpenAttachment}
       autoOpenThreadId={props.autoOpenThreadId}
+      onExpandMessages={props.onExpandMessages}
       closeoutByThread={props.closeoutByThread}
       onProposeCloseout={props.onProposeCloseout}
       onRespondCloseout={props.onRespondCloseout}
@@ -2061,6 +2118,7 @@ const styles = StyleSheet.create({
   /* conversation window header glyphs — × close, and a rotate-driven chevron for
    * collapse/expand, same border-corner technique QuotationSubmission.tsx's own
    * chevronGlyph/chevronGlyphOpen pair uses */
+  expandGlyph: { width: 11, height: 11, borderWidth: 1.5, borderColor: color.inkMuted, borderRadius: 2 },
   closeGlyphBox: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },
   closeGlyphBar: { position: 'absolute', width: 10, height: 1.4, borderRadius: 1, backgroundColor: color.inkMuted },
   dockChevron: { width: 6, height: 6, borderRightWidth: 1.4, borderBottomWidth: 1.4, borderColor: color.inkMuted, transform: [{ rotate: '45deg' }] },

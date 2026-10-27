@@ -75,6 +75,15 @@ npx expo start --web
 - Hindi kasama ang sarili mo, ang admin, ang inactive na account, ang sealed pa na quotation, at ang mga kalabang supplier sa ibang posting.
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 
+**Buong Messages page (`/messages`)**
+- May bagong "expand" na button (maliit na kahon) sa header ng chat dock, sa thread list at sa bawat conversation. Bubukas ito sa `/messages`. Kapag galing sa conversation, `?thread=<id>` at bukas na agad ang usapang iyon.
+- **Desktop:** thread list sa kaliwa at conversation sa kanan. **Phone:** isang pane lang, may "←" pabalik sa listahan.
+- Pareho ang features sa dock: attachments (📎), TrustLink messages, Report, at ang status bar ng transaction. May "View requirement" sa header ng conversation. Nagre-refresh ang bukas na usapan kada 15 segundo.
+- Code:
+  - `features/messages/Messages.tsx` at `app/messages.tsx`
+  - `ConversationPane` (galing sa dati nang `ConversationWindow` sa `HomeFeed.tsx`): ginagamit ng dock at ng page
+  - `lib/useMessaging.ts`: ang dating chat logic ng `app/home.tsx`, para iisa ang pinagkukunan ng dalawang screen
+
 # Latest update (branch `trustlink-updates`, base: `e3b21e5`)
 
 **Feedback batch bago ang final defense**
