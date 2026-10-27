@@ -91,14 +91,16 @@ class CategoryItemTests(unittest.TestCase):
     def test_invalid_category_is_rejected(self):
         self.assertEqual(self.onboard(self.seller, industry_category="Construction").status_code, 422)
 
-    def test_changing_category_and_items_keeps_verified_status(self):
+    def test_editing_items_keeps_category_and_verified_status(self):
+        # After onboarding the category is locked (change_request_service);
+        # items within it stay editable.
         verified = self.save(User(business_name="Verified", role="seller", industry_category="Printing",
                                   is_verified=True, verification_status="verified", onboarding_completed=True))
         response = self.onboard(verified, industry_category="Packaging & Labeling",
-                                offered_items=[{"code": "paper_bags"}, {"code": "other", "other_text": "Gift boxes"}])
+                                offered_items=[{"code": "tarpaulin"}, {"code": "other", "other_text": "Gift boxes"}])
         self.assertEqual(response.status_code, 204)
         user = self.load(User, verified.id)
-        self.assertEqual(user.industry_category, "Packaging & Labeling")
+        self.assertEqual(user.industry_category, "Printing")
         self.assertTrue(user.is_verified)
         self.assertEqual(user.verification_status, "verified")
 

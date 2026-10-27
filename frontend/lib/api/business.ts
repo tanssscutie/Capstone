@@ -327,3 +327,54 @@ export async function listReportSuggestions(): Promise<ReportSuggestionOut[]> {
 export async function searchBusinesses(q: string): Promise<BusinessSearchOut[]> {
   return api.get<BusinessSearchOut[]>(`/business/search?q=${encodeURIComponent(q)}`);
 }
+
+/* ─── Locked business details: change requests ───────── */
+
+/** Locked after onboarding — changed only through an admin-reviewed request. */
+export const LOCKED_FIELDS = [
+  { key: 'registered_name', label: 'Registered business name' },
+  { key: 'display_name', label: 'Display name' },
+  { key: 'business_type', label: 'Business type' },
+  { key: 'industry_category', label: 'Business category' },
+  { key: 'city', label: 'City' },
+  { key: 'province', label: 'Province' },
+  { key: 'contact_person', label: 'Contact person' },
+  { key: 'contact_mobile', label: 'Contact mobile' },
+] as const;
+export type LockedField = (typeof LOCKED_FIELDS)[number]['key'];
+
+export interface ChangeRequestOut {
+  id: number;
+  status: 'pending' | 'approved' | 'rejected';
+  changes: Record<string, { from: string; to: string }>;
+  reason: string;
+  admin_notes: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+export interface AdminChangeRequestOut extends ChangeRequestOut {
+  user_id: number;
+  business_name: string;
+  verification_status: string;
+}
+
+export function lockedFieldLabel(key: string): string {
+  return LOCKED_FIELDS.find((f) => f.key === key)?.label ?? key;
+}
+
+export async function requestProfileChange(changes: Partial<Record<LockedField, string>>, reason: string): Promise<ChangeRequestOut> {
+  return api.post<ChangeRequestOut>('/business/change-requests', { changes, reason });
+}
+
+export async function listMyChangeRequests(): Promise<ChangeRequestOut[]> {
+  return api.get<ChangeRequestOut[]>('/business/change-requests/mine');
+}
+
+export async function listChangeRequestsForAdmin(): Promise<AdminChangeRequestOut[]> {
+  return api.get<AdminChangeRequestOut[]>('/business/admin/change-requests');
+}
+
+export async function reviewChangeRequest(requestId: number, approve: boolean, notes: string): Promise<void> {
+  await api.post<void>(`/business/admin/change-requests/${requestId}/review`, { approve, notes });
+}

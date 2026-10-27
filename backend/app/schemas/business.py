@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Literal, List, Optional
+from typing import Dict, Literal, List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -340,3 +340,32 @@ class AdminStatsOut(BaseModel):
     open_requirements: int
     total_quotations: int
     registrations_last_7_days: List[RegistrationsByDay]
+
+
+# ---------- locked business details: change requests (change_request_service) ----------
+
+class ChangeRequestIn(BaseModel):
+    # field -> new value; only change_request_service.LOCKED_FIELDS.
+    changes: Dict[str, str]
+    reason: str = Field(max_length=500)
+
+
+class ChangeRequestOut(BaseModel):
+    id: int
+    status: str  # pending | approved | rejected
+    changes: Dict[str, Dict[str, str]]  # field -> {"from": old, "to": new}
+    reason: str
+    admin_notes: Optional[str] = None
+    created_at: datetime
+    reviewed_at: Optional[datetime] = None
+
+
+class AdminChangeRequestOut(ChangeRequestOut):
+    user_id: int
+    business_name: str
+    verification_status: str
+
+
+class ChangeRequestReview(BaseModel):
+    approve: bool
+    notes: Optional[str] = Field(default=None, max_length=500)

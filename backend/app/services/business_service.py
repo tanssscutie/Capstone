@@ -55,7 +55,16 @@ class BusinessService:
             user = session.get(User, user_id)
             if not user:
                 raise HTTPException(status_code=404, detail="User not found")
-            category = data.industry_category or user.industry_category
+            # After onboarding, identity and contact are locked: what's on file
+            # stays, whatever was sent (change_request_service handles changes).
+            # A field still empty on file (older accounts) can be filled in.
+            locked = user.onboarding_completed
+
+            def keep(field: str, sent):
+                current = getattr(user, field)
+                return current if locked and current else sent
+
+            category = keep("industry_category", data.industry_category or user.industry_category)
             if not category:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -71,15 +80,16 @@ class BusinessService:
                         detail="Sellers need at least 3 capabilities and 1 service area — they're how buyers' requirements get matched to you.",
                     )
 
-            user.registered_name = data.registered_name.strip()
-            user.display_name = data.display_name.strip() if data.display_name and data.display_name.strip() else None
-            user.business_type = data.business_type.strip()
+            user.registered_name = keep("registered_name", data.registered_name.strip())
+            if not locked:
+                user.display_name = data.display_name.strip() if data.display_name and data.display_name.strip() else None
+            user.business_type = keep("business_type", data.business_type.strip())
             user.industry_category = category
             user.offered_items = offered_items
-            user.city = data.city.strip()
-            user.province = data.province.strip()
-            user.contact_person = data.contact_person.strip()
-            user.contact_mobile = data.contact_mobile.strip()
+            user.city = keep("city", data.city.strip())
+            user.province = keep("province", data.province.strip())
+            user.contact_person = keep("contact_person", data.contact_person.strip())
+            user.contact_mobile = keep("contact_mobile", data.contact_mobile.strip())
             user.capabilities = ",".join(c.strip() for c in data.capabilities if c.strip())
             user.service_areas = ",".join(a.strip() for a in data.service_areas if a.strip())
             user.business_description = data.business_description.strip() if data.business_description and data.business_description.strip() else None

@@ -97,6 +97,10 @@ interface IdentityProps {
    *  someone who opened onboarding from Home (verification is opt-in now, not forced
    *  right after registration) leave without finishing it. */
   onExit?: () => void;
+  /** Editing after onboarding: identity and contact are locked (shown
+   *  read-only); changes go through "Request a change" on Business details. */
+  locked?: boolean;
+  onRequestChange?: () => void;
 }
 
 interface OperationsProps {
@@ -537,7 +541,57 @@ function CategoryChips({ categories, category, onSelect }: { categories: string[
   );
 }
 
-function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps & { reportContinue: (fn: () => void) => void }) {
+function LockedIdentity({ initial, onContinue, onRequestChange, reportContinue }: IdentityProps & { reportContinue: (fn: () => void) => void }) {
+  reportContinue(() => onContinue({
+    registeredName: initial?.registeredName ?? '',
+    displayName: initial?.displayName ?? '',
+    businessType: initial?.businessType ?? 'SOLE_PROP',
+    city: initial?.city ?? '',
+    province: initial?.province ?? NCR_PROVINCE,
+    contactPerson: initial?.contactPerson ?? '',
+    contactMobile: initial?.contactMobile ?? '',
+  }));
+  const rows: [string, string][] = [
+    ['Registered business name', initial?.registeredName ?? ''],
+    ['Display name', initial?.displayName || '—'],
+    ['Business type', initial?.businessType ? businessTypeLabel(initial.businessType) : '—'],
+    ['City', [initial?.city, initial?.province].filter(Boolean).join(', ')],
+    ['Contact person', initial?.contactPerson ?? ''],
+    ['Mobile number', initial?.contactMobile ?? ''],
+  ];
+  return (
+    <View style={styles.stepContent}>
+      <ScreenTitle step="IDENTITY" title="Your business" />
+      <FormSection index={1} heading="🔒 Locked details">
+        <Text style={styles.fieldCaption}>
+          Your name, business type, location and contact are locked after onboarding so a verified business can't quietly
+          become someone else. To change one, request it from an administrator — reviewed in 1–3 business days.
+        </Text>
+        <View style={{ gap: space.sm, marginTop: space.md }}>
+          {rows.map(([label, value]) => (
+            <View key={label} style={styles.lockedRow}>
+              <Text style={styles.fieldLabel}>{label}</Text>
+              <Text style={styles.lockedValue}>{value || '—'}</Text>
+            </View>
+          ))}
+        </View>
+        {onRequestChange && (
+          <Pressable onPress={onRequestChange} hitSlop={8} style={{ alignSelf: 'flex-start', marginTop: space.md }} accessibilityRole="link">
+            <Text style={styles.categoryChangeLink}>Request a change →</Text>
+          </Pressable>
+        )}
+        <Text style={[styles.fieldNote, { marginTop: space.md }]}>Continue to update your capabilities, service areas and items — those stay editable.</Text>
+      </FormSection>
+    </View>
+  );
+}
+
+function IdentityScreen(props: IdentityProps & { reportContinue: (fn: () => void) => void }) {
+  if (props.locked) return <LockedIdentity {...props} />;
+  return <EditableIdentity {...props} />;
+}
+
+function EditableIdentity({ initial, onContinue, reportContinue }: IdentityProps & { reportContinue: (fn: () => void) => void }) {
   const [registeredName, setRegisteredName] = useState(initial?.registeredName ?? '');
   const [displayName, setDisplayName] = useState(initial?.displayName ?? '');
   const [businessType, setBusinessType] = useState<BusinessType | ''>(initial?.businessType ?? '');
@@ -691,7 +745,7 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
 
 /* ─── OPERATIONS ────────────────────────────────────── */
 
-function OperationsScreen({ identity, initial, operationsOptional, onContinue, reportContinue }: OperationsProps & { reportContinue: (fn: () => void) => void }) {
+function OperationsScreen({ identity, initial, operationsOptional, editMode, onContinue, reportContinue }: OperationsProps & { reportContinue: (fn: () => void) => void }) {
   const { tree, categories, error: treeError } = useCategoryTree();
   const [category, setCategory] = useState(initial?.category ?? '');
   // The category from registration is shown read-only, with "Change" to open
@@ -810,9 +864,14 @@ function OperationsScreen({ identity, initial, operationsOptional, onContinue, r
             <Text style={styles.categoryRowText}>
               Business category: <Text style={styles.categoryRowValue}>{category}</Text>
             </Text>
-            <Pressable onPress={() => setPickingCategory(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Change business category">
-              <Text style={styles.categoryChangeLink}>Change</Text>
-            </Pressable>
+            {editMode ? (
+              // Locked after onboarding — changed through "Request a change".
+              <Text style={styles.fieldCaption}>🔒 Locked</Text>
+            ) : (
+              <Pressable onPress={() => setPickingCategory(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Change business category">
+                <Text style={styles.categoryChangeLink}>Change</Text>
+              </Pressable>
+            )}
           </View>
         ) : (
           <View style={{ marginBottom: space.lg }}>
@@ -1635,6 +1694,8 @@ const styles = StyleSheet.create({
   cardHeaderRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm, flexWrap: 'wrap' },
   fieldLabel: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
   categoryRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.md, marginBottom: space.lg },
+  lockedRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.md, flexWrap: 'wrap', paddingVertical: space.xs, borderBottomWidth: 1, borderBottomColor: color.borderFaint },
+  lockedValue: { flexShrink: 1, textAlign: 'right', fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
   categoryChangeLink: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary, textDecorationLine: 'underline' },
   categoryRowText: { fontFamily: font.body, fontSize: fontSize.base, color: color.inkMuted },
   categoryRowValue: { fontFamily: font.bodySemi, color: color.ink },

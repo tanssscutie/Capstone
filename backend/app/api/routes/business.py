@@ -31,12 +31,17 @@ from app.schemas.business import (
     AdminStatsOut,
     AdminBusinessOut,
     PublicBusinessProfileOut,
+    ChangeRequestIn,
+    ChangeRequestOut,
+    AdminChangeRequestOut,
+    ChangeRequestReview,
 )
 from app.services.business_service import business_service
 from app.services.report_service import report_service
 from app.services.moderation_service import moderation_service
 from app.services.portfolio_service import portfolio_service
 from app.services.profile_media_service import profile_media_service
+from app.services.change_request_service import change_request_service
 
 router = APIRouter()
 
@@ -44,6 +49,17 @@ router = APIRouter()
 @router.post("/onboarding", status_code=status.HTTP_204_NO_CONTENT)
 def submit_onboarding(payload: OnboardingSubmit, current_user: User = Depends(get_current_user)):
     business_service.submit_onboarding(current_user.id, payload)
+
+
+@router.post("/change-requests", response_model=ChangeRequestOut, status_code=status.HTTP_201_CREATED)
+def create_change_request(payload: ChangeRequestIn, current_user: User = Depends(get_current_user)):
+    """Ask an administrator to change a locked business detail (1–3 business days)."""
+    return change_request_service.create(current_user.id, payload)
+
+
+@router.get("/change-requests/mine", response_model=List[ChangeRequestOut])
+def my_change_requests(current_user: User = Depends(get_current_user)):
+    return change_request_service.mine(current_user.id)
 
 
 @router.post("/documents/extract", response_model=DocumentExtractionOut)
@@ -210,6 +226,16 @@ def list_reports(_admin: User = Depends(require_admin)):
 @router.post("/admin/reports/{report_id}/review", status_code=status.HTTP_204_NO_CONTENT)
 def review_report(report_id: int, payload: ReportReview, admin: User = Depends(require_admin)):
     report_service.review(report_id, admin.id, payload)
+
+
+@router.get("/admin/change-requests", response_model=List[AdminChangeRequestOut])
+def list_change_requests(_admin: User = Depends(require_admin)):
+    return change_request_service.list_for_admin()
+
+
+@router.post("/admin/change-requests/{request_id}/review", status_code=status.HTTP_204_NO_CONTENT)
+def review_change_request(request_id: int, payload: ChangeRequestReview, admin: User = Depends(require_admin)):
+    change_request_service.review(request_id, admin.id, payload)
 
 
 @router.get("/admin/whoami", status_code=status.HTTP_204_NO_CONTENT)

@@ -6,7 +6,7 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import AccountProfile from '../features/account/AccountProfile';
 import { me } from '../lib/api/auth';
-import { getVerificationStatus, getDashboardStats } from '../lib/api/business';
+import { getVerificationStatus, getDashboardStats, listMyChangeRequests, requestProfileChange, type ChangeRequestOut } from '../lib/api/business';
 import { mapViewerBusiness } from '../lib/api/mappers';
 import type { Business } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
@@ -17,6 +17,7 @@ export default function AccountRoute() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewer, setViewer] = useState<Business | null>(null);
+  const [changeRequests, setChangeRequests] = useState<ChangeRequestOut[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -24,6 +25,7 @@ export default function AccountRoute() {
     try {
       const [user, verification, stats] = await Promise.all([me(), getVerificationStatus(), getDashboardStats()]);
       setViewer(mapViewerBusiness(user, verification, stats));
+      setChangeRequests(await listMyChangeRequests().catch(() => []));
     } catch (e: any) {
       setError(errorMessage(e, 'Could not load your profile.'));
     } finally {
@@ -58,6 +60,16 @@ export default function AccountRoute() {
       viewer={viewer}
       onBack={() => router.push('/home')}
       onEditProfile={() => router.push('/onboarding?mode=edit')}
+      changeRequests={changeRequests}
+      onRequestChange={async (changes, reason) => {
+        try {
+          const created = await requestProfileChange(changes, reason);
+          setChangeRequests((prev) => [created, ...prev]);
+          return null;
+        } catch (e: any) {
+          return errorMessage(e, 'Could not send your request.');
+        }
+      }}
       onViewPublicProfile={() => router.push({ pathname: '/business-profile', params: { id: viewer.id } })}
     />
   );

@@ -226,6 +226,8 @@ export default function OnboardingRoute() {
         setStep('OPERATIONS');
       }}
       onExit={() => router.replace(editMode ? '/account' : '/home')}
+      locked={editMode && !!identity?.registeredName}
+      onRequestChange={() => router.replace('/account')}
     />
   );
 }

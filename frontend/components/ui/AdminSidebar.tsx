@@ -8,17 +8,18 @@ import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { color, font, fontSize, letterSpacing, space, radius } from './tokens';
 
-type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports';
+type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes';
 
 export const ADMIN_NAV_ITEMS: {
   label: string;
-  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports';
+  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests';
   glyph: NavGlyphKind;
 }[] = [
   { label: 'Dashboard', href: '/admin', glyph: 'dashboard' },
   { label: 'Businesses', href: '/admin-businesses', glyph: 'businesses' },
   { label: 'Requirements', href: '/admin-requirements', glyph: 'requirements' },
   { label: 'Reports', href: '/admin-reports', glyph: 'reports' },
+  { label: 'Change requests', href: '/admin-change-requests', glyph: 'changes' },
 ];
 
 /** No icon library in this project — each glyph is a few plain Views. */

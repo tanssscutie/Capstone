@@ -76,6 +76,19 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Naka-lock na business details + "Request a change"**
+- **Pagkatapos ng onboarding, naka-lock na ang:** registered name, display name, business type, category, city/province, contact person at contact mobile. Ang `submit_onboarding` ay pinapanatili ang nasa file, kahit iba ang ipinadala. Kung walang laman pa (lumang account), puwede pang punan.
+- **Puwede pa ring i-edit:** capabilities, service areas, items at description.
+- **Business details (`/account`):**
+  - may "🔒 Locked" sa Business details at Contact
+  - may card na "Need to change a locked detail?" → **Request a change** (pumili ng field, ilagay ang bagong value, at ang dahilan na hindi bababa sa 10 character), na may note na "reviewed in 1–3 business days"
+  - nakikita ang status ng request (Under review / Approved / Not approved) at ang note ng admin
+  - ang button ay "Update capabilities & service areas" na
+- **Onboarding edit mode:** read-only ang Identity step (may "Request a change →"), at "🔒 Locked" ang category sa Operations.
+- **Admin `/admin-change-requests`** (bago sa sidebar): luma → bago bawat field, ang dahilan, **Approve and apply**, at **Reject** (kailangan ng note). May alert (`VERIFICATION`) sa business sa bawat hakbang.
+- **Mga patakaran:** isang pending request lang kada account. Sa approve ng bagong category, binubura ang offered items (pipili ulit) at nire-recompute ang embedding. Hindi nagbabago ang verification status.
+- Code: `models/profile_change_request.py` (bagong table, `create_all`), `services/change_request_service.py`, `POST /business/change-requests`, `GET /business/change-requests/mine`, `GET /business/admin/change-requests`, `POST /business/admin/change-requests/{id}/review`, `RequestChangeModal` sa `AccountProfile.tsx`, `LockedIdentity` sa `Onboarding.tsx`, at `app/admin-change-requests.tsx`. Tests: `backend/tests/test_change_requests.py` (in-update rin ang `test_category_items.py`, dahil naka-lock na ang category).
+
 **AI quotation draft (Gemini) para sa seller**
 - Sa Submit Quotation, may **"✨ Draft with AI"** sa itaas ng form. Pinupunan nito ang line items at unit prices, ang sagot sa bawat specification, ang lead time (linggo), payment terms, validity, at note sa buyer.
 - **Pagkapuno:** may banner na "AI draft — review every line and price before sealing", may **Undo** (babalik sa dati), at **nili-linis ang dalawang checkbox** ng seal para i-confirm ulit ng seller. **Hindi ito kusang nagsa-submit.**
