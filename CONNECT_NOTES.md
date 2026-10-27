@@ -74,6 +74,7 @@ npx expo start --web
   - **bilang seller:** mga may-ari ng requirement kung saan na-release ang quotation mo ("You quoted on …")
 - Hindi kasama ang sarili mo, ang admin, ang inactive na account, ang sealed pa na quotation, at ang mga kalabang supplier sa ibang posting.
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
+- **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
 **Buong Messages page (`/messages`)**
 - May bagong "expand" na button (maliit na kahon) sa header ng chat dock, sa thread list at sa bawat conversation. Bubukas ito sa `/messages`. Kapag galing sa conversation, `?thread=<id>` at bukas na agad ang usapang iyon.

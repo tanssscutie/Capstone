@@ -25,6 +25,7 @@ export default function ReportsRoute() {
       suggestions={suggestions}
       onSearch={searchBusinesses}
       onReported={load}
+      onOpenMyReports={() => router.push('/my-reports')}
       onBack={() => (router.canGoBack() ? router.back() : router.push('/home'))}
     />
   );

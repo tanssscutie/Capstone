@@ -3,6 +3,8 @@
 // listings, scams, bid manipulation…), and follow what happened to the
 // reports you filed. An administrator reviews each one and can warn, suspend
 // or ban the account. Same page shell as HelpSupport.tsx.
+// Order: search → businesses you've dealt with → "Your reports (N)", which
+// opens MyReports on its own page (/my-reports).
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
 import ScreenScroll from '../../components/ui/ScreenScroll';
@@ -18,6 +20,8 @@ export interface ReportsProps {
   onSearch: (q: string) => Promise<BusinessSearchOut[]>;
   /** A report was sent — reload the list. */
   onReported?: () => void;
+  /** Opens /my-reports. */
+  onOpenMyReports?: () => void;
   onBack?: () => void;
 }
 
@@ -31,7 +35,7 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export default function Reports({ reports, suggestions = [], onSearch, onReported, onBack }: ReportsProps) {
+export default function Reports({ reports, suggestions = [], onSearch, onReported, onOpenMyReports, onBack }: ReportsProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= breakpoint.desktop;
   const [query, setQuery] = useState('');
@@ -81,23 +85,6 @@ export default function Reports({ reports, suggestions = [], onSearch, onReporte
           </Text>
         </View>
 
-        {suggestions.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.sectionLabel}>Businesses you've dealt with</Text>
-            {suggestions.map((b) => (
-              <Pressable key={b.id} onPress={() => setTarget(b)} style={({ pressed }) => [styles.resultRow, pressed ? styles.pressed : null]}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.resultName} numberOfLines={1}>{b.name}</Text>
-                  <Text style={styles.muted} numberOfLines={1}>
-                    {b.relation === 'supplier' ? 'Quoted on' : 'You quoted on'} {b.context}
-                  </Text>
-                </View>
-                <Text style={styles.reportLink}>Report</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
         <View style={styles.card}>
           <Text style={styles.sectionLabel}>Report a business</Text>
           <TextInput
@@ -128,9 +115,67 @@ export default function Reports({ reports, suggestions = [], onSearch, onReporte
           </Text>
         </View>
 
+        {suggestions.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>Businesses you've dealt with</Text>
+            {suggestions.map((b) => (
+              <Pressable key={b.id} onPress={() => setTarget(b)} style={({ pressed }) => [styles.resultRow, pressed ? styles.pressed : null]}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.resultName} numberOfLines={1}>{b.name}</Text>
+                  <Text style={styles.muted} numberOfLines={1}>
+                    {b.relation === 'supplier' ? 'Quoted on' : 'You quoted on'} {b.context}
+                  </Text>
+                </View>
+                <Text style={styles.reportLink}>Report</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        <Pressable
+          onPress={onOpenMyReports}
+          style={({ pressed }) => [styles.myReportsButton, pressed ? styles.pressed : null]}
+          accessibilityRole="button"
+        >
+          <Text style={styles.myReportsLabel}>Your reports ({reports.length})</Text>
+          <Text style={styles.myReportsArrow}>→</Text>
+        </Pressable>
+      </View>
+
+      {target && (
+        <ReportBusinessModal
+          businessId={target.id}
+          businessName={target.name}
+          onClose={() => {
+            setTarget(null);
+            onReported?.();
+          }}
+        />
+      )}
+    </ScreenScroll>
+  );
+}
+
+/** The reports you filed and what happened to each — /my-reports. */
+export function MyReports({ reports, loading, onBack }: { reports: MyReportOut[]; loading?: boolean; onBack?: () => void }) {
+  const { width } = useWindowDimensions();
+  const isWide = width >= breakpoint.desktop;
+  return (
+    <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
+      <View style={isWide ? styles.pageWide : styles.page}>
+        {onBack && (
+          <Pressable onPress={onBack} hitSlop={6} style={{ alignSelf: 'flex-start' }}>
+            <Text style={styles.backLink}>← Reports</Text>
+          </Pressable>
+        )}
+        <View style={{ gap: space.xs }}>
+          <Text style={styles.heroName}>Your reports</Text>
+          <Text style={styles.muted}>Every report you filed and what the administrator decided. The business is never told who reported them.</Text>
+        </View>
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Your reports</Text>
-          {reports.length === 0 ? (
+          {loading ? (
+            <ActivityIndicator color={color.primary} />
+          ) : reports.length === 0 ? (
             <Text style={styles.muted}>You haven't reported anyone.</Text>
           ) : (
             reports.map((r) => {
@@ -152,17 +197,6 @@ export default function Reports({ reports, suggestions = [], onSearch, onReporte
           )}
         </View>
       </View>
-
-      {target && (
-        <ReportBusinessModal
-          businessId={target.id}
-          businessName={target.name}
-          onClose={() => {
-            setTarget(null);
-            onReported?.();
-          }}
-        />
-      )}
     </ScreenScroll>
   );
 }
@@ -181,6 +215,9 @@ const styles = StyleSheet.create({
   error: { fontFamily: font.body, fontSize: fontSize.sm, color: color.danger },
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.borderFaint },
   pressed: { opacity: 0.7 },
+  myReportsButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: layout.minTouchTarget, borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, paddingHorizontal: space.lg, backgroundColor: color.surface },
+  myReportsLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
+  myReportsArrow: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
   resultName: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
   reportLink: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.danger },
   reportRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.borderFaint },
