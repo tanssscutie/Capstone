@@ -766,7 +766,7 @@ export default function BusinessProfile({
               ? 'Supplier counts include your private sealed activity.'
               : 'Supplier counts exclude sealed activity and submissions or withdrawals before the closing deadline.'}
           </Text>
-          <InfoHint text="Completed = the supplier marked it delivered and the buyer confirmed receipt (or did not respond within 14 days). Completion rate = completed ÷ awarded. Unconfirmed orders had no updates and count as neither." />
+          <InfoHint text="Completed = the supplier marked it completed and the buyer confirmed (or did not respond within 14 days). Completion rate = completed ÷ awarded. Unconfirmed orders had no updates and count as neither." />
         </View>
 
         <TransparencySlides profile={profile} verified={verified} />

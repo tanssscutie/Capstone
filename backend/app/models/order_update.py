@@ -8,8 +8,9 @@ from app.core.clock import now_ph
 
 class OrderUpdate(SQLModel, table=True):
     """One step on an awarded requirement's order timeline (fulfillment_service):
-    the supplier's In production / Out for delivery / Delivered updates, the
-    buyer's Confirm received, and the system's auto-confirm or Unconfirmed."""
+    the supplier's "Mark as completed" (delivered; older rows may hold the retired
+    in_production / out_for_delivery), the buyer's confirm, and the system's
+    auto-confirm or Unconfirmed."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
     requirement_id: int = Field(foreign_key="requirement.id", index=True)

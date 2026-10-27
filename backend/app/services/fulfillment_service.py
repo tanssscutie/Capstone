@@ -1,16 +1,16 @@
-"""Order status of an awarded requirement — LinkedIn-style updates instead of
-"Mark as completed" buttons in the chat.
+"""Order status of an awarded requirement: Awarded → Completed.
 
-The awarded supplier moves the order forward (In production → Out for
-delivery → Delivered; steps can be skipped, never undone). Once delivered,
-the buyer confirms receipt, which records a confirmed "completed"
-TransactionCloseout — the same record the trust profile already counts.
+The awarded supplier marks the order as completed (stored as "delivered", so
+older rows need no migration). The buyer then confirms it, which records a
+confirmed "completed" TransactionCloseout — the same record the trust profile
+already counts. TrustLink does not track production or delivery; rows from
+the old In production / Out for delivery steps read as Awarded.
 "Did not push through" stays with closeout_service (propose, then the other
 party confirms).
 
 When nobody updates (run_due, from the scheduler):
 - a reminder at 3 and at 7 days without a step, to whoever acts next;
-- Delivered and the buyer silent for 14 days → auto-confirmed as completed
+- marked completed and the buyer silent for 14 days → auto-confirmed
   (the buyer can still say it did not push through, or report, until then);
 - no step for 14 days and 14 days past the delivery window → "unconfirmed":
   counted as neither completed nor failed.
@@ -40,13 +40,16 @@ from app.services.requirement_service import RequirementNotFound, _log
 
 logger = logging.getLogger("trustlink.fulfillment")
 
-# The supplier's steps, in order.
-STEPS = ("awarded", "in_production", "out_for_delivery", "delivered")
+# The supplier's steps, in order. "delivered" = marked completed by the supplier,
+# waiting for the buyer to confirm.
+STEPS = ("awarded", "delivered")
+# Steps that no longer exist; such orders read as "awarded".
+LEGACY_STEPS = ("in_production", "out_for_delivery")
 LABELS = {
     "awarded": "Awarded",
     "in_production": "In production",
     "out_for_delivery": "Out for delivery",
-    "delivered": "Delivered",
+    "delivered": "Marked completed",
     "completed": "Completed",
     "not_pushed_through": "Did not push through",
     "unconfirmed": "Unconfirmed",
@@ -79,7 +82,10 @@ def effective_status(session: Session, req: Requirement) -> str:
     """A confirmed close-out (incl. one confirmed before order status existed)
     wins over the stored step."""
     final = next((r for r in _closeouts(session, req.id) if r.status == "confirmed"), None)
-    return final.outcome if final else (req.fulfillment_status or "awarded")
+    if final:
+        return final.outcome
+    stored = req.fulfillment_status or "awarded"
+    return "awarded" if stored in LEGACY_STEPS else stored
 
 
 def _last_step_at(req: Requirement) -> datetime:
@@ -122,14 +128,13 @@ class FulfillmentService:
             select(OrderUpdate).where(OrderUpdate.requirement_id == req.id)
             .order_by(OrderUpdate.created_at.asc(), OrderUpdate.id.asc())
         ).all()
-        current = STEPS.index(req.fulfillment_status) if req.fulfillment_status in STEPS else None
         return FulfillmentOut(
             requirement_id=req.id,
             status=status_,
             viewer_role=role,
             next_action=action,
             next_action_by=by,
-            next_status=STEPS[current + 1] if action == "seller_update" and current is not None else None,
+            next_status="delivered" if action == "seller_update" else None,
             auto_confirm_at=(_last_step_at(req) + timedelta(days=AUTO_CONFIRM_DAYS)) if status_ == "delivered" else None,
             auto_confirmed=any(u.status == "completed" and u.actor_role == "system" for u in timeline),
             timeline=[OrderUpdateOut(status=u.status, actor_role=u.actor_role, note=u.note, created_at=u.created_at)
@@ -172,7 +177,7 @@ class FulfillmentService:
         with Session(engine) as session:
             req, quotation = self._load(session, requirement_id)
             if self._role(req, quotation, actor_id) != "supplier":
-                raise _forbidden("Only the awarded supplier updates the order status")
+                raise _forbidden("Only the awarded supplier marks the order as completed")
             current = effective_status(session, req)
             if current in FINAL:
                 raise _conflict("This order is already closed")
@@ -188,38 +193,37 @@ class FulfillmentService:
             _log(session, "FULFILLMENT_UPDATED", req.id, quotation.id, actor_id, {
                 "requirement_id": req.id, "status": new_status,
             })
-            body = f"Order update: {LABELS[new_status]}." + (f"\nNote: {note}" if note else "")
-            if new_status == "delivered":
-                body += ("\n\nBuyer: please confirm you received it in My Requirements. "
-                         f"It confirms automatically after {AUTO_CONFIRM_DAYS} days.")
+            body = ("The supplier marked this order as completed." + (f"\nNote: {note}" if note else "")
+                    + "\n\nBuyer: please confirm it in My Requirements. "
+                    f"It confirms automatically after {AUTO_CONFIRM_DAYS} days.")
             self._notice(session, req, quotation, actor_id, body, [req.owner_id],
-                         f"Order update: {LABELS[new_status]}")
+                         "Order marked as completed — please confirm")
             return self._view(session, req, quotation, "supplier")
 
     def confirm_received(self, requirement_id: int, actor_id: int, note: Optional[str]) -> FulfillmentOut:
         with Session(engine) as session:
             req, quotation = self._load(session, requirement_id)
             if self._role(req, quotation, actor_id) != "buyer":
-                raise _forbidden("Only the buyer confirms receipt")
+                raise _forbidden("Only the buyer confirms the order is completed")
             if effective_status(session, req) != "delivered":
-                raise _conflict("You can confirm once the supplier marks the order as delivered")
+                raise _conflict("You can confirm once the supplier marks the order as completed")
             if any(r.status == "pending" for r in _closeouts(session, req.id)):
                 raise _conflict("A \"did not push through\" is waiting for a response")
             note = _clean(note)
             self._complete(session, req, quotation, actor_id, "buyer", note)
             _log(session, "ORDER_RECEIVED", req.id, quotation.id, actor_id, {"requirement_id": req.id})
             self._notice(session, req, quotation, actor_id,
-                         "The buyer confirmed receipt. This transaction is completed. Thank you for using TrustLink.",
-                         [quotation.business_id], "Order completed — the buyer confirmed receipt")
+                         "The buyer confirmed the order. This transaction is completed. Thank you for using TrustLink.",
+                         [quotation.business_id], "Order completed — the buyer confirmed")
             return self._view(session, req, quotation, "buyer")
 
     def _complete(self, session: Session, req: Requirement, quotation: Quotation, actor_id: Optional[int],
                   actor_role: str, note: Optional[str]) -> None:
-        """Delivered + received = both parties agree, so a confirmed close-out."""
+        """Marked completed + confirmed = both parties agree, so a confirmed close-out."""
         now = now_ph()
         session.add(TransactionCloseout(
             requirement_id=req.id, outcome="completed", proposed_by=quotation.business_id,
-            proposed_by_role="supplier", note="Marked as delivered", status="confirmed",
+            proposed_by_role="supplier", note="Marked as completed", status="confirmed",
             responded_by=req.owner_id if actor_role == "buyer" else None,
             response_note=note if actor_role == "buyer" else "Auto-confirmed: no response from the buyer",
             responded_at=now,
@@ -235,7 +239,7 @@ class FulfillmentService:
         done = {"reminded": 0, "auto_confirmed": 0, "unconfirmed": 0}
         with Session(engine) as session:
             reqs = session.exec(select(Requirement).where(
-                Requirement.status == "awarded", Requirement.fulfillment_status.in_(STEPS),
+                Requirement.status == "awarded", Requirement.fulfillment_status.in_(STEPS + LEGACY_STEPS),
             )).all()
             for req in reqs:
                 try:
@@ -260,7 +264,7 @@ class FulfillmentService:
             self._complete(session, req, quotation, None, "system", None)
             _log(session, "ORDER_AUTO_CONFIRMED", req.id, quotation.id, None, {"requirement_id": req.id})
             self._notice(session, req, quotation, quotation.business_id,
-                         f"No response from the buyer {AUTO_CONFIRM_DAYS} days after delivery, so TrustLink "
+                         f"No response from the buyer {AUTO_CONFIRM_DAYS} days after the supplier marked it completed, so TrustLink "
                          "auto-confirmed this order as completed.",
                          [req.owner_id, quotation.business_id], "Order auto-confirmed as completed")
             done["auto_confirmed"] += 1
@@ -281,12 +285,12 @@ class FulfillmentService:
         if level > (req.fulfillment_reminders or 0):
             days = REMINDER_DAYS[level - 1]
             if delivered:
-                to, title = req.owner_id, f"Did you receive it? Delivered {days} days ago"
-                detail = (f"{req.ref_code} · {req.title} — confirm receipt in My Requirements. "
-                          f"It auto-confirms {AUTO_CONFIRM_DAYS} days after delivery.")
+                to, title = req.owner_id, f"Please confirm: marked completed {days} days ago"
+                detail = (f"{req.ref_code} · {req.title} — confirm it in My Requirements. "
+                          f"It auto-confirms {AUTO_CONFIRM_DAYS} days after the supplier marked it completed.")
             else:
                 to, title = quotation.business_id, f"No order update for {days} days"
-                detail = f"{req.ref_code} · {req.title} — update the status in My Quotations."
+                detail = f"{req.ref_code} · {req.title} — mark it as completed in My Quotations once it's done."
             notif_repo.create_if_allowed(session, user_id=to, type_="DECISION", category="activity",
                                          title=title, detail=detail, related_requirement_id=req.id)
             req.fulfillment_reminders = level

@@ -2489,7 +2489,7 @@ function WideDecisionCard({ st }: { st: ReturnType<typeof useOwnerReleased> }) {
           ? 'Shortlist in progress'
           : 'No decision recorded';
   const body = awarded
-    ? 'The award is written to the ledger and contact details were exchanged. The supplier posts order updates; confirm receipt once it arrives. TrustLink does not handle payment or contracts.'
+    ? 'The award is written to the ledger and contact details were exchanged. The supplier marks the order as completed; confirm it once it is done. TrustLink does not handle payment or contracts.'
     : pending
       ? `Waiting on ${st.awardPendingName ?? 'the proposed business'} to accept or decline. Nothing else changes until they respond.`
       : st.closedNoAward

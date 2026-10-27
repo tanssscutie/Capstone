@@ -66,8 +66,9 @@ class Requirement(SQLModel, table=True):
     delivery_start: Optional[datetime] = None
     delivery_end: Optional[datetime] = None
 
-    # Order status once awarded (fulfillment_service): awarded -> in_production ->
-    # out_for_delivery -> delivered -> completed, or not_pushed_through / unconfirmed.
+    # Order status once awarded (fulfillment_service): awarded -> delivered (marked
+    # completed by the supplier) -> completed, or not_pushed_through / unconfirmed.
+    # Retired in_production / out_for_delivery values read as awarded.
     fulfillment_status: str = Field(default="awarded", max_length=30)
     fulfillment_updated_at: Optional[datetime] = None  # last step; reminders count from here
     # The awarded supplier chose to show this completed order on their

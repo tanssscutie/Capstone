@@ -91,21 +91,37 @@ class FulfillmentTests(unittest.TestCase):
         with Session(self.engine) as session:
             return business_repository.profile_activity_counts(session, business.id, include_sealed=False, now=now_ph())
 
-    def test_only_supplier_updates_and_only_forward(self):
-        self.assertEqual(self.step(self.buyer, "in_production").status_code, 403)
-        self.assertEqual(self.step(self.stranger, "in_production").status_code, 403)
-        r = self.step(self.supplier, "out_for_delivery", "Truck left 9am")
-        self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(r.json()["status"], "out_for_delivery")
-        self.assertEqual(r.json()["next_status"], "delivered")
-        self.assertEqual(self.step(self.supplier, "in_production").status_code, 409)
-        self.assertEqual(self.step(self.supplier, "out_for_delivery").status_code, 409)
+    def test_only_supplier_marks_completed(self):
+        self.assertEqual(self.step(self.buyer, "delivered").status_code, 403)
+        self.assertEqual(self.step(self.stranger, "delivered").status_code, 403)
+        # The retired steps are refused.
+        self.assertEqual(self.step(self.supplier, "in_production").status_code, 422)
+        self.assertEqual(self.step(self.supplier, "out_for_delivery").status_code, 422)
         self.assertEqual(self.step(self.supplier, "bogus").status_code, 422)
+        r = self.as_(self.supplier).get(self.url())
+        self.assertEqual(r.json()["next_status"], "delivered")
+        r = self.step(self.supplier, "delivered", "Handed over at the warehouse")
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["status"], "delivered")
+        self.assertIsNone(r.json()["next_status"])
+        self.assertEqual(r.json()["next_action"], "buyer_confirm")
+        self.assertEqual(self.step(self.supplier, "delivered").status_code, 409)
         with Session(self.engine) as session:
             self.assertIn("FULFILLMENT_UPDATED", [e.event_type for e in session.exec(select(LedgerEntry)).all()])
-            self.assertTrue(any("Out for delivery" in m.body for m in session.exec(select(Message)).all()))
+            self.assertTrue(any("marked this order as completed" in m.body for m in session.exec(select(Message)).all()))
             alerts = session.exec(select(Notification).where(Notification.user_id == self.buyer.id)).all()
-            self.assertTrue(any(a.title == "Order update: Out for delivery" for a in alerts))
+            self.assertTrue(any(a.title == "Order marked as completed — please confirm" for a in alerts))
+
+    def test_retired_steps_read_as_awarded(self):
+        self.set_idle(0, fulfillment_status="out_for_delivery")
+        r = self.as_(self.buyer).get(self.url())
+        self.assertEqual(r.json()["status"], "awarded")
+        self.assertEqual(r.json()["next_action"], "seller_update")
+        self.assertEqual(self.as_(self.supplier).get(self.url()).json()["next_status"], "delivered")
+        self.assertEqual(self.step(self.supplier, "delivered").status_code, 200)
+        # The scheduler still sees these orders.
+        self.set_idle(3, fulfillment_status="in_production")
+        self.assertEqual(fulfillment_service.run_due()["reminded"], 1)
 
     def test_buyer_confirms_only_when_delivered_and_counts(self):
         self.assertEqual(self.as_(self.buyer).post(self.url("/confirm"), json={}).status_code, 409)
@@ -162,7 +178,7 @@ class FulfillmentTests(unittest.TestCase):
     def test_did_not_push_through_ends_the_order(self):
         self.as_(self.buyer).post(f"/requirements/{self.req.id}/closeout",
                                   json={"outcome": "not_pushed_through", "note": "Supplier stopped replying"})
-        self.assertEqual(self.step(self.supplier, "in_production").status_code, 409)
+        self.assertEqual(self.step(self.supplier, "delivered").status_code, 409)
         self.as_(self.supplier).post(f"/requirements/{self.req.id}/closeout/respond", json={"confirm": True})
         r = self.as_(self.buyer).get(self.url())
         self.assertEqual(r.json()["status"], "not_pushed_through")

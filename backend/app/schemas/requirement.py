@@ -359,7 +359,7 @@ class OrderUpdateOut(BaseModel):
 class FulfillmentOut(BaseModel):
     """Order status of an awarded requirement (fulfillment_service)."""
     requirement_id: int
-    # awarded | in_production | out_for_delivery | delivered | completed | not_pushed_through | unconfirmed
+    # awarded | delivered (marked completed, awaiting the buyer) | completed | not_pushed_through | unconfirmed
     status: str
     viewer_role: str  # buyer | supplier | admin
     # seller_update | buyer_confirm | None (finished, or waiting on a "did not push through" answer)

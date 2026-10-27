@@ -1,8 +1,8 @@
 // components/ui/OrderStatusPanel.tsx
-// Order status of an awarded requirement (backend fulfillment_service), LinkedIn
-// style: the supplier posts In production → Out for delivery → Delivered, the
-// buyer confirms receipt → Completed. "Did not push through" (with a reason)
-// goes to the other party to confirm. Used on My Quotations (supplier), My
+// Order status of an awarded requirement (backend fulfillment_service):
+// Awarded → Completed. The supplier marks it as completed ("delivered" in the
+// API), the buyer confirms → Completed (auto-confirms after 14 days). "Did not
+// push through" (with a reason) goes to the other party to confirm. Used on My Quotations (supplier), My
 // Requirements and Requirement Detail (buyer). Loads its own data by requirement.
 // OrderStatusLine is the chat's read-only one-liner.
 import { useCallback, useEffect, useState } from 'react';
@@ -16,7 +16,7 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   awarded: 'Awarded',
   in_production: 'In production',
   out_for_delivery: 'Out for delivery',
-  delivered: 'Delivered',
+  delivered: 'Marked completed',
   completed: 'Completed',
   not_pushed_through: 'Did not push through',
   unconfirmed: 'Unconfirmed',
@@ -27,7 +27,13 @@ export function isChatClosed(status: OrderStatus | null | undefined): boolean {
   return status === 'completed' || status === 'not_pushed_through';
 }
 
-const TRACK: OrderStatus[] = ['awarded', 'in_production', 'out_for_delivery', 'delivered', 'completed'];
+const TRACK: OrderStatus[] = ['awarded', 'completed'];
+
+/** Position on the Awarded → Completed tracker; -1 when the order ended otherwise. */
+function trackIndex(status: OrderStatus): number {
+  if (status === 'completed') return 1;
+  return status === 'not_pushed_through' || status === 'unconfirmed' ? -1 : 0;
+}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -93,7 +99,7 @@ export function OrderStatusPanel({
   const closeout = data.closeout;
   const pending = closeout?.pending ?? null;
   const final = ['completed', 'not_pushed_through', 'unconfirmed'].includes(data.status);
-  const reached = TRACK.indexOf(data.status);
+  const reached = trackIndex(data.status);
   const noteRequired = mode === 'not_pushed' || mode === 'reject';
   const canSubmit = !busy && (!noteRequired || note.trim().length >= 5);
 
@@ -122,18 +128,18 @@ export function OrderStatusPanel({
 
   // One sentence: where the order is, and whose turn it is.
   let headline: string;
-  if (data.status === 'completed') headline = data.auto_confirmed ? '✓ Completed (auto-confirmed after delivery)' : '✓ Completed — the buyer confirmed receipt';
+  if (data.status === 'completed') headline = data.auto_confirmed ? '✓ Completed (auto-confirmed after 14 days)' : '✓ Completed — confirmed by the buyer';
   else if (data.status === 'not_pushed_through') headline = 'Did not push through — confirmed by both parties';
   else if (data.status === 'unconfirmed') headline = 'Unconfirmed — no updates were posted, so this counts as neither completed nor failed';
   else if (pending) headline = closeout?.awaiting_viewer
     ? `The ${pending.proposed_by_role} says this did not push through. Do you agree?`
     : `You said this did not push through — waiting for the ${role === 'buyer' ? 'supplier' : 'buyer'} to confirm.`;
   else if (data.next_action === 'seller_update') headline = role === 'supplier'
-    ? `${ORDER_STATUS_LABEL[data.status]}. Post the next update when it happens.`
-    : `${ORDER_STATUS_LABEL[data.status]} — waiting for the supplier's next update.`;
+    ? 'Awarded. Mark it as completed once the order is done.'
+    : 'Awarded — the supplier marks it as completed once the order is done.';
   else headline = role === 'buyer'
-    ? `Delivered. Confirm once you received it${data.auto_confirm_at ? ` — it auto-confirms on ${formatDate(data.auto_confirm_at)}` : ''}.`
-    : `Delivered — waiting for the buyer to confirm receipt${data.auto_confirm_at ? ` (auto-confirms on ${formatDate(data.auto_confirm_at)})` : ''}.`;
+    ? `The supplier marked this as completed. Confirm if it's done${data.auto_confirm_at ? ` — it auto-confirms on ${formatDate(data.auto_confirm_at)}` : ''}.`
+    : `Waiting for the buyer to confirm${data.auto_confirm_at ? ` (auto-confirms on ${formatDate(data.auto_confirm_at)})` : ''}.`;
 
   const myTurn = !final && !pending && data.next_action_by === role;
 
@@ -159,7 +165,7 @@ export function OrderStatusPanel({
           <TextInput
             value={note}
             onChangeText={setNote}
-            placeholder={noteRequired ? 'Reason (required)' : 'Note (optional), e.g. "Truck left at 9 AM"'}
+            placeholder={noteRequired ? 'Reason (required)' : 'Note (optional)'}
             placeholderTextColor={color.inkFaint}
             maxLength={500}
             style={styles.input}
@@ -167,8 +173,8 @@ export function OrderStatusPanel({
           <View style={styles.actions}>
             <Pressable onPress={submit} disabled={!canSubmit} style={[styles.primary, !canSubmit ? { opacity: 0.4 } : null]}>
               <Text style={styles.primaryLabel}>
-                {busy ? 'Saving…' : mode === 'update' && data.next_status ? `Mark ${ORDER_STATUS_LABEL[data.next_status].toLowerCase()}`
-                  : mode === 'confirm' ? 'Confirm received' : 'Submit'}
+                {busy ? 'Saving…' : mode === 'update' ? 'Mark as completed'
+                  : mode === 'confirm' ? 'Confirm completed' : 'Submit'}
               </Text>
             </Pressable>
             <Pressable onPress={() => { setMode(null); setNote(''); setError(null); }} hitSlop={6}>
@@ -181,12 +187,12 @@ export function OrderStatusPanel({
         <View style={styles.actions}>
           {myTurn && data.next_action === 'seller_update' && data.next_status && (
             <Pressable onPress={() => setMode('update')} style={styles.primary}>
-              <Text style={styles.primaryLabel}>Mark {ORDER_STATUS_LABEL[data.next_status].toLowerCase()}</Text>
+              <Text style={styles.primaryLabel}>Mark as completed</Text>
             </Pressable>
           )}
           {myTurn && data.next_action === 'buyer_confirm' && (
             <Pressable onPress={() => setMode('confirm')} style={styles.primary}>
-              <Text style={styles.primaryLabel}>Confirm received</Text>
+              <Text style={styles.primaryLabel}>Confirm completed</Text>
             </Pressable>
           )}
           {pending && closeout?.awaiting_viewer && (

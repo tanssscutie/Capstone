@@ -90,15 +90,18 @@ npx expo start --web
   - `ConversationPane` (galing sa dati nang `ConversationWindow` sa `HomeFeed.tsx`): ginagamit ng dock at ng page
   - `lib/useMessaging.ts`: ang dating chat logic ng `app/home.tsx`, para iisa ang pinagkukunan ng dalawang screen
 
-**Order status (parang LinkedIn), kapalit ng "Mark as completed" sa chat**
-- **Seller (My Quotations):** "Mark in production" → "Mark out for delivery" → "Mark delivered". May opsyonal na note. Pasulong lang, puwedeng lumaktaw, at hindi na maibabalik.
-- **Buyer (My Requirements at Requirement Detail):** "Confirm received" kapag Delivered na → **Completed**. Gumagawa ito ng confirmed na `TransactionCloseout(outcome="completed")`, kaya gumagana pa rin ang dating profile counts.
-- **"Did not push through":** may dahilan, at kailangang i-confirm ng kabila ("Confirm" / "Not yet" / "Withdraw"). Gamit pa rin ang `closeout_service`. Habang naghihintay ito, hindi muna puwedeng mag-update ng status.
+**Order status: Awarded → Completed lang**
+- Wala na ang In production / Out for delivery. Hindi tina-track ng TrustLink ang production at delivery.
+- **Seller (My Quotations):** "Mark as completed", may opsyonal na note. Sa loob ng system, `fulfillment_status="delivered"` pa rin ito, kaya walang migration.
+- **Buyer (My Requirements at Requirement Detail):** "Confirm completed" → **Completed**. Gumagawa ito ng confirmed na `TransactionCloseout(outcome="completed")`, kaya gumagana pa rin ang dating profile counts.
+- **Tracker:** Awarded → Completed. Habang naghihintay, "Waiting for the buyer to confirm (auto-confirms on …)".
+- Ang mga lumang order na naka-`in_production` o `out_for_delivery` ay ituturing na **Awarded**. Kasama pa rin sila sa reminders, at puwede pa ring i-"Mark as completed". Tinatanggihan (422) ang mga lumang step.
+- **"Did not push through":** may dahilan, at kailangang i-confirm ng kabila ("Confirm" / "Not yet" / "Withdraw"). Gamit pa rin ang `closeout_service`. Habang naghihintay ito, hindi muna puwedeng mag-mark as completed.
 - **"Report a problem":** nasa panel ng My Quotations at Requirement Detail.
-- **Chat:** wala nang button. Read-only na linya na lang: "Status: Out for delivery · Update in My Quotations". Bawat hakbang ay may TrustLink notice sa chat, alert (`DECISION`, may email), at ledger entry (`FULFILLMENT_UPDATED`, `ORDER_RECEIVED`, `ORDER_AUTO_CONFIRMED`, `ORDER_UNCONFIRMED`).
+- **Chat:** read-only na linya lang ito, hal. "Status: Marked completed". Bawat hakbang ay may TrustLink notice sa chat, alert (`DECISION`, may email), at ledger entry: `FULFILLMENT_UPDATED` ("Marked completed by supplier"), `ORDER_RECEIVED` ("Buyer confirmed — completed"), `ORDER_AUTO_CONFIRMED` at `ORDER_UNCONFIRMED`.
 - **Kapag walang nag-a-update** (scheduler kada 5 minuto, `fulfillment_service.run_due`):
-  - **3 at 7 araw** na walang update: may paalala sa may susunod na aksyon (seller, o buyer kapag Delivered na). Tig-iisa lang.
-  - **Delivered at 14 araw na tahimik ang buyer:** auto-confirmed bilang Completed. Hanggang doon, puwede pang mag-"Did not push through" o mag-report ang buyer.
+  - **3 at 7 araw** na walang update: may paalala sa may susunod na aksyon (seller, o buyer kapag na-mark as completed na). Tig-iisa lang.
+  - **Na-mark as completed at 14 araw na tahimik ang buyer:** auto-confirmed bilang Completed. Hanggang doon, puwede pang mag-"Did not push through" o mag-report ang buyer.
   - **14 araw na walang update at lampas 14 araw pagkatapos ng delivery window:** **Unconfirmed**. Hindi ito completed at hindi rin failed. Final na ito.
 - **Profile:** may "Unconfirmed (no order updates)" at "Completion rate" na (completed ÷ awarded, bilang buyer o supplier).
 - **Para sa demo:** walang shortcut sa 3/7/14 araw. Ipakita sa `test_fulfillment.py`, o baguhin muna ang `fulfillment_updated_at` sa DB.
@@ -143,7 +146,7 @@ npx expo start --web
 - **Links:** http/https lang. Kapag walang scheme, idinadagdag ang `https://`. Tinatanggihan ang `javascript:` at iba pang scheme.
 - **Header:** ang larawan na rin ang nasa account chip, kung mayroon.
 - **Past work: "Completed on TrustLink"** (seller):
-  - Ang mga completed na order mo (Confirm received o auto-confirmed) ay lalabas bilang **"Suggested from your completed orders"** sa sarili mong profile, at ikaw lang ang nakakakita.
+  - Ang mga completed na order mo (Confirm completed o auto-confirmed) ay lalabas bilang **"Suggested from your completed orders"** sa sarili mong profile, at ikaw lang ang nakakakita.
   - **"Show on profile"** para ipakita, at **"Hide"** para itago ulit.
   - Ang card: "✓ Verified transaction", title, item · quantity · city, at "For {buyer} · Completed {buwan}". **Walang presyo kailanman.**
   - May bagong linya tungkol dito sa Privacy Notice (section 5). Hindi binago ang bersyon, kaya hindi hihingan ulit ng consent ang lahat. Ipa-apruba sa adviser.

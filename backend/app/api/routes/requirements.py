@@ -393,7 +393,7 @@ def get_fulfillment(requirement_id: int, current_user=Depends(get_current_user))
 
 @router.post("/{requirement_id}/fulfillment", response_model=FulfillmentOut)
 def update_fulfillment(requirement_id: int, payload: FulfillmentUpdateIn, current_user=Depends(require_verified)):
-    """Awarded supplier: In production / Out for delivery / Delivered (forward only)."""
+    """Awarded supplier: mark the order as completed (status "delivered")."""
     try:
         return fulfillment_service.update(requirement_id, current_user.id, payload.status, payload.note)
     except Exception as exc:
@@ -402,7 +402,7 @@ def update_fulfillment(requirement_id: int, payload: FulfillmentUpdateIn, curren
 
 @router.post("/{requirement_id}/fulfillment/confirm", response_model=FulfillmentOut)
 def confirm_fulfillment(requirement_id: int, payload: FulfillmentConfirmIn, current_user=Depends(require_verified)):
-    """Buyer: confirm receipt of a delivered order — completes the transaction."""
+    """Buyer: confirm an order the supplier marked completed — completes the transaction."""
     try:
         return fulfillment_service.confirm_received(requirement_id, current_user.id, payload.note)
     except Exception as exc:

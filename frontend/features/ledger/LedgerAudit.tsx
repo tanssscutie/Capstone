@@ -54,8 +54,8 @@ const EVENT_LABEL: Record<LedgerEntryType, string> = {
   CLOSEOUT_CONFIRMED: 'Transaction close-out confirmed',
   CLOSEOUT_REJECTED: 'Transaction close-out not confirmed',
   CLOSEOUT_WITHDRAWN: 'Transaction close-out withdrawn',
-  FULFILLMENT_UPDATED: 'Order status updated',
-  ORDER_RECEIVED: 'Order received — completed',
+  FULFILLMENT_UPDATED: 'Marked completed by supplier',
+  ORDER_RECEIVED: 'Buyer confirmed — completed',
   ORDER_AUTO_CONFIRMED: 'Order auto-confirmed as completed',
   ORDER_UNCONFIRMED: 'Order marked unconfirmed',
 };
