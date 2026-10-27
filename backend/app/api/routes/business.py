@@ -13,8 +13,6 @@ from app.schemas.business import (
     OnboardingSubmit,
     DocumentUploadOut,
     DocumentExtractionOut,
-    DescriptionSuggestionRequest,
-    DescriptionSuggestionOut,
     VerificationStatusOut,
     AdminReviewAction,
     DashboardStatsOut,
@@ -40,11 +38,6 @@ async def extract_document_fields(
     current_user: User = Depends(get_current_user),
 ):
     return await business_service.extract_document_fields(doc_type=doc_type, file=file)
-
-
-@router.post("/suggest-description", response_model=DescriptionSuggestionOut)
-def suggest_description(payload: DescriptionSuggestionRequest, current_user: User = Depends(get_current_user)):
-    return business_service.suggest_description(payload)
 
 
 @router.post("/documents", response_model=DocumentUploadOut, status_code=status.HTTP_201_CREATED)
@@ -84,8 +77,8 @@ def get_dashboard_stats(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/{business_id}/profile", response_model=PublicBusinessProfileOut)
-def get_public_profile(business_id: int, _current_user: User = Depends(get_current_user)):
-    return business_service.get_public_profile(business_id)
+def get_public_profile(business_id: int, current_user: User = Depends(get_current_user)):
+    return business_service.get_public_profile(business_id, current_user.id)
 
 
 # ---------- admin ----------

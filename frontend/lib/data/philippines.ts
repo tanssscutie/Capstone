@@ -33,6 +33,18 @@ export const PH_CITIES = [
   'Vigan',
 ];
 
+// The 17 local government units of Metro Manila (16 cities + the municipality
+// of Pateros) — the study's service scope. Onboarding offers these as a pick
+// list instead of a free-text city field, so the value is always one of them.
+export const NCR_CITIES = [
+  'Caloocan', 'Las Piñas', 'Makati', 'Malabon', 'Mandaluyong', 'Manila', 'Marikina',
+  'Muntinlupa', 'Navotas', 'Parañaque', 'Pasay', 'Pasig', 'Pateros', 'Quezon City',
+  'San Juan', 'Taguig', 'Valenzuela',
+];
+
+/** Stored as the province for every NCR business — the field is no longer asked. */
+export const NCR_PROVINCE = 'Metro Manila';
+
 // The 82 provinces of the Philippines, plus Metro Manila / NCR — which isn't
 // officially a province, but is what nearly everyone (including this app's own
 // sample data) writes in a "province" field for anywhere in the capital region.

@@ -18,9 +18,9 @@
 // `QuotationDraftInput` on submit.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, TextInput, Image, StyleSheet } from 'react-native';
+import { View, Text, Pressable, TextInput, Image, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import ScreenScroll from '../../components/ui/ScreenScroll';
-import type { LayoutChangeEvent, ViewStyle } from 'react-native';
+import type { LayoutChangeEvent, TextInputProps, ViewStyle } from 'react-native';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import {
   color,
@@ -34,9 +34,10 @@ import {
   layout,
 } from '../../components/ui/tokens';
 import type { Business, BusinessType, OnboardingStep, Attachment } from '../../lib/types';
-import { isRecognizedCity, isRecognizedProvince } from '../../lib/data/philippines';
-import { CATEGORIES as SHARED_CATEGORIES } from '../../lib/data/categories';
+import { NCR_CITIES, NCR_PROVINCE } from '../../lib/data/philippines';
+import { OTHER_ITEM_CODE, itemsFor, useCategoryTree } from '../../lib/data/categories';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
+import { VALIDATION_ERROR_MARK, scrollToFirstError } from '../../lib/scrollToFirstError';
 
 /* ─── Draft shapes ──────────────────────────────────────
  * Local to onboarding — not shared types. Assembled into a real `Business` by the route
@@ -49,19 +50,28 @@ export interface IdentityDraft {
    *  is used everywhere, same as before this field existed. */
   displayName: string;
   businessType: BusinessType;
-  category: string;
   city: string;
   province: string;
   contactPerson: string;
   contactMobile: string;
 }
 
+/** One item a seller offers — a code from GET /meta/categories, plus their
+ *  own wording when the code is "other". */
+export interface OfferedItemDraft {
+  code: string;
+  otherText: string | null;
+}
+
 export interface OperationsDraft {
+  /** Asked at registration, so OPERATIONS only shows it (read-only) — accounts
+   *  with none on file must pick one here. */
+  category: string;
+  /** Seller only, at least one. Cleared whenever the category changes. */
+  offeredItems: OfferedItemDraft[];
   capabilities: string[];
   serviceAreas: string[];
-  /** Optional public-facing bio — blank is completely normal, same as
-   *  before this field existed. Can be typed by hand or drafted with the AI
-   *  profile assistant (see onSuggestDescription on OperationsProps). */
+  /** Optional public-facing bio, typed by the business — blank is completely normal. */
   businessDescription: string;
 }
 
@@ -98,11 +108,6 @@ interface OperationsProps {
   operationsOptional?: boolean;
   onContinue: (draft: OperationsDraft) => void;
   onBack: () => void;
-  /** AI profile assistant — drafts a short bio from what's already known
-   *  (type, category, capabilities, service areas, location). Optional:
-   *  the bio field is always a normal editable textarea whether or not
-   *  this is wired up, and null (nothing suggested) is a normal result. */
-  onSuggestDescription?: (capabilities: string[], serviceAreas: string[]) => Promise<string | null>;
   /** True when an already-verified business reached this screen from "Update
    *  profile" rather than fresh onboarding — onContinue here saves and exits
    *  straight away instead of moving on to DOCUMENTS, since editing your name
@@ -150,12 +155,21 @@ function businessTypeLabel(type: BusinessType): string {
 
 /** Capability suggestions per category — keys must match the shared CATEGORIES
  *  list (see lib/data/categories.ts) so the two never drift apart again. */
+/** Placeholder examples that match the business's own category — a specialty
+ *  deliberately *not* in that category's pick list (so it reads as "type your
+ *  own"), and the kind of work a bio would describe. */
+const EXAMPLES_BY_CATEGORY: Record<string, { customCapability: string; bioWork: string }> = {
+  'Printing': { customCapability: 'Foil stamping', bioWork: 'Offset and digital printing for offices, schools and events' },
+  'Packaging & Labeling': { customCapability: 'Blister packaging', bioWork: 'Custom corrugated boxes and product labels for food and retail brands' },
+};
+const DEFAULT_EXAMPLES = EXAMPLES_BY_CATEGORY['Printing'];
+
 const CAPABILITIES_BY_CATEGORY: Record<string, string[]> = {
   'Printing': ['Offset printing', 'Digital printing', 'Large format printing', 'Bookbinding', 'Signage & banners', 'Screen printing'],
   'Packaging & Labeling': ['Corrugated boxes', 'Labels & stickers', 'Shrink wrap & film', 'Packaging design', 'Custom packaging', 'Pallets & crates'],
 };
-const CATEGORIES = SHARED_CATEGORIES;
 const CATEGORY_VISIBLE_COUNT = 4;
+const OTHER_ITEM_TEXT_MAX = 100;
 
 const CAPABILITY_MIN = 3;
 const CAPABILITY_MAX = 8;
@@ -234,13 +248,60 @@ function formatMobileDisplay(rawDigits: string): string {
 
 /* ─── Small building blocks ─────────────────────────── */
 
+/** RN-web passes these straight through as CSS; native ignores them. */
+function webTransition(properties: string): ViewStyle {
+  return Platform.OS === 'web'
+    ? ({ transitionProperty: properties, transitionDuration: '160ms', transitionTimingFunction: 'ease-out' } as unknown as ViewStyle)
+    : {};
+}
+
+/** Hover is web-only; on native the handlers are simply not attached. */
+function useHover() {
+  const [hovered, setHovered] = useState(false);
+  const handlers =
+    Platform.OS === 'web' ? { onHoverIn: () => setHovered(true), onHoverOut: () => setHovered(false) } : {};
+  return [hovered, handlers] as const;
+}
+
+/** TextInput that lights its border (plus a soft ring on web) while focused —
+ *  same as PostRequirement.tsx's, so both forms feel like one app. */
+function FormInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      placeholderTextColor={color.inkFaint}
+      {...props}
+      onFocus={(e) => {
+        setFocused(true);
+        onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocused(false);
+        onBlur?.(e);
+      }}
+      style={[style, webTransition('border-color, background-color, box-shadow'), focused && styles.inputFocused]}
+    />
+  );
+}
+
 function SectionLabel({ children }: { children: string }) {
   return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
 function Pill({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const [hovered, hoverHandlers] = useHover();
   return (
-    <Pressable onPress={onPress} style={[styles.pill, active ? styles.pillActive : null]}>
+    <Pressable
+      {...hoverHandlers}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.pill,
+        webTransition('background-color, border-color, transform'),
+        hovered && !active && styles.pillHovered,
+        active ? styles.pillActive : null,
+        pressed && styles.pressedScale,
+      ]}
+    >
       <Text style={[styles.pillLabel, active ? styles.pillLabelActive : null]}>{label}</Text>
     </Pressable>
   );
@@ -272,17 +333,26 @@ function ActionButton({
   variant?: ActionVariant;
   disabled?: boolean;
 }) {
+  const [hovered, hoverHandlers] = useHover();
+  const live = hovered && !disabled;
   return (
     <Pressable
+      {...hoverHandlers}
       onPress={disabled ? undefined : onPress}
       disabled={disabled}
       style={({ pressed }) => [
         styles.actionButton,
+        webTransition('background-color, border-color, transform, box-shadow, opacity'),
         {
-          backgroundColor: variant === 'primary' ? (pressed ? color.primaryPressed : color.primary) : variant === 'text' ? 'transparent' : color.surface,
-          borderColor: variant === 'outline' ? color.border : variant === 'text' ? 'transparent' : color.primary,
+          backgroundColor:
+            variant === 'primary'
+              ? pressed || live ? color.primaryPressed : color.primary
+              : variant === 'text' ? 'transparent' : live ? color.surfaceSunken : color.surface,
+          borderColor: variant === 'outline' ? (live ? color.borderStrong : color.border) : variant === 'text' ? 'transparent' : color.primary,
           opacity: disabled ? 0.5 : 1,
         },
+        variant === 'primary' && live && styles.actionButtonPrimaryHovered,
+        pressed && !disabled && styles.pressedScale,
       ]}
     >
       <Text style={[styles.actionButtonLabel, { color: variant === 'primary' ? color.onPrimary : variant === 'text' ? color.inkMuted : color.ink }]}>
@@ -301,11 +371,23 @@ function SummaryBanner({ message }: { message: string }) {
   );
 }
 
-function FormSection({ heading, children }: { heading?: string; children: ReactNode }) {
+/** One white card per group of fields, numbered — same look as PostRequirement.tsx's SectionCard. */
+function FormSection({ index, heading, caption, children }: { index?: number; heading?: string; caption?: string; children: ReactNode }) {
+  const { width } = useWindowDimensions();
   return (
-    <View style={styles.formSection}>
-      {!!heading && <Text style={styles.sectionLabel}>{heading}</Text>}
-      {children}
+    <View style={[styles.sectionCard, width < 480 && styles.sectionCardCompact]}>
+      {!!heading && (
+        <View style={styles.sectionCardHeader}>
+          {index != null && (
+            <View style={styles.sectionBadge}>
+              <Text style={styles.sectionBadgeLabel}>{index}</Text>
+            </View>
+          )}
+          <Text style={styles.sectionCardTitle}>{heading}</Text>
+        </View>
+      )}
+      {!!caption && <Text style={styles.sectionCardCaption}>{caption}</Text>}
+      <View style={[styles.formSection, !!heading && styles.sectionCardBody]}>{children}</View>
     </View>
   );
 }
@@ -314,9 +396,13 @@ function FormDivider() {
   return <View style={styles.formDivider} />;
 }
 
-function ScreenTitle({ title }: { title: string }) {
+function ScreenTitle({ step, title }: { step: FormStep; title: string }) {
+  const index = STEP_ORDER.indexOf(step);
   return (
     <View style={{ gap: space.xs }}>
+      <Text style={styles.pageEyebrow}>
+        Step {index + 1} of {STEP_ORDER.length} · {STEP_INDICATOR_LABELS[step]}
+      </Text>
       <Text style={styles.pageTitle}>{title}</Text>
       <Text style={styles.pageSubtitle}>{SUPPORTING_LINE}</Text>
     </View>
@@ -420,8 +506,9 @@ function BottomBar({
 
 /* ─── IDENTITY ──────────────────────────────────────── */
 
-function CategoryChips({ category, onSelect }: { category: string; onSelect: (c: string) => void }) {
+function CategoryChips({ categories, category, onSelect }: { categories: string[]; category: string; onSelect: (c: string) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const CATEGORIES = categories;
   const selectedOutsideVisible = !!category && CATEGORIES.indexOf(category) >= CATEGORY_VISIBLE_COUNT;
   const showAll = expanded || selectedOutsideVisible;
   const shown = showAll ? CATEGORIES : CATEGORIES.slice(0, CATEGORY_VISIBLE_COUNT);
@@ -454,9 +541,12 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
   const [registeredName, setRegisteredName] = useState(initial?.registeredName ?? '');
   const [displayName, setDisplayName] = useState(initial?.displayName ?? '');
   const [businessType, setBusinessType] = useState<BusinessType | ''>(initial?.businessType ?? '');
-  const [category, setCategory] = useState(initial?.category ?? '');
-  const [city, setCity] = useState(initial?.city ?? '');
-  const [province, setProvince] = useState(initial?.province ?? '');
+  // Only an NCR city carries over — a profile saved before the pick list (e.g.
+  // "Calamba") starts unselected so they choose one of the supported cities.
+  const [city, setCity] = useState<string>(() => {
+    const saved = initial?.city ?? '';
+    return NCR_CITIES.includes(saved) ? saved : '';
+  });
   const [contactPerson, setContactPerson] = useState(initial?.contactPerson ?? '');
   // Strip a leading "+63" before stripping the rest of the non-digits, so re-hydrating from
   // a previously-submitted "+63 917 555 0142" (going Back to this step) yields the 10-digit
@@ -466,8 +556,6 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
 
   const nameBad = registeredName.trim().length > 0 && registeredName.trim().length < 4;
   const mobileBad = mobileDigits.length > 0 && (mobileDigits.length < 10 || mobileDigits.length > 11);
-  const cityBad = city.trim().length > 0 && !isRecognizedCity(city);
-  const provinceBad = province.trim().length > 0 && !isRecognizedProvince(province);
   // Catches "12345" or "n/a" typed to get past the required-field check without
   // actually naming anyone — a contact person needs at least one letter.
   const contactPersonBad = contactPerson.trim().length > 0 && !/[a-zA-Z]/.test(contactPerson);
@@ -475,26 +563,24 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
   const missing: string[] = [];
   if (!registeredName.trim()) missing.push('your registered business name');
   if (!businessType) missing.push('business type');
-  if (!category) missing.push('industry category');
-  if (!city.trim()) missing.push('city');
-  if (!province.trim()) missing.push('province');
+  if (!city) missing.push('city');
   if (!contactPerson.trim()) missing.push('contact person');
   if (!mobileDigits) missing.push('mobile number');
 
-  const ready = missing.length === 0 && !nameBad && !mobileBad && !cityBad && !provinceBad && !contactPersonBad;
+  const ready = missing.length === 0 && !nameBad && !mobileBad && !contactPersonBad;
 
   const handleContinue = () => {
     if (!ready || !businessType) {
       setAttempted(true);
+      scrollToFirstError();
       return;
     }
     onContinue({
       registeredName: registeredName.trim(),
       displayName: displayName.trim(),
       businessType,
-      category,
-      city: city.trim(),
-      province: province.trim(),
+      city,
+      province: NCR_PROVINCE,
       contactPerson: contactPerson.trim(),
       contactMobile: `+63 ${formatMobileDisplay(mobileDigits)}`,
     });
@@ -506,37 +592,37 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
 
   return (
     <View style={styles.stepContent}>
-      <ScreenTitle title="Tell us about your business" />
+      <ScreenTitle step="IDENTITY" title="Tell us about your business" />
       {attempted && missing.length > 0 && <SummaryBanner message={`Still needed before you continue: ${listOut(missing)}.`} />}
-      <FormSection heading="About your business">
+      <FormSection index={1} heading="About your business">
         <View style={{ gap: space.md }}>
           <View>
             <Text style={styles.fieldLabel}>Registered business name</Text>
             <Text style={styles.fieldCaption}>Exactly as it appears on your DTI or SEC certificate. We check the two against each other.</Text>
-            <TextInput
+            <FormInput
               value={registeredName}
               onChangeText={(v) => setRegisteredName(stripEmoji(v))}
-              placeholder="Santiago Metal Works and General Merchandise"
+              placeholder="Santiago Printing and Packaging Services"
               placeholderTextColor={color.inkFaint}
               style={[styles.input, nameBad ? styles.inputError : null]}
             />
-            {nameBad && <Text style={styles.errorText}>That looks short for a registered name — check it against the certificate.</Text>}
+            {nameBad && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>That looks short for a registered name — check it against the certificate.</Text>}
           </View>
 
           <View>
             <Text style={styles.fieldLabel}>Display name <Text style={styles.fieldOptional}>(optional)</Text></Text>
             <Text style={styles.fieldCaption}>A shorter trading name, shown instead of your registered name wherever businesses see you — requirement cards, your profile. Leave blank to just use your registered name everywhere.</Text>
-            <TextInput
+            <FormInput
               value={displayName}
               onChangeText={(v) => setDisplayName(stripEmoji(v))}
-              placeholder="Santiago Metal Works"
+              placeholder="Santiago Print Shop"
               placeholderTextColor={color.inkFaint}
               style={styles.input}
             />
           </View>
 
-          <View style={styles.twoColRow}>
-            <View style={styles.twoCol}>
+          <View>
+            <View>
               <Text style={styles.fieldLabel}>Business type</Text>
               <View style={styles.optionGrid}>
                 {BUSINESS_TYPES.map((t) => (
@@ -547,55 +633,25 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
               </View>
               {!!docHint && <Text style={styles.fieldNote}>We will ask for your {docHint} certificate and BIR registration next.</Text>}
             </View>
-
-            <View style={styles.twoCol}>
-              <Text style={styles.fieldLabel}>Industry category</Text>
-              <CategoryChips category={category} onSelect={setCategory} />
-            </View>
           </View>
         </View>
       </FormSection>
 
-      <FormDivider />
-
-      <FormSection heading="Where you operate">
-        <View style={styles.twoColRow}>
-          <View style={styles.twoCol}>
-            <Text style={styles.fieldLabel}>City</Text>
-            <TextInput
-              value={city}
-              onChangeText={setCity}
-              placeholder="Quezon City"
-              placeholderTextColor={color.inkFaint}
-              style={[styles.input, attempted && cityBad ? styles.inputError : null]}
-            />
-            {attempted && cityBad && (
-              <Text style={styles.errorText}>We don't recognize that city — check the spelling (e.g. "Calamba", "Quezon City").</Text>
-            )}
-          </View>
-          <View style={styles.twoCol}>
-            <Text style={styles.fieldLabel}>Province</Text>
-            <TextInput
-              value={province}
-              onChangeText={setProvince}
-              placeholder="Metro Manila"
-              placeholderTextColor={color.inkFaint}
-              style={[styles.input, attempted && provinceBad ? styles.inputError : null]}
-            />
-            {attempted && provinceBad && (
-              <Text style={styles.errorText}>We don't recognize that province — check the spelling (e.g. "Laguna", "Metro Manila").</Text>
-            )}
-          </View>
+      <FormSection index={2} heading="Where you operate">
+        <Text style={styles.fieldLabel}>City</Text>
+        <Text style={styles.fieldCaption}>TrustLink currently covers Metro Manila — pick the city your business is based in.</Text>
+        <View style={styles.pillGroupWrap}>
+          {NCR_CITIES.map((c) => (
+            <Pill key={c} label={c} active={city === c} onPress={() => setCity(c)} />
+          ))}
         </View>
       </FormSection>
 
-      <FormDivider />
-
-      <FormSection heading="Business contact">
+      <FormSection index={3} heading="Business contact">
         <View style={styles.twoColRow}>
           <View style={styles.twoCol}>
             <Text style={styles.fieldLabel}>Contact person</Text>
-            <TextInput
+            <FormInput
               value={contactPerson}
               onChangeText={(v) => setContactPerson(stripEmoji(v))}
               placeholder="Maria Santiago"
@@ -603,7 +659,7 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
               style={[styles.input, attempted && contactPersonBad ? styles.inputError : null]}
             />
             {attempted && contactPersonBad ? (
-              <Text style={styles.errorText}>That doesn't look like a name.</Text>
+              <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>That doesn't look like a name.</Text>
             ) : (
               // Below the input, not above — keeps this row's input aligned with Mobile
               // number's regardless of how many lines either helper text wraps to.
@@ -615,7 +671,7 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
             <Text style={styles.fieldLabel}>Mobile number</Text>
             <View style={[styles.input, styles.mobileFieldRow, mobileBad ? styles.inputError : null]}>
               <Text style={styles.mobilePrefix}>+63</Text>
-              <TextInput
+              <FormInput
                 value={mobileDigits}
                 onChangeText={(v) => setMobileDigits(v.replace(/[^0-9]/g, '').slice(0, 11))}
                 placeholder="917 555 0142"
@@ -624,7 +680,7 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
                 style={styles.mobileInput}
               />
             </View>
-            {mobileBad && <Text style={styles.errorText}>That does not look like a Philippine mobile number — 10 digits after +63.</Text>}
+            {mobileBad && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>That does not look like a Philippine mobile number — 10 digits after +63.</Text>}
             <Text style={styles.quietNote}>Never shown publicly — only shared after an award.</Text>
           </View>
         </View>
@@ -635,32 +691,42 @@ function IdentityScreen({ initial, onContinue, reportContinue }: IdentityProps &
 
 /* ─── OPERATIONS ────────────────────────────────────── */
 
-function OperationsScreen({ identity, initial, operationsOptional, onContinue, onSuggestDescription, reportContinue }: OperationsProps & { reportContinue: (fn: () => void) => void }) {
+function OperationsScreen({ identity, initial, operationsOptional, onContinue, reportContinue }: OperationsProps & { reportContinue: (fn: () => void) => void }) {
+  const { tree, categories, error: treeError } = useCategoryTree();
+  const [category, setCategory] = useState(initial?.category ?? '');
+  // The category from registration is shown read-only, with "Change" to open
+  // the picker. An account with none on file (from before registration asked,
+  // Google sign-ups) gets the picker straight away, as a required field.
+  // Changing it never touches verification (business_service.submit_onboarding).
+  const [pickingCategory, setPickingCategory] = useState(!initial?.category);
+  const [offeredCodes, setOfferedCodes] = useState<string[]>(() => (initial?.offeredItems ?? []).map((i) => i.code));
+  const [otherItemText, setOtherItemText] = useState(
+    () => initial?.offeredItems?.find((i) => i.code === OTHER_ITEM_CODE)?.otherText ?? '',
+  );
   const [capabilities, setCapabilities] = useState<string[]>(initial?.capabilities ?? []);
   const [capQuery, setCapQuery] = useState('');
   const [serviceAreas, setServiceAreas] = useState<string[]>(initial?.serviceAreas ?? (identity.province ? [identity.province] : []));
   const [areaInput, setAreaInput] = useState('');
   const [businessDescription, setBusinessDescription] = useState(initial?.businessDescription ?? '');
-  const [descStatus, setDescStatus] = useState<'idle' | 'checking' | 'not_found'>('idle');
   const [attempted, setAttempted] = useState(false);
 
-  async function handleSuggestDescription() {
-    if (!onSuggestDescription) return;
-    setDescStatus('checking');
-    try {
-      const suggestion = await onSuggestDescription(capabilities, serviceAreas);
-      if (suggestion) {
-        setBusinessDescription(suggestion);
-        setDescStatus('idle');
-      } else {
-        setDescStatus('not_found');
-      }
-    } catch {
-      setDescStatus('not_found');
+  const pool = CAPABILITIES_BY_CATEGORY[category] ?? [];
+  const examples = EXAMPLES_BY_CATEGORY[category] ?? DEFAULT_EXAMPLES;
+  const items = itemsFor(tree, category);
+  const offersOther = offeredCodes.includes(OTHER_ITEM_CODE);
+
+  function selectCategory(c: string) {
+    // The items belong to the old category, so they go with it.
+    if (c !== category) {
+      setOfferedCodes([]);
+      setOtherItemText('');
     }
+    setCategory(c);
   }
 
-  const pool = CAPABILITIES_BY_CATEGORY[identity.category] ?? [];
+  function toggleItem(code: string) {
+    setOfferedCodes((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]));
+  }
   const q = capQuery.trim().toLowerCase();
   const shownCaps = q ? pool.filter((c) => c.toLowerCase().includes(q)) : pool;
   const atCap = capabilities.length >= CAPABILITY_MAX;
@@ -671,8 +737,8 @@ function OperationsScreen({ identity, initial, operationsOptional, onContinue, o
   // exactly what makes a plain keyword/category match miss — a shared
   // vocabulary from the presets is what keeps that matching working today.
   // Free text still earns its place for whatever a business's specialty
-  // genuinely isn't on the list (e.g. "Cement manufacturing" specifically,
-  // not just "Cement & aggregates").
+  // genuinely isn't on the list (e.g. "Foil stamping" under Printing,
+  // which none of the presets cover).
   const customCapabilities = capabilities.filter((c) => !pool.includes(c));
   const [customCapInput, setCustomCapInput] = useState('');
 
@@ -703,6 +769,11 @@ function OperationsScreen({ identity, initial, operationsOptional, onContinue, o
   }
 
   const missing: string[] = [];
+  if (!category) missing.push('your business category');
+  if (!operationsOptional && category) {
+    if (offeredCodes.length === 0) missing.push('at least one item you offer');
+    else if (offersOther && !otherItemText.trim()) missing.push('what your "Other" item is');
+  }
   if (!operationsOptional) {
     if (capabilities.length < CAPABILITY_MIN) missing.push(`at least ${CAPABILITY_MIN} capabilities`);
     if (serviceAreas.length === 0) missing.push('at least one service area');
@@ -712,18 +783,91 @@ function OperationsScreen({ identity, initial, operationsOptional, onContinue, o
   const handleContinue = () => {
     if (!ready) {
       setAttempted(true);
+      scrollToFirstError();
       return;
     }
-    onContinue({ capabilities, serviceAreas, businessDescription });
+    onContinue({
+      category,
+      // A buyer isn't asked — the backend drops anything sent anyway.
+      offeredItems: operationsOptional
+        ? []
+        : offeredCodes.map((code) => ({ code, otherText: code === OTHER_ITEM_CODE ? otherItemText.trim() : null })),
+      capabilities,
+      serviceAreas,
+      businessDescription,
+    });
   };
 
   reportContinue(handleContinue);
 
   return (
     <View style={styles.stepContent}>
-      <ScreenTitle title="What you do, and where" />
+      <ScreenTitle step="OPERATIONS" title="What you do, and where" />
       {attempted && missing.length > 0 && <SummaryBanner message={`Add ${listOut(missing)} first.`} />}
-      <FormSection heading="What you provide">
+      <FormSection index={1} heading="What you provide">
+        {!pickingCategory ? (
+          <View style={styles.categoryRow}>
+            <Text style={styles.categoryRowText}>
+              Business category: <Text style={styles.categoryRowValue}>{category}</Text>
+            </Text>
+            <Pressable onPress={() => setPickingCategory(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Change business category">
+              <Text style={styles.categoryChangeLink}>Change</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={{ marginBottom: space.lg }}>
+            <Text style={styles.fieldLabel}>Business category</Text>
+            <Text style={styles.fieldCaption}>
+              Pick the category your business belongs to.
+              {!operationsOptional && !!initial?.category ? ' Changing it clears the items you offer — pick them again below.' : ''}
+            </Text>
+            {treeError ? (
+              <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Couldn't load the categories — check your connection and reopen this page.</Text>
+            ) : (
+              <CategoryChips categories={categories} category={category} onSelect={selectCategory} />
+            )}
+            {attempted && !category && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick your business category.</Text>}
+          </View>
+        )}
+
+        {!operationsOptional && !!category && (
+          <View style={{ marginBottom: space.lg }}>
+            <Text style={styles.fieldLabel}>Items you offer</Text>
+            <Text style={styles.fieldCaption}>Everything in {category} you take orders for — buyers' requirements name one of these.</Text>
+            <View style={styles.pillGroupWrap}>
+              {items.map((item) => {
+                const on = offeredCodes.includes(item.code);
+                return (
+                  <Pressable
+                    key={item.code}
+                    onPress={() => toggleItem(item.code)}
+                    style={[styles.pill, on ? styles.pillActive : null]}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: on }}
+                  >
+                    <View style={styles.pillContentRow}>
+                      {on && <CheckGlyph tone={color.primary} />}
+                      <Text style={[styles.pillLabel, on ? styles.pillLabelActive : null]}>{item.name}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {offersOther && (
+              <FormInput
+                value={otherItemText}
+                onChangeText={(v) => setOtherItemText(stripEmoji(v))}
+                maxLength={OTHER_ITEM_TEXT_MAX}
+                placeholder="What else do you offer? e.g. Gift boxes"
+                placeholderTextColor={color.inkFaint}
+                style={[styles.input, attempted && !otherItemText.trim() ? styles.inputError : null]}
+              />
+            )}
+            {attempted && offeredCodes.length === 0 && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick at least one item you offer.</Text>}
+            {attempted && offersOther && !otherItemText.trim() && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Describe the other item you offer.</Text>}
+          </View>
+        )}
+
         <View style={styles.cardHeaderRow}>
           <Text style={styles.fieldLabel}>Capabilities</Text>
           <View style={{ flex: 1 }} />
@@ -737,10 +881,10 @@ function OperationsScreen({ identity, initial, operationsOptional, onContinue, o
             : `Pick between ${CAPABILITY_MIN} and ${CAPABILITY_MAX}. Choosing everything you could possibly do makes your feed worse, not better.`}
         </Text>
 
-        <TextInput
+        <FormInput
           value={capQuery}
           onChangeText={setCapQuery}
-          placeholder={`Search capabilities in ${identity.category || 'your category'}`}
+          placeholder={`Search capabilities in ${category || 'your category'}`}
           placeholderTextColor={color.inkFaint}
           style={styles.searchInput}
         />
@@ -760,7 +904,7 @@ function OperationsScreen({ identity, initial, operationsOptional, onContinue, o
           })}
         </View>
         {q.length > 0 && shownCaps.length === 0 && (
-          <Text style={styles.fieldNote}>Nothing in {identity.category} matches "{capQuery}". Try a broader word.</Text>
+          <Text style={styles.fieldNote}>Nothing in {category} matches "{capQuery}". Try a broader word.</Text>
         )}
 
         {customCapabilities.length > 0 && (
@@ -777,12 +921,12 @@ function OperationsScreen({ identity, initial, operationsOptional, onContinue, o
         )}
         <Text style={[styles.fieldCaption, { marginTop: space.sm }]}>Specialty not on the list? Type your own.</Text>
         <View style={styles.addAreaRow}>
-          <TextInput
+          <FormInput
             value={customCapInput}
             onChangeText={(v) => setCustomCapInput(stripEmoji(v))}
             onSubmitEditing={addCustomCapability}
             editable={!atCap}
-            placeholder={atCap ? `${CAPABILITY_MAX} selected already` : 'e.g. Cement manufacturing'}
+            placeholder={atCap ? `${CAPABILITY_MAX} selected already` : `e.g. ${examples.customCapability}`}
             placeholderTextColor={color.inkFaint}
             style={[styles.input, { flex: 1, marginTop: 0 }]}
           />
@@ -790,11 +934,9 @@ function OperationsScreen({ identity, initial, operationsOptional, onContinue, o
         </View>
       </FormSection>
 
-      <FormDivider />
-
-      <FormSection heading="Where you work">
+      <FormSection index={2} heading="Where you work">
         <Text style={styles.fieldLabel}>Service areas</Text>
-        <Text style={styles.fieldCaption}>Cities or provinces you would travel to for work. Pre-filled from where you are based.</Text>
+        <Text style={styles.fieldCaption}>Cities you would travel to for work. Pre-filled from where you are based.</Text>
 
         <View style={styles.pillGroupWrap}>
           {serviceAreas.map((a) => (
@@ -808,11 +950,11 @@ function OperationsScreen({ identity, initial, operationsOptional, onContinue, o
         </View>
 
         <View style={styles.addAreaRow}>
-          <TextInput
+          <FormInput
             value={areaInput}
             onChangeText={(v) => setAreaInput(stripEmoji(v))}
             onSubmitEditing={addArea}
-            placeholder="Add a city or province"
+            placeholder="Add a city, e.g. Pasig"
             placeholderTextColor={color.inkFaint}
             style={[styles.input, { flex: 1, marginTop: 0 }]}
           />
@@ -820,9 +962,7 @@ function OperationsScreen({ identity, initial, operationsOptional, onContinue, o
         </View>
       </FormSection>
 
-      <FormDivider />
-
-      <FormSection heading="About your business">
+      <FormSection index={3} heading="About your business">
         <View style={styles.cardHeaderRow}>
           <Text style={styles.fieldLabel}>Bio</Text>
           <View style={{ flex: 1 }} />
@@ -830,34 +970,17 @@ function OperationsScreen({ identity, initial, operationsOptional, onContinue, o
             <Text style={[styles.tagLabel, styles.tagLabelOptional]}>Optional</Text>
           </View>
         </View>
-        <Text style={styles.fieldCaption}>Shown on your public profile. Write your own, or let the AI profile assistant draft one from what you picked above — you can edit or clear it either way.</Text>
-        <TextInput
+        <Text style={styles.fieldCaption}>Shown on your public profile. A sentence or two about what you do and where you work.</Text>
+        <FormInput
           value={businessDescription}
           onChangeText={setBusinessDescription}
           multiline
           numberOfLines={3}
           maxLength={500}
-          placeholder="e.g. Tarpaulin and large-format printing serving Calamba and nearby Laguna towns."
+          placeholder={`e.g. ${examples.bioWork} in ${identity.city || 'Quezon City'} and nearby Metro Manila cities.`}
           placeholderTextColor={color.inkFaint}
           style={styles.textareaLarge}
         />
-        {onSuggestDescription && (
-          <Pressable
-            onPress={handleSuggestDescription}
-            disabled={descStatus === 'checking' || capabilities.length < CAPABILITY_MIN}
-            style={styles.docAddButton}
-          >
-            <Text style={styles.docAddButtonLabel}>
-              {descStatus === 'checking' ? 'Drafting…' : businessDescription ? 'Redo with AI' : 'Suggest with AI'}
-            </Text>
-          </Pressable>
-        )}
-        {capabilities.length < CAPABILITY_MIN && (
-          <Text style={styles.fieldCaption}>Pick your capabilities above first — the assistant drafts from those.</Text>
-        )}
-        {descStatus === 'not_found' && (
-          <Text style={styles.fieldCaption}>Couldn't draft one right now — write your own, or try again in a moment.</Text>
-        )}
       </FormSection>
     </View>
   );
@@ -935,7 +1058,7 @@ function DocumentUploadRow({
       {file && (
         <View style={{ marginTop: space.sm }}>
           <Text style={styles.fieldLabel}>{idNumberLabel}</Text>
-          <TextInput
+          <FormInput
             value={idNumber}
             onChangeText={onIdNumberChange}
             placeholder={idNumberPlaceholder}
@@ -951,7 +1074,7 @@ function DocumentUploadRow({
             <Text style={styles.fieldCaption}>Couldn't find a number on that document — enter it yourself below.</Text>
           )}
           {attempted && idNumberBad && (
-            <Text style={styles.errorText}>That doesn't look like a valid {idNumberLabel.toLowerCase()} — check it against the document.</Text>
+            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>That doesn't look like a valid {idNumberLabel.toLowerCase()} — check it against the document.</Text>
           )}
         </View>
       )}
@@ -1069,6 +1192,7 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
   const handleSubmit = () => {
     if (!ready) {
       setAttempted(true);
+      scrollToFirstError();
       return;
     }
     onSubmit({ registrationDoc, registrationIdNumber, birDoc, birIdNumber, mayorsPermit, mayorsPermitIdNumber });
@@ -1078,9 +1202,9 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
 
   return (
     <View style={styles.stepContent}>
-      <ScreenTitle title="Verify your business" />
+      <ScreenTitle step="DOCUMENTS" title="Verify your business" />
       {attempted && missing.length > 0 && <SummaryBanner message={`Add ${listOut(missing)} to submit.`} />}
-      <FormSection heading="Documents">
+      <FormSection index={1} heading="Documents">
         <View style={{ gap: space.lg }}>
           <DocumentUploadRow
             name={regSpec.name}
@@ -1405,7 +1529,7 @@ export default function Onboarding(props: OnboardingProps) {
 /* ─── Styles ─────────────────────────────────────────── */
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.canvas },
+  root: { flex: 1, backgroundColor: color.surfaceSunken },
 
   /* top header — mark + wordmark only, far left of the viewport. Full-width bar with a
    * bottom border, matching the fixed bottom bar's treatment (not capped to the form). */
@@ -1450,6 +1574,7 @@ const styles = StyleSheet.create({
   arrivalScrollContent: { alignItems: 'center', paddingBottom: space.xxl },
   arrivalPage: { width: '100%', maxWidth: FORM_COLUMN_MAX_WIDTH, paddingHorizontal: layout.screenPadding, paddingTop: space.xxl, gap: space.lg },
 
+  pageEyebrow: { fontFamily: font.monoMedium, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.primary },
   pageTitle: { fontFamily: font.display, fontSize: fontSize.xl, lineHeight: lineHeight.xl, letterSpacing: letterSpacing.tight, color: color.ink },
   pageSubtitle: { maxWidth: 480, fontFamily: font.body, fontSize: fontSize.base, lineHeight: lineHeight.base, color: color.inkMuted },
 
@@ -1491,18 +1616,35 @@ const styles = StyleSheet.create({
 
   /* plain field groups: headings + dividers, no nested cards */
   formSection: { gap: space.sm },
+  sectionCard: { ...elevation.card, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.xxl },
+  sectionCardCompact: { padding: space.lg },
+  sectionCardHeader: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  sectionBadge: { width: 24, height: 24, borderRadius: radius.pill, backgroundColor: color.primaryFaint, alignItems: 'center', justifyContent: 'center' },
+  sectionBadgeLabel: { fontFamily: font.monoMedium, fontSize: fontSize.micro, color: color.primary },
+  sectionCardTitle: { flex: 1, fontFamily: font.display, fontSize: fontSize.md, letterSpacing: letterSpacing.tight, color: color.ink },
+  sectionCardCaption: { marginTop: space.xs, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
+  sectionCardBody: { marginTop: space.lg },
+  inputFocused: {
+    borderColor: color.primary,
+    backgroundColor: color.surface,
+    ...(Platform.OS === 'web' ? ({ boxShadow: `0 0 0 3px ${color.primaryFaint}`, outlineStyle: 'none' } as object) : null),
+  },
   formDivider: { height: 1, backgroundColor: color.borderFaint },
 
   sectionLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkFaint },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm, flexWrap: 'wrap' },
   fieldLabel: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.md, marginBottom: space.lg },
+  categoryChangeLink: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary, textDecorationLine: 'underline' },
+  categoryRowText: { fontFamily: font.body, fontSize: fontSize.base, color: color.inkMuted },
+  categoryRowValue: { fontFamily: font.bodySemi, color: color.ink },
   fieldCaption: { marginTop: 2, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
   fieldOptional: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkFaint },
   fieldNote: { marginTop: space.xs, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
   errorText: { marginTop: space.xs, fontFamily: font.body, fontSize: fontSize.sm, color: color.danger },
   quietNote: { marginTop: space.xs, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkFaint },
 
-  input: { marginTop: space.xs, backgroundColor: color.canvas, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm, fontFamily: font.body, fontSize: fontSize.base, color: color.ink },
+  input: { marginTop: space.xs, minHeight: layout.minTouchTarget, backgroundColor: color.canvas, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm, fontFamily: font.body, fontSize: fontSize.base, color: color.ink },
   textareaLarge: { marginTop: space.xs, backgroundColor: color.canvas, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm, fontFamily: font.body, fontSize: fontSize.base, color: color.ink, minHeight: 80, textAlignVertical: 'top' },
   inputError: { borderColor: color.dangerBorder },
 
@@ -1524,7 +1666,9 @@ const styles = StyleSheet.create({
    * business type additionally uses optionGrid/optionGridItem below for an even layout */
   pillGroupWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginTop: space.sm },
   pill: { borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs + 2, alignItems: 'center', justifyContent: 'center' },
+  pillHovered: { borderColor: color.borderStrong, backgroundColor: color.surface },
   pillActive: { backgroundColor: color.primaryFaint, borderColor: color.primary },
+  pressedScale: { transform: [{ scale: 0.97 }] },
   pillBlocked: { opacity: 0.45 },
   pillContentRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   pillLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted, textAlign: 'center' },
@@ -1562,6 +1706,10 @@ const styles = StyleSheet.create({
   backLink: { fontFamily: font.bodyMedium, fontSize: fontSize.base, color: color.inkMuted },
   actionButton: { minHeight: layout.minTouchTarget, borderRadius: radius.pill, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xl },
   actionButtonLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm },
+  actionButtonPrimaryHovered: {
+    transform: [{ translateY: -1 }],
+    ...(Platform.OS === 'web' ? ({ boxShadow: `0 6px 16px ${color.primaryBorder}` } as object) : null),
+  },
 
   /* documents */
   tag: { borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: space.sm, paddingVertical: 2 },

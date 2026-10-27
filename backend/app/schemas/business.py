@@ -1,7 +1,16 @@
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.core.categories import CATEGORIES
+
+
+class OfferedItem(BaseModel):
+    """One item a seller offers — a code from app/core/categories.py, plus
+    the seller's own wording when the code is "other"."""
+    code: str = Field(min_length=1, max_length=60)
+    other_text: Optional[str] = Field(default=None, max_length=100)
 
 
 class OnboardingSubmit(BaseModel):
@@ -11,7 +20,11 @@ class OnboardingSubmit(BaseModel):
     # registered_name is used everywhere, same as before this field existed.
     display_name: Optional[str] = Field(default=None, max_length=200)
     business_type: str = Field(min_length=2, max_length=100)
-    industry_category: str = Field(min_length=2, max_length=100)
+    # Optional: it's asked at registration, so onboarding only sends it when
+    # the business changes it ("Palitan") or never had one (accounts from
+    # before registration asked, Google sign-ups). Omitted keeps what's on
+    # file — see business_service.submit_onboarding.
+    industry_category: Optional[str] = None
     city: str = Field(min_length=2, max_length=100)
     province: str = Field(min_length=2, max_length=100)
     contact_person: str = Field(min_length=2, max_length=120)
@@ -21,9 +34,21 @@ class OnboardingSubmit(BaseModel):
     # business_service.submit_onboarding.
     capabilities: List[str] = Field(default=[], max_length=8)
     service_areas: List[str] = []
-    # Optional public-facing bio — the business can leave it blank, type
-    # their own, or accept an AI-suggested draft (see /business/suggest-description).
+    # Optional public-facing bio, typed by the business — blank is fine.
     business_description: Optional[str] = Field(default=None, max_length=500)
+    # Seller-only, at least one — validated against the category in
+    # business_service.submit_onboarding. Ignored for a buyer.
+    offered_items: List[OfferedItem] = []
+
+    @field_validator("industry_category")
+    @classmethod
+    def _check_category(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        if value not in CATEGORIES:
+            raise ValueError(f"industry_category must be one of: {', '.join(CATEGORIES)}")
+        return value
 
 
 class DocumentUploadOut(BaseModel):
@@ -36,22 +61,6 @@ class DocumentUploadOut(BaseModel):
     validation_status: str
     validation_notes: str
     uploaded_at: datetime
-
-
-class DescriptionSuggestionRequest(BaseModel):
-    business_type: str
-    industry_category: str
-    capabilities: List[str] = []
-    service_areas: List[str] = []
-    city: str = ""
-    province: str = ""
-
-
-class DescriptionSuggestionOut(BaseModel):
-    """AI profile assistant's draft bio — a suggestion only, same convention
-    as DocumentExtractionOut below: None means nothing usable came back, the
-    business's own business_description field is untouched either way."""
-    description: Optional[str] = None
 
 
 class DocumentExtractionOut(BaseModel):
@@ -92,14 +101,16 @@ class VerificationStatusOut(BaseModel):
     capabilities: List[str] = []
     service_areas: List[str] = []
     business_description: Optional[str] = None
+    offered_items: List[OfferedItem] = []
 
 
 class PublicBusinessProfileOut(BaseModel):
-    """A business's public-facing profile — what any other logged-in business
-    can see about them (e.g. "View buyer profile" from a requirement, or a
-    respondent's card once quotations release). Deliberately excludes the
-    login mobile number, contact person/mobile, and everything document- or
-    admin-facing — those stay private to the business itself and to admin."""
+    """Authenticated profile with safe verification metadata and aggregates.
+
+    Contact details are shown to verified viewers, the owner and administrators.
+    Document contents, identifiers, credentials and quotation content are
+    never included. Public supplier counts exclude sealed activity.
+    """
     id: int
     role: Optional[str] = None  # buyer | seller
     registered_name: Optional[str]
@@ -117,6 +128,20 @@ class PublicBusinessProfileOut(BaseModel):
     member_since_year: int
     requirements_posted_count: int
     requirements_awarded_count: int
+    member_since: datetime
+    verification_status: str
+    registration_document_types: List[str] = []
+    quotations_submitted_count: int
+    quotations_awarded_count: int
+    requirements_cancelled_count: int
+    quotations_withdrawn_count: int
+    # Confirmed by both parties (closeout_service), as buyer or as supplier.
+    transactions_completed_count: int = 0
+    transactions_not_pushed_through_count: int = 0
+    includes_sealed_activity: bool = False
+    contact_details_visible: bool = False
+    contact_person: Optional[str] = None
+    contact_mobile: Optional[str] = None
 
 
 class AdminReviewAction(BaseModel):

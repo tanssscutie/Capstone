@@ -46,6 +46,12 @@ const EVENT_LABEL: Record<LedgerEntryType, string> = {
   AWARD_DECLINED: 'Award declined',
   AWARD_RECORDED: 'Awarded',
   CLOSED_NO_AWARD_RECORDED: 'Closed without award',
+  DOCUMENT_REQUESTED: 'Document requested',
+  DOCUMENT_SUBMITTED: 'Requested document submitted',
+  CLOSEOUT_PROPOSED: 'Transaction close-out proposed',
+  CLOSEOUT_CONFIRMED: 'Transaction close-out confirmed',
+  CLOSEOUT_REJECTED: 'Transaction close-out not confirmed',
+  CLOSEOUT_WITHDRAWN: 'Transaction close-out withdrawn',
 };
 
 function formatDateTime(iso: string): string {

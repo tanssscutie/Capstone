@@ -19,6 +19,7 @@ class NotOwner(Exception):
 def _to_out(n: Notification) -> NotificationOut:
     return NotificationOut(
         id=n.id, type=n.type, title=n.title, detail=n.detail, urgent=n.urgent, read=n.read, created_at=n.created_at,
+        related_requirement_id=n.related_requirement_id,
     )
 
 

@@ -60,8 +60,9 @@ def has_unread(session: Session, thread_id: int, viewer_id: int) -> bool:
     return session.exec(statement).one() > 0
 
 
-def create_message(session: Session, thread_id: int, sender_id: int, body: str) -> Message:
-    message = Message(thread_id=thread_id, sender_id=sender_id, body=body)
+def create_message(session: Session, thread_id: int, sender_id: int, body: str, is_system: bool = False,
+                   **attachment) -> Message:
+    message = Message(thread_id=thread_id, sender_id=sender_id, body=body, is_system=is_system, **attachment)
     session.add(message)
     session.commit()
     session.refresh(message)

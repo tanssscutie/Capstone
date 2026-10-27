@@ -82,7 +82,14 @@ export type RequirementStatus =
 
 export interface SpecRow {
   label: string;
+  /** As the buyer typed it — always what's displayed. */
   value: string;
+  /** Dictionary attribute id (GET /meta/categories); null on the buyer's own rows
+   *  and on requirements posted before attribute ids existed. */
+  attributeId?: string | null;
+  /** value in its standard unit (cm / gsm / microns), set by the server. */
+  normalizedValue?: string | null;
+  normalizedUnit?: string | null;
 }
 
 export interface DeliverySite {
@@ -110,6 +117,10 @@ export interface Requirement {
   buyerId: BusinessId;
   status: RequirementStatus;
   category: string;
+  /** The category item it's for (e.g. "tarpaulin"), "other", or null on
+   *  requirements posted before items existed. */
+  itemCode?: string | null;
+  itemName?: string | null;
   title: string;
   scope: string;
   specifications: SpecRow[];
@@ -160,6 +171,16 @@ export interface QuotationLineItem {
   unitPrice: number;   // PHP
 }
 
+/** A respondent's answer to one of the requirement's specification rows. */
+export interface QuotationSpecResponse {
+  label: string;
+  attributeId: string | null;
+  complies: boolean;
+  /** What's quoted instead (for the preferred brand: the equivalent brand) —
+   *  set only when complies is false. */
+  offered: string | null;
+}
+
 export interface Quotation {
   id: string;
   ref: QuotationRef;
@@ -171,6 +192,9 @@ export interface Quotation {
    *  "Total price only" instead of line items. Sealed with the rest of the
    *  quotation, same visibility rules as totalPrice itself. */
   lineItems: QuotationLineItem[];
+  /** Sealed with the rest. Empty on quotations submitted before spec
+   *  responses existed — shown as "not confirmed", not as a deviation. */
+  specResponses: QuotationSpecResponse[];
   leadTimeDays: number;
   paymentTerms: string;
   validityDays: number;
@@ -184,6 +208,49 @@ export interface Quotation {
   replacedByQuotationId: string | null;
 }
 
+/** A buyer asking a shortlisted respondent for one more supporting document
+ *  after release (backend document_request_service). Separate from the
+ *  quotation's own sealed attachments — never changes the quotation. */
+export type DocumentRequestStatus = 'PENDING' | 'SUBMITTED' | 'CANCELLED';
+
+export interface DocumentRequest {
+  id: string;
+  quotationId: string;
+  documentLabel: string;
+  note: string | null;
+  status: DocumentRequestStatus;
+  filename: string | null;
+  responseNote: string | null;
+  createdAt: ISODateTime;
+  submittedAt: ISODateTime | null;
+}
+
+/** Both parties confirming how an awarded deal ended (backend closeout_service).
+ *  Not post-award tracking — only the two parties' agreement on the outcome. */
+export type CloseoutOutcome = 'COMPLETED' | 'NOT_PUSHED_THROUGH';
+export type CloseoutState = 'OPEN' | 'PENDING' | CloseoutOutcome;
+
+export interface CloseoutProposal {
+  id: string;
+  outcome: CloseoutOutcome;
+  proposedByRole: 'buyer' | 'supplier';
+  note: string | null;
+  status: 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'WITHDRAWN';
+  responseNote: string | null;
+  createdAt: ISODateTime;
+  respondedAt: ISODateTime | null;
+}
+
+export interface TransactionCloseout {
+  state: CloseoutState;
+  viewerRole: 'buyer' | 'supplier' | 'admin';
+  pending: CloseoutProposal | null;
+  /** The viewer is the party who has to confirm or reject `pending`. */
+  awaitingViewer: boolean;
+  final: CloseoutProposal | null;
+  history: CloseoutProposal[];
+}
+
 /* ─── Ledger ────────────────────────────────────────── */
 
 export type LedgerEntryType =
@@ -195,7 +262,13 @@ export type LedgerEntryType =
   | 'AWARD_NOTICE_SENT'
   | 'AWARD_DECLINED'
   | 'AWARD_RECORDED'
-  | 'CLOSED_NO_AWARD_RECORDED';
+  | 'CLOSED_NO_AWARD_RECORDED'
+  | 'DOCUMENT_REQUESTED'
+  | 'DOCUMENT_SUBMITTED'
+  | 'CLOSEOUT_PROPOSED'
+  | 'CLOSEOUT_CONFIRMED'
+  | 'CLOSEOUT_REJECTED'
+  | 'CLOSEOUT_WITHDRAWN';
 
 export interface LedgerEntry {
   id: string;
@@ -229,7 +302,9 @@ export type AlertType =
   | 'DOCUMENT_FLAGGED'
   | 'MESSAGE_RECEIVED'
   | 'QUESTION_ASKED'
-  | 'QUESTION_ANSWERED';
+  | 'QUESTION_ANSWERED'
+  /** A newly published requirement in the seller's category and items. */
+  | 'REQUIREMENT_MATCH';
 
 export interface Alert {
   id: string;
@@ -239,6 +314,8 @@ export interface Alert {
   createdAt: ISODateTime;
   urgent: boolean;
   read: boolean;
+  /** The requirement this alert is about, when there is one. */
+  relatedRequirementId: string | null;
 }
 
 /* ─── Pre-closing clarification Q&A ─────────────────────
@@ -273,12 +350,15 @@ export interface MessageThread {
   unread: boolean;
 }
 
-/** Plain text only — no attachments. Documents belong to the quotation, not the thread. */
+/** Text and/or one attached file (post-award coordination: artwork, layouts, specs). */
 export interface Message {
   id: string;
   threadId: string;
   senderId: BusinessId;
   body: string;
+  /** Written by TrustLink when the award was accepted, not by either party. */
+  isSystem: boolean;
+  attachment: { filename: string; sizeBytes: number } | null;
   sentAt: ISODateTime;
   read: boolean;
 }

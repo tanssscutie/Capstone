@@ -1,8 +1,14 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Literal, Optional
+
+from app.core.categories import CATEGORIES
 
 # Admin isn't a choice here — admin accounts are is_admin, never self-registered.
 AccountRole = Literal["buyer", "seller"]
+
+# Seller-only, picked at sign-up. Stored as these codes; the labels
+# ("Less than 1 year", "1–3 years", ...) live in the frontend.
+YearsInBusiness = Literal["LESS_THAN_1", "1_TO_3", "4_TO_6", "7_PLUS"]
 
 
 class UserCreate(BaseModel):
@@ -13,6 +19,22 @@ class UserCreate(BaseModel):
     email: str = Field(min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     password: str = Field(min_length=8, max_length=72)
     role: AccountRole
+    # A buyer's primary procurement category, or a seller's business
+    # category — same list either way, and it seeds User.industry_category
+    # so onboarding starts with it already filled in.
+    industry_category: str
+    years_in_business: Optional[YearsInBusiness] = None
+
+    @model_validator(mode="after")
+    def _check_role_fields(self):
+        if self.industry_category not in CATEGORIES:
+            raise ValueError(f"industry_category must be one of: {', '.join(CATEGORIES)}")
+        if self.role == "seller" and self.years_in_business is None:
+            raise ValueError("years_in_business is required for a seller account")
+        if self.role == "buyer":
+            # Not asked of buyers; never store a stray value sent anyway.
+            self.years_in_business = None
+        return self
 
 
 class UserRead(BaseModel):

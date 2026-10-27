@@ -1,10 +1,13 @@
 // lib/api/requirements.ts
 // Maps to backend app/api/routes/requirements.py (prefix /requirements).
-import { api } from './client';
+import { api, API_BASE_URL, tokenStore } from './client';
 
 export interface SpecRowOut {
   label: string;
   value: string;
+  attribute_id?: string | null;
+  normalized_value?: string | null;
+  normalized_unit?: string | null;
 }
 
 export interface PosterOut {
@@ -29,6 +32,9 @@ export interface RequirementOut {
   tags: string[];
   poster: PosterOut;
   category: string;
+  /** Null on requirements posted before items existed. */
+  item_code: string | null;
+  item_name: string | null;
   scope: string;
   specifications: SpecRowOut[];
   quantity: string;
@@ -36,6 +42,8 @@ export interface RequirementOut {
   price_max: number | null;
   city: string;
   site_address: string | null;
+  barangay?: string | null;
+  zip_code?: string | null;
   location: string;
   site_access_hours: string;
   site_access_notes: string;
@@ -67,11 +75,47 @@ export interface ClarificationQuestionOut {
   created_at: string;
 }
 
+export interface DocumentRequestOut {
+  id: number;
+  requirement_id: number;
+  quotation_id: number;
+  document_label: string;
+  note: string | null;
+  status: 'pending' | 'submitted' | 'cancelled';
+  filename: string | null;
+  response_note: string | null;
+  created_at: string;
+  submitted_at: string | null;
+}
+
+export interface CloseoutProposalOut {
+  id: number;
+  outcome: 'completed' | 'not_pushed_through';
+  proposed_by_role: 'buyer' | 'supplier';
+  note: string | null;
+  status: 'pending' | 'confirmed' | 'rejected' | 'withdrawn';
+  response_note: string | null;
+  created_at: string;
+  responded_at: string | null;
+}
+
+export interface CloseoutOut {
+  requirement_id: number;
+  state: 'open' | 'pending' | 'completed' | 'not_pushed_through';
+  viewer_role: 'buyer' | 'supplier' | 'admin';
+  pending: CloseoutProposalOut | null;
+  awaiting_viewer: boolean;
+  final: CloseoutProposalOut | null;
+  history: CloseoutProposalOut[];
+}
+
 export interface MyRequirementOut {
   id: number;
   ref_code: string;
   title: string;
   category: string;
+  item_code: string | null;
+  item_name: string | null;
   scope: string;
   specifications: SpecRowOut[];
   quantity: string;
@@ -101,6 +145,15 @@ export interface LineItemOut {
   unit_price: number;
 }
 
+/** A respondent's answer to one specification row of the requirement. */
+export interface SpecResponseOut {
+  label: string;
+  attribute_id: string | null;
+  complies: boolean;
+  /** What's quoted instead — set only when complies is false. */
+  offered: string | null;
+}
+
 export interface MyQuotationOut {
   quotation_id: number;
   quotation_ref: string;
@@ -112,6 +165,7 @@ export interface MyQuotationOut {
   payment_terms: string | null;
   validity_period: string | null;
   notes: string;
+  spec_responses: SpecResponseOut[];
   submitted_at: string;
   integrity_status: string | null;
   attachments: AttachmentOut[];
@@ -135,6 +189,8 @@ export interface QuotationDetailOut {
   payment_terms: string | null;
   validity_period: string | null;
   notes: string;
+  /** Empty on quotations submitted before spec responses existed. */
+  spec_responses: SpecResponseOut[];
   status: string; // released | withdrawn | voided | shortlisted | awarded | not_selected
   shortlisted: boolean;
   submitted_at: string;
@@ -151,6 +207,8 @@ export interface RequirementQuotationsView {
 
 export interface RequirementCreateInput {
   category: string;
+  /** One of the category's items — see lib/data/categories.ts. */
+  item_code: string;
   title: string;
   scope: string;
   specifications?: SpecRowOut[];
@@ -158,7 +216,11 @@ export interface RequirementCreateInput {
   price_min?: number | null;
   price_max?: number | null;
   city: string;
+  /** Street / building / unit number — the server composes the full line. */
   site_address?: string | null;
+  /** One of the city's PSGC barangays (GET /meta/ncr-addresses). */
+  barangay?: string | null;
+  zip_code?: string | null;
   delivery_start?: string | null; // ISO datetime
   delivery_end?: string | null;
   required_documents?: string[];
@@ -172,6 +234,8 @@ export interface QuotationCreateInput {
   payment_terms?: string | null;
   validity_period?: string | null;
   notes?: string | null;
+  /** One per specification row of the requirement — the backend 422s on a missing one. */
+  spec_responses?: { label: string; complies: boolean; offered: string | null }[];
 }
 
 export interface QuotationSealedReceipt {
@@ -292,4 +356,61 @@ export const requirementsApi = {
 
   answerQuestion: (requirementId: number, questionId: number, answer: string) =>
     api.post<ClarificationQuestionOut>(`/requirements/${requirementId}/questions/${questionId}/answer`, { answer }),
+
+  // ---- transaction close-out (awarded requirements, both parties confirm) ----
+
+  getCloseout: (requirementId: number) => api.get<CloseoutOut>(`/requirements/${requirementId}/closeout`),
+
+  proposeCloseout: (requirementId: number, outcome: 'completed' | 'not_pushed_through', note?: string) =>
+    api.post<CloseoutOut>(`/requirements/${requirementId}/closeout`, {
+      outcome,
+      note: note && note.trim().length > 0 ? note.trim() : null,
+    }),
+
+  respondCloseout: (requirementId: number, confirm: boolean, note?: string) =>
+    api.post<CloseoutOut>(`/requirements/${requirementId}/closeout/respond`, {
+      confirm,
+      note: note && note.trim().length > 0 ? note.trim() : null,
+    }),
+
+  withdrawCloseout: (requirementId: number) =>
+    api.post<CloseoutOut>(`/requirements/${requirementId}/closeout/withdraw`),
+
+  // ---- post-release document requests (shortlisted quotations only) ----
+
+  listDocumentRequests: (requirementId: number, quotationId: number) =>
+    api.get<DocumentRequestOut[]>(`/requirements/${requirementId}/quotations/${quotationId}/document-requests`),
+
+  requestDocument: (requirementId: number, quotationId: number, documentLabel: string, note?: string) =>
+    api.post<DocumentRequestOut>(`/requirements/${requirementId}/quotations/${quotationId}/document-requests`, {
+      document_label: documentLabel,
+      note: note && note.trim().length > 0 ? note.trim() : null,
+    }),
+
+  cancelDocumentRequest: (requirementId: number, requestId: number) =>
+    api.post<DocumentRequestOut>(`/requirements/${requirementId}/document-requests/${requestId}/cancel`),
+
+  uploadRequestedDocument: (requirementId: number, requestId: number, file: File | Blob, fileName: string, responseNote?: string) => {
+    const form = new FormData();
+    form.append('file', file, fileName);
+    if (responseNote && responseNote.trim()) form.append('response_note', responseNote.trim());
+    return api.postForm<DocumentRequestOut>(`/requirements/${requirementId}/document-requests/${requestId}/upload`, form);
+  },
 };
+
+/** GET /requirements/{id}/document-requests/{request_id}/file — raw bytes, so
+ *  fetched by hand with the auth header and opened as a blob: URL, same
+ *  reasoning as admin.ts's openAdminDocumentFile. Web only. */
+export async function openRequestedDocumentFile(requirementId: number, requestId: number): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const token = tokenStore.get();
+  const res = await fetch(`${API_BASE_URL}/requirements/${requirementId}/document-requests/${requestId}/file`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    throw new Error(`Could not load that document (${res.status})`);
+  }
+  const url = URL.createObjectURL(await res.blob());
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}

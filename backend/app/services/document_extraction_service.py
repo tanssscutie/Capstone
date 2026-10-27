@@ -25,6 +25,7 @@ Verified end-to-end with a real key: a synthetic test certificate image
 with "Registration Number: 8837215690" printed on it came back with
 exactly that string.
 """
+import io
 import logging
 import time
 
@@ -58,9 +59,39 @@ MAX_ATTEMPTS = 2
 RETRY_DELAY_SECONDS = 2
 REQUEST_TIMEOUT_MS = 15_000
 
+# Speed (measured live on a 3000x2200 test certificate: 11.6s before, 5.5-8.6s
+# after — Gemini's own latency varies with load — same correct number):
+# - thinking_level "minimal": reading one printed number needs no reasoning
+#   pass, and the model's default thinking was most of the wait.
+# - photos are downscaled to this longest edge before upload — phone photos
+#   run several MB, and a certificate number stays legible well below this.
+THINKING_LEVEL = "minimal"
+MAX_IMAGE_EDGE_PX = 1600
+
 
 class _DocumentExtraction(BaseModel):
     id_number: str | None = None
+
+
+def _shrink_image(file_bytes: bytes, mime_type: str) -> tuple[bytes, str]:
+    """Downscales a large photo to MAX_IMAGE_EDGE_PX and re-encodes it as JPEG.
+    PDFs, small images, and anything Pillow can't read go through unchanged."""
+    if not (mime_type or "").startswith("image/"):
+        return file_bytes, mime_type
+    try:
+        from PIL import Image, ImageOps
+
+        image = Image.open(io.BytesIO(file_bytes))
+        image = ImageOps.exif_transpose(image)  # phone photos: honour rotation
+        if max(image.size) <= MAX_IMAGE_EDGE_PX and len(file_bytes) <= 1_000_000:
+            return file_bytes, mime_type
+        image.thumbnail((MAX_IMAGE_EDGE_PX, MAX_IMAGE_EDGE_PX))
+        out = io.BytesIO()
+        image.convert("RGB").save(out, "JPEG", quality=85)
+        return out.getvalue(), "image/jpeg"
+    except Exception:
+        logger.warning("Document extraction: couldn't downscale image, sending as-is", exc_info=True)
+        return file_bytes, mime_type
 
 
 def extract_id_number(doc_type: str, file_bytes: bytes, mime_type: str) -> str | None:
@@ -89,6 +120,8 @@ def extract_id_number(doc_type: str, file_bytes: bytes, mime_type: str) -> str |
         logger.exception("Document extraction: client construction failed")
         return None
 
+    file_bytes, mime_type = _shrink_image(file_bytes, mime_type)
+
     prompt = (
         "This is a photo or scan of a Philippine business document. "
         f"Find {hint}. Return only that identifier exactly as printed — "
@@ -109,12 +142,12 @@ def extract_id_number(doc_type: str, file_bytes: bytes, mime_type: str) -> str |
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=_DocumentExtraction,
+                    thinking_config=types.ThinkingConfig(thinking_level=THINKING_LEVEL),
                 ),
             )
-            logger.warning(
-                "Document extraction raw response for doc_type=%s (mime=%s, bytes=%d): %r",
-                doc_type, mime_type, len(file_bytes), response.text,
-            )
+            # Debug only, and never the value itself — it's a registration number.
+            logger.debug("Document extraction answered for doc_type=%s (mime=%s, bytes=%d)",
+                         doc_type, mime_type, len(file_bytes))
             result = _DocumentExtraction.model_validate_json(response.text)
             value = (result.id_number or "").strip()
             return value or None

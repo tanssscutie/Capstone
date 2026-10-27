@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { View, Text, Pressable, Modal, TextInput, StyleSheet, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, Modal, ScrollView, TextInput, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import type { ViewStyle } from 'react-native';
 import {
   color,
@@ -35,7 +35,10 @@ import type {
   IntegrityResult,
   BusinessStatus,
   ClarificationQuestion,
+  DocumentRequest,
 } from '../../lib/types';
+import { PREFERRED_BRAND_ID, specDisplayValue } from '../../lib/data/categories';
+import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 
 /* ─── Props ─────────────────────────────────────────── */
 
@@ -67,6 +70,11 @@ interface RespondentSubmitted {
    *  Notice of Award before it's ever final. */
   onAcceptAward?: () => void;
   onDeclineAward?: () => void;
+  /** Documents the buyer asked of this (shortlisted) respondent after release. */
+  documentRequests?: DocumentRequest[];
+  /** Resolve false if the upload failed, so the row keeps its draft. */
+  onUploadRequestedDocument?: (requestId: string, file: File, responseNote: string) => Promise<boolean>;
+  onOpenRequestedDocument?: (requestId: string) => void;
   questions: ClarificationQuestion[];
   onAskQuestion?: (question: string) => void;
   onViewBuyerProfile?: () => void;
@@ -106,7 +114,16 @@ interface OwnerReleasedProps {
   onViewRespondentProfile?: (businessId: string) => void;
   onMessageRespondent?: (businessId: string) => void;
   onViewLedger?: () => void;
+  /** Keyed by quotation id. See OwnerDocumentRequests. */
+  documentRequests?: Record<string, DocumentRequest[]>;
+  /** Resolve false if the backend refused, so the form keeps what was typed. */
+  onRequestDocument?: (quotationId: string, documentLabel: string, note: string) => Promise<boolean>;
+  onCancelDocumentRequest?: (requestId: string) => void;
+  onOpenRequestedDocument?: (requestId: string) => void;
 }
+
+/** The document-request handlers both quotation cards pass straight through. */
+type DocumentRequestHandlers = Pick<OwnerReleasedProps, 'onRequestDocument' | 'onCancelDocumentRequest' | 'onOpenRequestedDocument'>;
 
 export type RequirementDetailProps =
   | RespondentNotSubmitted
@@ -352,7 +369,7 @@ function SpecTable({ rows }: { rows: SpecRow[] }) {
       {rows.map((row, index) => (
         <View key={`${row.label}-${index}`} style={styles.specRow}>
           <Text style={styles.specLabel}>{row.label}</Text>
-          <Text style={styles.specValue}>{row.value}</Text>
+          <Text style={styles.specValue}>{specDisplayValue(row)}</Text>
         </View>
       ))}
     </View>
@@ -381,6 +398,201 @@ function AttachmentList({ attachments }: { attachments: Attachment[] }) {
           <Text style={styles.bodyText} numberOfLines={1}>{attachment.filename}</Text>
           <Text style={styles.mutedSmall}>{formatBytes(attachment.sizeBytes)}</Text>
         </View>
+      ))}
+    </View>
+  );
+}
+
+/* ─── Post-release document requests (Panel Suggestion #3) ─── */
+
+function documentRequestBadge(r: DocumentRequest): { label: string; tone: BadgeTone } {
+  if (r.status === 'SUBMITTED') return { label: 'Received', tone: 'primary' };
+  if (r.status === 'CANCELLED') return { label: 'Cancelled', tone: 'neutral' };
+  return { label: 'Waiting', tone: 'neutral' };
+}
+
+function DocumentRequestSummary({ request, onOpen }: { request: DocumentRequest; onOpen?: (requestId: string) => void }) {
+  const badge = documentRequestBadge(request);
+  return (
+    <View style={{ gap: space.xs }}>
+      <View style={styles.docRequestTitleRow}>
+        <Text style={[styles.bodyTextSemi, { flex: 1 }]}>{request.documentLabel}</Text>
+        <Badge label={badge.label} tone={badge.tone} />
+      </View>
+      {request.note && <Text style={styles.mutedSmall}>Buyer's note: {request.note}</Text>}
+      {request.status === 'SUBMITTED' && request.filename && (
+        <View style={styles.attachmentRow}>
+          <Text style={[styles.bodyText, { flex: 1 }]} numberOfLines={1}>{request.filename}</Text>
+          {onOpen && (
+            <Pressable onPress={() => onOpen(request.id)} hitSlop={6}>
+              <Text style={styles.docRequestLink}>Open</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+      {request.responseNote && <Text style={styles.mutedSmall}>Supplier's note: {request.responseNote}</Text>}
+      {request.submittedAt && <Text style={styles.mutedRow}>Uploaded {formatDateTime(request.submittedAt)}</Text>}
+    </View>
+  );
+}
+
+/** Buyer side, on a released quotation card. New requests only while the
+ *  quotation is shortlisted and nothing is decided yet (the backend enforces
+ *  the same); earlier requests and their files stay listed afterwards. */
+function OwnerDocumentRequests({
+  quotationId,
+  requests,
+  canRequest,
+  onRequestDocument,
+  onCancelDocumentRequest,
+  onOpenRequestedDocument,
+}: {
+  quotationId: string;
+  requests: DocumentRequest[];
+  canRequest: boolean;
+} & DocumentRequestHandlers) {
+  const [composing, setComposing] = useState(false);
+  const [label, setLabel] = useState('');
+  const [note, setNote] = useState('');
+  const [sending, setSending] = useState(false);
+
+  if (requests.length === 0 && !canRequest) return null;
+
+  const reset = () => {
+    setComposing(false);
+    setLabel('');
+    setNote('');
+  };
+
+  const send = async () => {
+    if (label.trim().length < 2 || sending) return;
+    setSending(true);
+    const ok = await Promise.resolve(onRequestDocument?.(quotationId, label.trim(), note)).catch(() => false);
+    setSending(false);
+    if (ok !== false) reset();
+  };
+
+  return (
+    <View style={styles.docRequestBlock}>
+      <SectionLabel>Requested documents</SectionLabel>
+      {requests.map((r) => (
+        <View key={r.id} style={styles.docRequestRow}>
+          <DocumentRequestSummary request={r} onOpen={onOpenRequestedDocument} />
+          {r.status === 'PENDING' && onCancelDocumentRequest && (
+            <Pressable onPress={() => onCancelDocumentRequest(r.id)} hitSlop={6} style={{ alignSelf: 'flex-start' }}>
+              <Text style={styles.docRequestLinkMuted}>Cancel request</Text>
+            </Pressable>
+          )}
+        </View>
+      ))}
+      {canRequest && (composing ? (
+        <View style={{ gap: space.sm }}>
+          <TextInput
+            value={label}
+            onChangeText={setLabel}
+            placeholder="Document needed, e.g. Product sample photo, FDA certificate"
+            placeholderTextColor={color.inkFaint}
+            maxLength={120}
+            style={styles.docRequestInput}
+          />
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            placeholder="Note to the supplier (optional)"
+            placeholderTextColor={color.inkFaint}
+            maxLength={500}
+            multiline
+            style={styles.qaInput}
+          />
+          <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
+            <ActionButton label={sending ? 'Sending…' : 'Send request'} variant="primary" onPress={send} disabled={label.trim().length < 2 || sending} />
+            <ActionButton label="Cancel" variant="text" onPress={reset} />
+          </View>
+        </View>
+      ) : (
+        <View style={{ gap: space.xs }}>
+          <ActionButton label="Request a document" variant="outline" onPress={() => setComposing(true)} />
+          <Text style={styles.mutedSmall}>
+            Only this supplier sees the request. Their quotation and price stay locked — this only adds a supporting file.
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function RespondentDocumentRequestRow({
+  request,
+  canUpload,
+  onUpload,
+  onOpen,
+}: {
+  request: DocumentRequest;
+  canUpload: boolean;
+  onUpload?: (requestId: string, file: File, responseNote: string) => Promise<boolean>;
+  onOpen?: (requestId: string) => void;
+}) {
+  const [note, setNote] = useState('');
+  const [uploading, setUploading] = useState(false);
+
+  const pickAndUpload = async () => {
+    if (!onUpload || uploading || !isWebFilePickerSupported()) return;
+    const file = await pickWebFile('.pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,image/*');
+    if (!file) return;
+    setUploading(true);
+    const ok = await onUpload(request.id, file, note).catch(() => false);
+    setUploading(false);
+    if (ok) setNote('');
+  };
+
+  return (
+    <View style={styles.docRequestRow}>
+      <DocumentRequestSummary request={request} onOpen={onOpen} />
+      {canUpload && (
+        <View style={{ gap: space.sm }}>
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            placeholder="Note to the buyer (optional)"
+            placeholderTextColor={color.inkFaint}
+            maxLength={500}
+            style={styles.docRequestInput}
+          />
+          <ActionButton
+            label={uploading ? 'Uploading…' : request.status === 'SUBMITTED' ? 'Replace file' : 'Upload file'}
+            variant={request.status === 'SUBMITTED' ? 'outline' : 'primary'}
+            onPress={pickAndUpload}
+            disabled={uploading}
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** Respondent side, under their own released quotation. Uploads stay open
+ *  until the requirement reaches a final decision. */
+function RespondentDocumentRequests({
+  requests,
+  requirementStatus,
+  onUpload,
+  onOpen,
+}: {
+  requests: DocumentRequest[] | undefined;
+  requirementStatus: RequirementStatus;
+  onUpload?: (requestId: string, file: File, responseNote: string) => Promise<boolean>;
+  onOpen?: (requestId: string) => void;
+}) {
+  if (!requests || requests.length === 0) return null;
+  const canUpload = requirementStatus === 'CLOSED' || requirementStatus === 'AWARD_PENDING';
+  return (
+    <View style={styles.docRequestBlock}>
+      <SectionLabel>Documents requested by the buyer</SectionLabel>
+      <Text style={styles.mutedSmall}>
+        Your quotation and price stay exactly as submitted. PDF, Word or image, up to 10 MB.
+      </Text>
+      {requests.map((r) => (
+        <RespondentDocumentRequestRow key={r.id} request={r} canUpload={canUpload} onUpload={onUpload} onOpen={onOpen} />
       ))}
     </View>
   );
@@ -504,11 +716,16 @@ function RequirementOverview({ requirement }: { requirement: Requirement }) {
   );
 }
 
+/** "Printing · Tarpaulin" — just the category on requirements posted before items existed. */
+function categoryLine(requirement: Requirement): string {
+  return requirement.itemName ? `${requirement.category} · ${requirement.itemName}` : requirement.category;
+}
+
 function Header({ requirement }: { requirement: Requirement }) {
   return (
     <View style={{ gap: space.sm }}>
       <View style={styles.headerTopRow}>
-        <SectionLabel>{requirement.category}</SectionLabel>
+        <SectionLabel>{categoryLine(requirement)}</SectionLabel>
         <Badge label={requirementStatusLabel(requirement.status)} tone={requirementStatusTone(requirement.status)} />
       </View>
       <Text style={styles.title}>{requirement.title}</Text>
@@ -539,6 +756,10 @@ function SealedRecordPanel({
   onWithdraw,
   onAcceptAward,
   onDeclineAward,
+  requirementStatus,
+  documentRequests,
+  onUploadRequestedDocument,
+  onOpenRequestedDocument,
 }: {
   quotation: Quotation;
   ledgerEntry: LedgerEntry;
@@ -546,6 +767,10 @@ function SealedRecordPanel({
   onWithdraw?: () => void;
   onAcceptAward?: () => void;
   onDeclineAward?: () => void;
+  requirementStatus: RequirementStatus;
+  documentRequests?: DocumentRequest[];
+  onUploadRequestedDocument?: RespondentSubmitted['onUploadRequestedDocument'];
+  onOpenRequestedDocument?: (requestId: string) => void;
 }) {
   const canWithdraw = quotation.status === 'SUBMITTED';
   const isAwardPending = quotation.status === 'AWARD_PENDING';
@@ -571,6 +796,12 @@ function SealedRecordPanel({
           Withdrawal is only possible while a quotation is submitted and unreleased.
         </Text>
       )}
+      <RespondentDocumentRequests
+        requests={documentRequests}
+        requirementStatus={requirementStatus}
+        onUpload={onUploadRequestedDocument}
+        onOpen={onOpenRequestedDocument}
+      />
     </View>
   );
 }
@@ -591,6 +822,10 @@ function RespondentSideContent(props: RespondentNotSubmitted | RespondentSubmitt
           onWithdraw={props.onWithdraw}
           onAcceptAward={props.onAcceptAward}
           onDeclineAward={props.onDeclineAward}
+          requirementStatus={requirement.status}
+          documentRequests={props.documentRequests}
+          onUploadRequestedDocument={props.onUploadRequestedDocument}
+          onOpenRequestedDocument={props.onOpenRequestedDocument}
         />
       ) : props.readOnly ? (
         <Text style={styles.mutedSmall}>Only seller accounts can submit quotations.</Text>
@@ -863,20 +1098,118 @@ function SortBar({
   );
 }
 
+/* ─── Spec-by-spec comparison ──────────────────────────
+ * Each respondent answers every specification row when sealing (QuotationSubmission's
+ * SpecificationsSection). After release the buyer sees those answers side by side, so a
+ * lower price that quietly drops a spec shows as a difference. An equivalent brand is
+ * shown, but not counted as a difference — the buyer asked for "or equivalent". */
+
+/** "Meets all 5 specifications" / "2 of 5 specifications differ" / "Specifications not confirmed". */
+function specSummary(quotation: Quotation, requirement: Requirement): { text: string; differs: boolean } | null {
+  const total = requirement.specifications.length;
+  if (total === 0) return null;
+  if (quotation.specResponses.length === 0) return { text: 'Specifications not confirmed', differs: false };
+  const differ = quotation.specResponses.filter((r) => !r.complies && r.attributeId !== PREFERRED_BRAND_ID).length;
+  const brand = quotation.specResponses.find((r) => !r.complies && r.attributeId === PREFERRED_BRAND_ID);
+  const base = differ === 0
+    ? `Meets all ${total} specification${total === 1 ? '' : 's'}`
+    : `${differ} of ${total} specification${total === 1 ? '' : 's'} differ`;
+  return { text: brand ? `${base} · equivalent brand: ${brand.offered}` : base, differs: differ > 0 };
+}
+
+function SpecSummaryLine({ quotation, requirement }: { quotation: Quotation; requirement: Requirement }) {
+  const summary = specSummary(quotation, requirement);
+  if (!summary) return null;
+  return <Text style={[styles.mutedSmall, summary.differs ? styles.specSummaryDiffers : null]}>{summary.text}</Text>;
+}
+
+function SpecCompareCell({ row, quotation }: { row: SpecRow; quotation: Quotation }) {
+  const brand = row.attributeId === PREFERRED_BRAND_ID;
+  if (quotation.specResponses.length === 0) {
+    return <View style={styles.specCompareCell}><Text style={styles.mutedSmall}>Not confirmed</Text></View>;
+  }
+  const r = quotation.specResponses.find((s) => s.label === row.label);
+  if (!r) return <View style={styles.specCompareCell}><Text style={styles.mutedSmall}>—</Text></View>;
+  if (r.complies) {
+    return <View style={styles.specCompareCell}><Text style={styles.specCompareMeets}>✓ {brand ? 'Same brand' : 'Meets'}</Text></View>;
+  }
+  return (
+    <View style={[styles.specCompareCell, brand ? styles.specCompareCellEquivalent : styles.specCompareCellDiffers]}>
+      <Text style={brand ? styles.specCompareEquivalent : styles.specCompareDiffers}>
+        {brand
+          ? (r.offered ? `Equivalent: ${r.offered}` : 'Equivalent brand')
+          : (r.offered ? `Offers: ${r.offered}` : 'Does not meet')}
+      </Text>
+    </View>
+  );
+}
+
+function SpecComparisonTable({
+  requirement,
+  quotations,
+  respondents,
+}: {
+  requirement: Requirement;
+  quotations: Quotation[];
+  respondents: Record<BusinessId, Respondent>;
+}) {
+  const rows = requirement.specifications;
+  if (rows.length === 0 || quotations.length === 0) return null;
+  return (
+    <View style={styles.specCompareCard}>
+      <SectionLabel>Specifications compared</SectionLabel>
+      <Text style={styles.mutedSmall}>
+        What each respondent confirmed against what you asked for. Differences are highlighted — check them before
+        comparing prices.
+      </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator>
+        <View>
+          <View style={[styles.specCompareRow, styles.specCompareHeaderRow]}>
+            <View style={[styles.specCompareCell, styles.specCompareLabelCol]}><Text style={styles.specCompareHead}>Specification</Text></View>
+            <View style={[styles.specCompareCell, styles.specCompareAskedCol]}><Text style={styles.specCompareHead}>You asked</Text></View>
+            {quotations.map((q) => (
+              <View key={q.id} style={[styles.specCompareCell, styles.specCompareQuoteCol]}>
+                <Text style={styles.specCompareHead} numberOfLines={2}>{respondents[q.respondentId]?.registeredName ?? q.ref}</Text>
+              </View>
+            ))}
+          </View>
+          {rows.map((row, i) => (
+            <View key={row.label} style={[styles.specCompareRow, i % 2 === 1 ? styles.wideSpecRowAlt : null]}>
+              <View style={[styles.specCompareCell, styles.specCompareLabelCol]}><Text style={styles.specCompareLabel}>{row.label}</Text></View>
+              <View style={[styles.specCompareCell, styles.specCompareAskedCol]}><Text style={styles.specCompareAsked}>{specDisplayValue(row)}</Text></View>
+              {quotations.map((q) => (
+                <View key={q.id} style={styles.specCompareQuoteCol}>
+                  <SpecCompareCell row={row} quotation={q} />
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
 function QuotationCard({
+  requirement,
   quotation,
   respondent,
   awardLocked,
   predecessor,
   onToggleShortlist,
   onRequestAward,
+  documentRequests,
+  documentHandlers,
 }: {
+  requirement: Requirement;
   quotation: Quotation;
   respondent: Respondent;
   awardLocked: boolean;
   predecessor: Quotation | null;
   onToggleShortlist: () => void;
   onRequestAward: () => void;
+  documentRequests: DocumentRequest[];
+  documentHandlers: DocumentRequestHandlers;
 }) {
   const isAwarded = quotation.status === 'AWARDED';
   const isAwardPending = quotation.status === 'AWARD_PENDING';
@@ -914,6 +1247,7 @@ function QuotationCard({
         <Text style={styles.priceText}>{formatPHP(quotation.totalPrice)}</Text>
         <Text style={styles.mutedSmall}>{quotation.leadTimeDays} days lead time</Text>
       </View>
+      <SpecSummaryLine quotation={quotation} requirement={requirement} />
 
       {quotation.lineItems.length > 0 && (
         <View style={styles.block}>
@@ -961,6 +1295,13 @@ function QuotationCard({
           {predecessor.withdrawnAt ? ` (${formatDateTime(predecessor.withdrawnAt)})` : ''}
         </Text>
       )}
+
+      <OwnerDocumentRequests
+        quotationId={quotation.id}
+        requests={documentRequests}
+        canRequest={isShortlisted && !awardLocked}
+        {...documentHandlers}
+      />
 
       {isAwardPending && (
         <Text style={styles.mutedSmall}>Notice of Award sent — awaiting this business's response.</Text>
@@ -1188,18 +1529,22 @@ function OwnerReleasedPanel(props: OwnerReleasedProps) {
       {!st.locked && <DecisionReminderBanner releasedAt={st.releasedAt} />}
       <SectionLabel>{`${st.visible.length} quotation${st.visible.length === 1 ? '' : 's'} released`}</SectionLabel>
       <SortBar activeKey={st.sortKey} activeDir={st.sortDir} onPress={st.handleSortPress} />
+      <SpecComparisonTable requirement={props.requirement} quotations={st.sorted} respondents={st.respondents} />
       <View style={{ gap: space.md }}>
         {st.sorted.map((q) => {
           const predecessor = st.withdrawn.find((w) => w.replacedByQuotationId === q.id) ?? null;
           return (
             <QuotationCard
               key={q.id}
+              requirement={props.requirement}
               quotation={q}
               respondent={st.respondents[q.respondentId]}
               awardLocked={st.locked}
               predecessor={predecessor}
               onToggleShortlist={() => st.handleToggleShortlist(q.id)}
               onRequestAward={() => st.setAwardTargetId(q.id)}
+              documentRequests={props.documentRequests?.[q.id] ?? []}
+              documentHandlers={props}
             />
           );
         })}
@@ -1240,7 +1585,7 @@ function WideHeader({ requirement }: { requirement: Requirement }) {
     <View style={{ gap: space.md }}>
       <View style={styles.widePillRow}>
         <View style={styles.categoryPill}>
-          <Text style={styles.categoryPillLabel}>{requirement.category}</Text>
+          <Text style={styles.categoryPillLabel}>{categoryLine(requirement)}</Text>
         </View>
         <Badge label={requirementStatusLabel(requirement.status)} tone={tone} dot />
       </View>
@@ -1283,7 +1628,7 @@ function WideScopeCard({ requirement }: { requirement: Requirement }) {
         {requirement.specifications.map((row, index) => (
           <View key={`${row.label}-${index}`} style={[styles.wideSpecRow, index % 2 === 1 ? styles.wideSpecRowAlt : null]}>
             <Text style={styles.wideSpecKey}>{row.label}</Text>
-            <Text style={styles.wideSpecValue}>{row.value}</Text>
+            <Text style={styles.wideSpecValue}>{specDisplayValue(row)}</Text>
           </View>
         ))}
       </View>
@@ -1738,6 +2083,10 @@ function WideMyRecordCard({
   onWithdraw,
   onAcceptAward,
   onDeclineAward,
+  requirementStatus,
+  documentRequests,
+  onUploadRequestedDocument,
+  onOpenRequestedDocument,
 }: {
   quotation: Quotation;
   ledgerEntry: LedgerEntry;
@@ -1745,6 +2094,10 @@ function WideMyRecordCard({
   onWithdraw?: () => void;
   onAcceptAward?: () => void;
   onDeclineAward?: () => void;
+  requirementStatus: RequirementStatus;
+  documentRequests?: DocumentRequest[];
+  onUploadRequestedDocument?: RespondentSubmitted['onUploadRequestedDocument'];
+  onOpenRequestedDocument?: (requestId: string) => void;
 }) {
   const canWithdraw = quotation.status === 'SUBMITTED';
   const isAwardPending = quotation.status === 'AWARD_PENDING';
@@ -1780,6 +2133,12 @@ function WideMyRecordCard({
       ) : (
         <Text style={styles.mutedSmall}>Status: {quotationStatusLabel(quotation.status)}</Text>
       )}
+      <RespondentDocumentRequests
+        requests={documentRequests}
+        requirementStatus={requirementStatus}
+        onUpload={onUploadRequestedDocument}
+        onOpen={onOpenRequestedDocument}
+      />
     </View>
   );
 }
@@ -1834,6 +2193,7 @@ function WideReleasedHeaderCard({
 }
 
 function WideQuotationCard({
+  requirement,
   quotation,
   respondent,
   awardLocked,
@@ -1842,7 +2202,10 @@ function WideQuotationCard({
   onRequestAward,
   onViewProfile,
   onMessage,
+  documentRequests,
+  documentHandlers,
 }: {
+  requirement: Requirement;
   quotation: Quotation;
   respondent: Respondent;
   awardLocked: boolean;
@@ -1851,6 +2214,8 @@ function WideQuotationCard({
   onRequestAward: () => void;
   onViewProfile: () => void;
   onMessage: () => void;
+  documentRequests: DocumentRequest[];
+  documentHandlers: DocumentRequestHandlers;
 }) {
   const isAwarded = quotation.status === 'AWARDED';
   const isAwardPending = quotation.status === 'AWARD_PENDING';
@@ -1919,6 +2284,7 @@ function WideQuotationCard({
           <Text style={styles.factValue}>{formatValidUntil(quotation.submittedAt, quotation.validityDays)}</Text>
         </View>
       </View>
+      <SpecSummaryLine quotation={quotation} requirement={requirement} />
 
       {quotation.lineItems.length > 0 && (
         <View style={styles.wideSpecTable}>
@@ -1952,12 +2318,19 @@ function WideQuotationCard({
         </View>
       )}
 
+      <OwnerDocumentRequests
+        quotationId={quotation.id}
+        requests={documentRequests}
+        canRequest={isShortlisted && !awardLocked}
+        {...documentHandlers}
+      />
+
       <View style={styles.wideQuoteFooter}>
         <Text style={styles.mutedSmall}>Submitted {formatDateTime(quotation.submittedAt)}</Text>
         <View style={styles.wideMetaSpacer} />
         <View style={styles.wideQuoteFooterActions}>
           <ActionButton label="View profile" variant="outline" onPress={onViewProfile} />
-          <ActionButton label="Message" variant="outline" onPress={onMessage} />
+          {isAwarded && <ActionButton label="Message" variant="outline" onPress={onMessage} />}
           {!isAwardPending && (
             <ActionButton
               label={isShortlisted ? 'Shortlisted' : 'Shortlist'}
@@ -2097,12 +2470,14 @@ function WideOwnerReleasedScreen(props: OwnerReleasedProps) {
             )}
             {!st.locked && <DecisionReminderBanner releasedAt={st.releasedAt} />}
             <WideReleasedHeaderCard st={st} requirement={requirement} />
+            <SpecComparisonTable requirement={requirement} quotations={st.sorted} respondents={st.respondents} />
             <View style={{ gap: space.lg }}>
               {st.sorted.map((q) => {
                 const predecessor = st.withdrawn.find((w) => w.replacedByQuotationId === q.id) ?? null;
                 return (
                   <WideQuotationCard
                     key={q.id}
+                    requirement={requirement}
                     quotation={q}
                     respondent={st.respondents[q.respondentId]}
                     awardLocked={decided}
@@ -2111,6 +2486,8 @@ function WideOwnerReleasedScreen(props: OwnerReleasedProps) {
                     onRequestAward={() => st.setAwardTargetId(q.id)}
                     onViewProfile={() => props.onViewRespondentProfile?.(q.respondentId)}
                     onMessage={() => props.onMessageRespondent?.(q.respondentId)}
+                    documentRequests={props.documentRequests?.[q.id] ?? []}
+                    documentHandlers={props}
                   />
                 );
               })}
@@ -2209,6 +2586,10 @@ export default function RequirementDetail(props: RequirementDetailProps) {
                 onWithdraw={props.onWithdraw}
                 onAcceptAward={props.onAcceptAward}
                 onDeclineAward={props.onDeclineAward}
+                requirementStatus={props.requirement.status}
+                documentRequests={props.documentRequests}
+                onUploadRequestedDocument={props.onUploadRequestedDocument}
+                onOpenRequestedDocument={props.onOpenRequestedDocument}
               />
             )}
             {props.state === 'OWNER_SEALED' && (
@@ -2388,6 +2769,44 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     lineHeight: lineHeight.base,
     color: color.ink,
+  },
+  docRequestBlock: {
+    gap: space.sm,
+    paddingTop: space.md,
+    borderTopWidth: 1,
+    borderTopColor: color.border,
+  },
+  docRequestRow: {
+    gap: space.sm,
+    padding: space.md,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.md,
+  },
+  docRequestTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  docRequestInput: {
+    minHeight: layout.minTouchTarget,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    paddingHorizontal: space.md,
+    fontFamily: font.body,
+    fontSize: fontSize.base,
+    color: color.ink,
+  },
+  docRequestLink: {
+    fontFamily: font.bodySemi,
+    fontSize: fontSize.sm,
+    color: color.primary,
+  },
+  docRequestLinkMuted: {
+    fontFamily: font.bodyMedium,
+    fontSize: fontSize.sm,
+    color: color.inkMuted,
   },
   attachmentRow: {
     flexDirection: 'row',
@@ -2618,6 +3037,35 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     color: color.inkMuted,
   },
+
+  specCompareCard: {
+    ...elevation.card,
+    borderRadius: radius.xl,
+    backgroundColor: color.surface,
+    padding: space.lg,
+    gap: space.sm,
+  },
+  specCompareRow: { flexDirection: 'row', alignItems: 'stretch', borderBottomWidth: 1, borderBottomColor: color.borderFaint },
+  specCompareHeaderRow: { borderBottomColor: color.border },
+  // No `flex` shorthand on these cells: on web `flex: 0`/`flex: 1` become
+  // flex-basis 0%, which overrides the column widths below and squeezed every
+  // column to one character wide. Fixed widths, never shrink; the inner cell
+  // of a quote column just grows to fill the row's height.
+  specCompareCell: { flexGrow: 1, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: space.md, paddingVertical: space.sm, justifyContent: 'center' },
+  // Own styles, not wideSpecKey/wideSpecValue: those carry flex 1/2 for a
+  // side-by-side row and squeezed or stretched the text inside a cell.
+  specCompareLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
+  specCompareAsked: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.ink },
+  specCompareLabelCol: { width: 170, flexGrow: 0, flexShrink: 0 },
+  specCompareAskedCol: { width: 170, flexGrow: 0, flexShrink: 0 },
+  specCompareQuoteCol: { width: 180, flexGrow: 0, flexShrink: 0 },
+  specCompareHead: { fontFamily: font.bodySemi, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.ink },
+  specCompareMeets: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.primary },
+  specCompareDiffers: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.danger },
+  specCompareEquivalent: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.ink },
+  specCompareCellDiffers: { backgroundColor: color.dangerFaint, borderLeftWidth: 2, borderLeftColor: color.dangerBorder },
+  specCompareCellEquivalent: { backgroundColor: color.primaryFaint },
+  specSummaryDiffers: { color: color.danger },
 
   wideCard: {
     ...elevation.cardRaised,

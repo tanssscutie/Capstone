@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import QuotationSubmission, { pickedQuotationFiles } from '../features/quotation/QuotationSubmission';
@@ -21,6 +21,12 @@ export default function QuotationRoute() {
   const [requirement, setRequirement] = useState<Requirement | null>(null);
   const [buyer, setBuyer] = useState<Business | null>(null);
   const [submission, setSubmission] = useState<{ quotation: Quotation; ledgerEntry: LedgerEntry } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [receiptNotice, setReceiptNotice] = useState<string | null>(null);
+  // State updates aren't visible to a second press fired before the re-render,
+  // so the in-flight guard lives in a ref too.
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -76,7 +82,7 @@ export default function QuotationRoute() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: color.canvas, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: color.surfaceSunken, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={color.primary} />
       </View>
     );
@@ -84,7 +90,7 @@ export default function QuotationRoute() {
 
   if (error || !requirement || !buyer) {
     return (
-      <View style={{ flex: 1, backgroundColor: color.canvas, alignItems: 'center', justifyContent: 'center', padding: space.xl }}>
+      <View style={{ flex: 1, backgroundColor: color.surfaceSunken, alignItems: 'center', justifyContent: 'center', padding: space.xl }}>
         <Text style={{ fontFamily: font.body, fontSize: fontSize.base, color: color.danger, textAlign: 'center' }}>
           {error ?? 'Requirement not found.'}
         </Text>
@@ -100,10 +106,13 @@ export default function QuotationRoute() {
         buyer={buyer}
         quotation={submission.quotation}
         ledgerEntry={submission.ledgerEntry}
+        notice={receiptNotice}
         onWithdraw={async () => {
           try {
             await requirementsApi.withdrawQuotation(Number(id));
             setSubmission(null);
+            setReceiptNotice(null);
+            setSubmitError(null);
           } catch (e: any) {
             setError(errorMessage(e, 'Could not withdraw this quotation.'));
           }
@@ -121,9 +130,16 @@ export default function QuotationRoute() {
       buyer={buyer}
       onBack={() => router.back()}
       onOpenBuyer={(businessId) => router.push({ pathname: '/business-profile', params: { id: businessId } })}
+      submitting={submitting}
+      submitError={submitError}
       onSubmit={async (input: QuotationDraftInput) => {
+        if (submittingRef.current) return;
+        submittingRef.current = true;
+        setSubmitting(true);
+        setSubmitError(null);
+        let receipt;
         try {
-          const receipt = await requirementsApi.submitQuotation(Number(id), {
+          receipt = await requirementsApi.submitQuotation(Number(id), {
             total_price: input.totalPrice,
             line_items: input.lineItems.map((li) => ({
               description: li.description,
@@ -134,61 +150,83 @@ export default function QuotationRoute() {
             payment_terms: input.paymentTerms,
             validity_period: `${input.validityDays} days`,
             notes: input.notesToBuyer,
+            spec_responses: input.specResponses.map((r) => ({ label: r.label, complies: r.complies, offered: r.offered })),
           });
-          // Attachments need a real quotation id before they can upload, so this happens
-          // as a second step after submitQuotation() rather than inline with it.
-          // Native-fallback attachments (no real File behind them — see
-          // pickedQuotationFiles) are skipped.
-          for (const att of input.attachments) {
-            const file = pickedQuotationFiles.get(att.id);
-            if (!file) continue;
-            try {
-              await requirementsApi.uploadQuotationAttachment(
-                Number(id),
-                receipt.quotation_id,
-                file,
-                att.filename,
-                att.documentLabel ?? undefined,
-              );
-            } finally {
-              pickedQuotationFiles.delete(att.id);
-            }
-          }
-
-          const quotation: Quotation = {
-            id: String(receipt.quotation_id),
-            ref: receipt.quotation_ref,
-            requirementId: String(id),
-            respondentId: buyer.id, // placeholder — see mapPosterToBusiness note; not the viewer's real id
-            status: 'SUBMITTED',
-            totalPrice: input.totalPrice,
-            lineItems: input.lineItems,
-            leadTimeDays: input.leadTimeDays,
-            paymentTerms: input.paymentTerms,
-            validityDays: input.validityDays,
-            notesToBuyer: input.notesToBuyer,
-            attachments: input.attachments,
-            submittedAt: receipt.submitted_at,
-            hashTruncated: receipt.truncated_hash,
-            ledgerEntryId: String(receipt.ledger_entry_number),
-            integrity: null,
-            withdrawnAt: null,
-            replacedByQuotationId: null,
-          };
-          const ledgerEntry: LedgerEntry = {
-            id: String(receipt.ledger_entry_number),
-            sequence: receipt.ledger_entry_number,
-            type: 'QUOTATION_SUBMITTED',
-            subjectId: quotation.id,
-            actorName: null, // it's always the viewer's own submission here — nothing to label
-            hash: receipt.truncated_hash,
-            previousHash: null, // BACKEND GAP — not returned
-            createdAt: receipt.submitted_at,
-          };
-          setSubmission({ quotation, ledgerEntry });
         } catch (e: any) {
-          setError(errorMessage(e, 'Could not submit your quotation.'));
+          // Nothing was sealed — keep the form and everything typed into it.
+          setSubmitError(errorMessage(e, 'Could not submit your quotation.'));
+          submittingRef.current = false;
+          setSubmitting(false);
+          return;
         }
+
+        // From here on the quotation IS sealed server-side. An attachment failure
+        // must not drop back to an error screen — retrying would only 409 against
+        // the quotation that already exists — so it's reported on the receipt.
+        // Attachments need a real quotation id before they can upload, so this happens
+        // as a second step after submitQuotation() rather than inline with it.
+        // Native-fallback attachments (no real File behind them — see
+        // pickedQuotationFiles) are skipped.
+        const uploaded: typeof input.attachments = [];
+        const failed: string[] = [];
+        for (const att of input.attachments) {
+          const file = pickedQuotationFiles.get(att.id);
+          if (!file) continue;
+          try {
+            await requirementsApi.uploadQuotationAttachment(
+              Number(id),
+              receipt.quotation_id,
+              file,
+              att.filename,
+              att.documentLabel ?? undefined,
+            );
+            uploaded.push(att);
+          } catch {
+            failed.push(att.filename);
+          } finally {
+            pickedQuotationFiles.delete(att.id);
+          }
+        }
+        setReceiptNotice(
+          failed.length > 0
+            ? `Your quotation is sealed, but ${failed.length === 1 ? 'this attachment' : 'these attachments'} failed to upload: ${failed.join(', ')}. Withdraw and resubmit before closing to include ${failed.length === 1 ? 'it' : 'them'}.`
+            : null,
+        );
+
+        const quotation: Quotation = {
+          id: String(receipt.quotation_id),
+          ref: receipt.quotation_ref,
+          requirementId: String(id),
+          respondentId: buyer.id, // placeholder — see mapPosterToBusiness note; not the viewer's real id
+          status: 'SUBMITTED',
+          totalPrice: input.totalPrice,
+          lineItems: input.lineItems,
+          specResponses: input.specResponses,
+          leadTimeDays: input.leadTimeDays,
+          paymentTerms: input.paymentTerms,
+          validityDays: input.validityDays,
+          notesToBuyer: input.notesToBuyer,
+          attachments: uploaded,
+          submittedAt: receipt.submitted_at,
+          hashTruncated: receipt.truncated_hash,
+          ledgerEntryId: String(receipt.ledger_entry_number),
+          integrity: null,
+          withdrawnAt: null,
+          replacedByQuotationId: null,
+        };
+        const ledgerEntry: LedgerEntry = {
+          id: String(receipt.ledger_entry_number),
+          sequence: receipt.ledger_entry_number,
+          type: 'QUOTATION_SUBMITTED',
+          subjectId: quotation.id,
+          actorName: null, // it's always the viewer's own submission here — nothing to label
+          hash: receipt.truncated_hash,
+          previousHash: null, // BACKEND GAP — not returned
+          createdAt: receipt.submitted_at,
+        };
+        setSubmission({ quotation, ledgerEntry });
+        submittingRef.current = false;
+        setSubmitting(false);
       }}
     />
   );

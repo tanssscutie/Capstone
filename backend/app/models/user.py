@@ -32,6 +32,15 @@ class User(SQLModel, table=True):
     # Added after launch, so existing databases get the column from
     # database._migrate_user_role at startup rather than from create_all.
     role: Optional[str] = Field(default=None, max_length=10)  # buyer | seller
+    # Seller-only, asked at sign-up (see schemas.auth.YearsInBusiness).
+    # Added after launch — existing databases get the column from
+    # database._migrate_user_years_in_business at startup.
+    years_in_business: Optional[str] = Field(default=None, max_length=20)
+    # Seller-only: the items of their industry_category they offer, JSON list
+    # of {"code": str, "other_text": str | null} (codes from app/core/categories.py).
+    # Added after launch — existing databases get the column from
+    # database._migrate_user_offered_items at startup.
+    offered_items: Optional[str] = Field(default=None, sa_type=Text)
 
     # Business onboarding (filled in during the onboarding step, separate
     # from registration — see BusinessDocument for the supporting files)
@@ -46,10 +55,8 @@ class User(SQLModel, table=True):
     province: Optional[str] = None
     contact_person: Optional[str] = None
     contact_mobile: Optional[str] = None  # business contact; may differ from the login number
-    # Short public-facing bio shown on the business's profile — optional, and
-    # never authoritative: same convention as Assistive Document Extraction
-    # and the category suggestion, an AI-assisted draft the business can
-    # accept, edit, or ignore entirely (see profile_assistant_service.py).
+    # Short public-facing bio shown on the business's profile — optional,
+    # written by the business itself.
     business_description: Optional[str] = None
     capabilities: str = ""    # comma-separated free text, used as matching input
     service_areas: str = ""   # comma-separated free text (cities/provinces)

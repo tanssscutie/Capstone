@@ -28,16 +28,37 @@ import type {
   Message,
   ClarificationQuestion,
   AccountRole,
+  SpecRow,
+  QuotationSpecResponse,
 } from '../types';
-import type { RequirementOut, MyRequirementOut, PosterOut, MyQuotationOut, QuotationDetailOut, LedgerEntryOut, ClarificationQuestionOut, LineItemOut } from './requirements';
+import type { SpecRowOut, SpecResponseOut, RequirementOut, MyRequirementOut, PosterOut, MyQuotationOut, QuotationDetailOut, LedgerEntryOut, ClarificationQuestionOut, LineItemOut, DocumentRequestOut, CloseoutOut, CloseoutProposalOut } from './requirements';
 import type { VerificationStatusOut, DashboardStatsOut, PublicBusinessProfileOut } from './business';
 import type { NotificationOut } from './notifications';
 import type { MessageThreadOut, MessageOut } from './messages';
 import type { BackendUser } from './auth';
-import type { Quotation, QuotationStatus, IntegrityResult, LedgerEntry, LedgerEntryType, QuotationLineItem } from '../types';
+import type { Quotation, QuotationStatus, IntegrityResult, LedgerEntry, LedgerEntryType, QuotationLineItem, DocumentRequest, DocumentRequestStatus, TransactionCloseout, CloseoutProposal, CloseoutOutcome, CloseoutState } from '../types';
 
 function mapLineItems(items: LineItemOut[]): QuotationLineItem[] {
   return items.map((li) => ({ description: li.description, quantity: li.quantity, unitPrice: li.unit_price }));
+}
+
+export function mapSpecRows(rows: SpecRowOut[]): SpecRow[] {
+  return rows.map((s) => ({
+    label: s.label,
+    value: s.value,
+    attributeId: s.attribute_id ?? null,
+    normalizedValue: s.normalized_value ?? null,
+    normalizedUnit: s.normalized_unit ?? null,
+  }));
+}
+
+function mapSpecResponses(rows: SpecResponseOut[] | undefined): QuotationSpecResponse[] {
+  return (rows ?? []).map((r) => ({ label: r.label, attributeId: r.attribute_id, complies: r.complies, offered: r.offered }));
+}
+
+/** For RequirementCreateInput — normalized values are the server's to set. */
+export function toSpecRowsOut(rows: SpecRow[]): SpecRowOut[] {
+  return rows.map((s) => ({ label: s.label, value: s.value, attribute_id: s.attributeId ?? null }));
 }
 
 const REQUIREMENT_STATUS_MAP: Record<string, RequirementStatus> = {
@@ -91,9 +112,11 @@ export function mapRequirement(r: RequirementOut): Requirement {
     buyerId: String(r.poster.id),
     status: mapRequirementStatus(r.status),
     category: r.category,
+    itemCode: r.item_code,
+    itemName: r.item_name,
     title: r.title,
     scope: r.scope,
-    specifications: r.specifications,
+    specifications: mapSpecRows(r.specifications),
     quantity: r.quantity,
     budgetMin: r.price_min,
     budgetMax: r.price_max,
@@ -137,9 +160,11 @@ export function mapMyRequirement(r: MyRequirementOut, ownerId: BusinessId): Requ
     buyerId: ownerId,
     status: mapRequirementStatus(r.status),
     category: r.category,
+    itemCode: r.item_code,
+    itemName: r.item_name,
     title: r.title,
     scope: r.scope,
-    specifications: r.specifications,
+    specifications: mapSpecRows(r.specifications),
     quantity: r.quantity,
     budgetMin: r.price_min,
     budgetMax: r.price_max,
@@ -182,10 +207,7 @@ export function mapPosterToBusiness(poster: PosterOut): Business {
   };
 }
 
-/** Another business's public-facing profile — narrower than `Business` on
- *  purpose: no contact person/mobile, no login mobile number. See
- *  PublicBusinessProfileOut (lib/api/business.ts) for what the backend
- *  deliberately excludes. */
+/** Profile facts; the server restricts contact details and sealed activity. */
 export interface PublicBusinessProfile {
   id: BusinessId;
   role: AccountRole | null;
@@ -197,8 +219,19 @@ export interface PublicBusinessProfile {
   province: string;
   capabilities: string[];
   serviceAreas: string[];
-  credibility: Pick<CredibilityBlock, 'status' | 'verifiedAt' | 'tier' | 'requirementsPosted' | 'requirementsAwarded'>;
+  credibility: Pick<CredibilityBlock, 'status' | 'verifiedAt' | 'tier' | 'requirementsPosted' | 'requirementsAwarded' | 'quotationsSubmitted' | 'quotationsAwarded'>;
   memberSinceYear: number;
+  memberSince: string;
+  verificationStatus: string;
+  registrationDocumentTypes: string[];
+  requirementsCancelled: number;
+  quotationsWithdrawn: number;
+  transactionsCompleted: number;
+  transactionsNotPushedThrough: number;
+  includesSealedActivity: boolean;
+  contactDetailsVisible: boolean;
+  contactPerson: string | null;
+  contactMobile: string | null;
 }
 
 export function mapPublicBusinessProfile(p: PublicBusinessProfileOut): PublicBusinessProfile {
@@ -219,8 +252,21 @@ export function mapPublicBusinessProfile(p: PublicBusinessProfileOut): PublicBus
       tier: (p.tier as 1 | 2 | 3) ?? null,
       requirementsPosted: p.requirements_posted_count,
       requirementsAwarded: p.requirements_awarded_count,
+      quotationsSubmitted: p.quotations_submitted_count,
+      quotationsAwarded: p.quotations_awarded_count,
     },
     memberSinceYear: p.member_since_year,
+    memberSince: p.member_since,
+    verificationStatus: p.verification_status,
+    registrationDocumentTypes: p.registration_document_types,
+    requirementsCancelled: p.requirements_cancelled_count,
+    quotationsWithdrawn: p.quotations_withdrawn_count,
+    transactionsCompleted: p.transactions_completed_count ?? 0,
+    transactionsNotPushedThrough: p.transactions_not_pushed_through_count ?? 0,
+    includesSealedActivity: p.includes_sealed_activity,
+    contactDetailsVisible: p.contact_details_visible,
+    contactPerson: p.contact_person,
+    contactMobile: p.contact_mobile,
   };
 }
 
@@ -249,6 +295,12 @@ const LEDGER_EVENT_MAP: Record<string, LedgerEntryType> = {
   AWARD_DECLINED: 'AWARD_DECLINED',
   AWARDED: 'AWARD_RECORDED',
   CLOSED_NO_AWARD: 'CLOSED_NO_AWARD_RECORDED',
+  DOCUMENT_REQUESTED: 'DOCUMENT_REQUESTED',
+  DOCUMENT_SUBMITTED: 'DOCUMENT_SUBMITTED',
+  CLOSEOUT_PROPOSED: 'CLOSEOUT_PROPOSED',
+  CLOSEOUT_CONFIRMED: 'CLOSEOUT_CONFIRMED',
+  CLOSEOUT_REJECTED: 'CLOSEOUT_REJECTED',
+  CLOSEOUT_WITHDRAWN: 'CLOSEOUT_WITHDRAWN',
 };
 
 // The chain's starting point — see backend app/services/ledger_service.py GENESIS_HASH.
@@ -286,6 +338,7 @@ export function mapMyQuotation(q: MyQuotationOut): Quotation {
     status: QUOTATION_OUTCOME_MAP[q.outcome] ?? 'SUBMITTED',
     totalPrice: q.total_price ?? 0,
     lineItems: mapLineItems(q.line_items),
+    specResponses: mapSpecResponses(q.spec_responses),
     leadTimeDays: parseLeadingInt(q.delivery_lead_time),
     paymentTerms: q.payment_terms ?? '',
     validityDays: parseLeadingInt(q.validity_period),
@@ -346,6 +399,7 @@ export function mapNotification(n: NotificationOut): Alert {
     createdAt: n.created_at,
     urgent: n.urgent,
     read: n.read,
+    relatedRequirementId: n.related_requirement_id ? String(n.related_requirement_id) : null,
   };
 }
 
@@ -371,6 +425,8 @@ export function mapMessage(m: MessageOut): Message {
     threadId: String(m.thread_id),
     senderId: String(m.sender_id),
     body: m.body,
+    isSystem: m.is_system ?? false,
+    attachment: m.attachment_filename ? { filename: m.attachment_filename, sizeBytes: m.attachment_size ?? 0 } : null,
     sentAt: m.created_at,
     read: m.read,
   };
@@ -386,6 +442,44 @@ export function mapClarificationQuestion(q: ClarificationQuestionOut): Clarifica
     answer: q.answer,
     answeredAt: q.answered_at,
     createdAt: q.created_at,
+  };
+}
+
+function mapCloseoutProposal(p: CloseoutProposalOut): CloseoutProposal {
+  return {
+    id: String(p.id),
+    outcome: p.outcome.toUpperCase() as CloseoutOutcome,
+    proposedByRole: p.proposed_by_role,
+    note: p.note,
+    status: p.status.toUpperCase() as CloseoutProposal['status'],
+    responseNote: p.response_note,
+    createdAt: p.created_at,
+    respondedAt: p.responded_at,
+  };
+}
+
+export function mapCloseout(c: CloseoutOut): TransactionCloseout {
+  return {
+    state: c.state.toUpperCase() as CloseoutState,
+    viewerRole: c.viewer_role,
+    pending: c.pending ? mapCloseoutProposal(c.pending) : null,
+    awaitingViewer: c.awaiting_viewer,
+    final: c.final ? mapCloseoutProposal(c.final) : null,
+    history: c.history.map(mapCloseoutProposal),
+  };
+}
+
+export function mapDocumentRequest(r: DocumentRequestOut): DocumentRequest {
+  return {
+    id: String(r.id),
+    quotationId: String(r.quotation_id),
+    documentLabel: r.document_label,
+    note: r.note,
+    status: r.status.toUpperCase() as DocumentRequestStatus,
+    filename: r.filename,
+    responseNote: r.response_note,
+    createdAt: r.created_at,
+    submittedAt: r.submitted_at,
   };
 }
 
@@ -408,6 +502,7 @@ export function mapQuotationDetail(q: QuotationDetailOut, requirementId: string)
     status: QUOTATION_DETAIL_STATUS_MAP[q.status] ?? 'RELEASED',
     totalPrice: q.total_price ?? 0,
     lineItems: mapLineItems(q.line_items),
+    specResponses: mapSpecResponses(q.spec_responses),
     leadTimeDays: parseLeadingInt(q.delivery_lead_time),
     paymentTerms: q.payment_terms ?? '',
     validityDays: parseLeadingInt(q.validity_period),

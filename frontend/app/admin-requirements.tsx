@@ -1,48 +1,54 @@
 // app/admin-requirements.tsx
 // Admin's full requirement roster (GET /requirements/admin/all) — every
 // requirement ever posted, across every business. Same shell as
-// admin.tsx and admin-businesses.tsx.
+// admin.tsx and admin-businesses.tsx, with search and a status filter.
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Pressable, useWindowDimensions } from 'react-native';
-import { useRouter } from 'expo-router';
-import { color, font, fontSize, space, radius, layout, breakpoint } from '../components/ui/tokens';
-import { AdminSidebar } from '../components/ui/AdminSidebar';
-import { checkAdminAccess, listAllRequirements } from '../lib/api/admin';
+import { View, Text, StyleSheet } from 'react-native';
+import { color, font, fontSize, lineHeight, letterSpacing, space } from '../components/ui/tokens';
+import {
+  AdminShell,
+  AdminCard,
+  EmptyState,
+  ErrorBanner,
+  FilterChips,
+  GhostButton,
+  InfoGrid,
+  LoadingBlock,
+  Pill,
+  SearchField,
+  formatDate,
+  useAdminAccess,
+} from '../components/ui/AdminKit';
+import type { PillTone } from '../components/ui/AdminKit';
+import { listAllRequirements } from '../lib/api/admin';
 import type { AdminRequirementOut } from '../lib/api/admin';
-import { logout } from '../lib/api/auth';
 import { errorMessage } from '../lib/api/client';
-
-type Access = 'CHECKING' | 'GRANTED' | 'DENIED';
 
 const STATUS_LABELS: Record<string, string> = {
   open: 'Open',
   closed: 'Closed',
   cancelled: 'Cancelled',
+  award_pending: 'Award pending',
   awarded: 'Awarded',
+  closed_no_award: 'Closed · no award',
 };
 
-function StatusBadge({ status }: { status: string }) {
-  const tone =
-    status === 'open' || status === 'awarded'
-      ? styles.badgePrimary
-      : status === 'cancelled'
-      ? styles.badgeDanger
-      : styles.badgeNeutral;
-  const label =
-    tone === styles.badgePrimary ? styles.badgeLabelPrimary : tone === styles.badgeDanger ? styles.badgeLabelDanger : styles.badgeLabelNeutral;
-  return (
-    <View style={[styles.badge, tone]}>
-      <Text style={[styles.badgeText, label]}>{STATUS_LABELS[status] ?? status}</Text>
-    </View>
-  );
+function statusTone(status: string): PillTone {
+  if (status === 'open') return 'solid';
+  if (status === 'awarded' || status === 'award_pending') return 'primary';
+  if (status === 'cancelled') return 'danger';
+  return 'neutral';
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
+type StatusFilter = 'all' | 'open' | 'awarded' | 'closed' | 'cancelled';
+
+const STATUS_MATCH: Record<StatusFilter, (r: AdminRequirementOut) => boolean> = {
+  all: () => true,
+  open: (r) => r.status === 'open',
+  awarded: (r) => r.status === 'awarded' || r.status === 'award_pending',
+  closed: (r) => r.status === 'closed' || r.status === 'closed_no_award',
+  cancelled: (r) => r.status === 'cancelled',
+};
 
 function formatPriceRange(min: number | null, max: number | null): string {
   if (min !== null && max !== null) return `₱${Math.round(min).toLocaleString()} – ₱${Math.round(max).toLocaleString()}`;
@@ -51,14 +57,20 @@ function formatPriceRange(min: number | null, max: number | null): string {
   return 'Not specified';
 }
 
+function matchesSearch(r: AdminRequirementOut, q: string): boolean {
+  if (!q) return true;
+  return [r.title, r.ref_code, r.owner_business_name, r.category, r.city]
+    .filter(Boolean)
+    .some((v) => v.toLowerCase().includes(q));
+}
+
 export default function AdminRequirementsRoute() {
-  const router = useRouter();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= breakpoint.desktop;
-  const [access, setAccess] = useState<Access>('CHECKING');
+  const access = useAdminAccess();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requirements, setRequirements] = useState<AdminRequirementOut[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,166 +85,96 @@ export default function AdminRequirementsRoute() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      const isAdmin = await checkAdminAccess();
-      if (!isAdmin) {
-        setAccess('DENIED');
-        router.replace('/admin-login');
-        return;
-      }
-      setAccess('GRANTED');
-      await load();
-    })();
-  }, [load, router]);
+    if (access === 'GRANTED') load();
+  }, [access, load]);
 
-  function handleLogout() {
-    logout();
-    router.replace('/admin-login');
-  }
-
-  if (access === 'CHECKING') {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={color.primary} />
-      </View>
-    );
-  }
-
-  if (access === 'DENIED') {
-    return null; // redirecting
-  }
+  const q = search.trim().toLowerCase();
+  const shown = requirements.filter((r) => STATUS_MATCH[statusFilter](r) && matchesSearch(r, q));
+  const count = (s: StatusFilter) => requirements.filter(STATUS_MATCH[s]).length;
 
   return (
-    <View style={styles.root}>
-      {isDesktop && <AdminSidebar onLogout={handleLogout} />}
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.eyebrow}>TrustLink Admin</Text>
-            <Text style={styles.title}>Requirements</Text>
+    <AdminShell
+      access={access}
+      title="Requirements"
+      subtitle={`${requirements.length} requirement${requirements.length === 1 ? '' : 's'} posted`}
+      actions={<GhostButton label="Refresh" onPress={load} busy={loading} />}
+    >
+      {error && <ErrorBanner message={error} />}
+
+      {loading && requirements.length === 0 ? (
+        <LoadingBlock />
+      ) : (
+        <>
+          <SearchField value={search} onChangeText={setSearch} placeholder="Search by title, reference, buyer or city" />
+          <View style={styles.filters}>
+            <FilterChips
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: 'all', label: 'All', count: count('all') },
+                { value: 'open', label: 'Open', count: count('open') },
+                { value: 'awarded', label: 'Awarded', count: count('awarded') },
+                { value: 'closed', label: 'Closed', count: count('closed') },
+                { value: 'cancelled', label: 'Cancelled', count: count('cancelled') },
+              ]}
+            />
           </View>
-          {!isDesktop && (
-            <Pressable onPress={handleLogout} style={styles.logoutButton}>
-              <Text style={styles.logoutLabel}>Log out</Text>
-            </Pressable>
-          )}
-        </View>
 
-        {error && <Text style={styles.error}>{error}</Text>}
-
-        {loading ? (
-          <View style={styles.centeredInline}>
-            <ActivityIndicator color={color.primary} />
-          </View>
-        ) : (
-          <>
-            <Text style={styles.sectionSubtitle}>
-              {requirements.length} requirement{requirements.length === 1 ? '' : 's'} posted
-            </Text>
-
-            {requirements.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No requirements posted yet.</Text>
-              </View>
-            ) : (
-              requirements.map((r) => (
-                <View key={r.id} style={styles.card}>
-                  <View style={styles.cardHeaderRow}>
-                    <Text style={styles.requirementTitle} numberOfLines={1}>{r.title}</Text>
-                    <StatusBadge status={r.status} />
-                  </View>
-                  <Text style={styles.metaLine}>
-                    {r.ref_code} · {r.category || '—'} · {r.city || '—'}
-                  </Text>
-                  <Text style={styles.metaLine}>Posted by {r.owner_business_name}</Text>
-                  <View style={styles.cardFooterRow}>
-                    <Text style={styles.metaLineFaint}>{formatPriceRange(r.price_min, r.price_max)}</Text>
-                    <Text style={styles.metaLineFaint}>
-                      {r.quotations_count} quotation{r.quotations_count === 1 ? '' : 's'}
+          {shown.length === 0 ? (
+            <EmptyState
+              title={requirements.length === 0 ? 'No requirements posted yet' : 'No requirements match'}
+              body={
+                requirements.length === 0
+                  ? 'Requirements appear here as soon as a buyer posts one.'
+                  : 'Try a different search or clear the filter.'
+              }
+            />
+          ) : (
+            shown.map((r) => (
+              <AdminCard key={r.id} highlight={r.status === 'open'}>
+                <View style={styles.cardTop}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.ref}>{r.ref_code}</Text>
+                    <Text style={styles.title} numberOfLines={2}>{r.title}</Text>
+                    <Text style={styles.sub} numberOfLines={1}>
+                      Posted by <Text style={styles.subStrong}>{r.owner_business_name}</Text>
+                      {r.category ? ` · ${r.category}` : ''}
+                      {r.city ? ` · ${r.city}` : ''}
                     </Text>
-                    <Text style={styles.metaLineFaint}>Closes {formatDate(r.closes_at)}</Text>
-                    <Text style={styles.metaLineFaint}>Posted {formatDate(r.created_at)}</Text>
                   </View>
+                  <Pill label={STATUS_LABELS[r.status] ?? r.status} tone={statusTone(r.status)} />
                 </View>
-              ))
-            )}
-          </>
-        )}
-      </ScrollView>
-    </View>
+
+                <InfoGrid
+                  items={[
+                    { label: 'Budget', value: formatPriceRange(r.price_min, r.price_max) },
+                    { label: 'Quotations', value: `${r.quotations_count} received` },
+                    { label: 'Closes', value: formatDate(r.closes_at) },
+                    { label: 'Posted', value: formatDate(r.created_at) },
+                  ]}
+                />
+              </AdminCard>
+            ))
+          )}
+        </>
+      )}
+    </AdminShell>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, flexDirection: 'row', backgroundColor: color.canvas },
-  screen: { flex: 1, backgroundColor: color.canvas },
-  content: {
-    width: '100%',
-    maxWidth: layout.maxWidthWide,
-    alignSelf: 'center',
-    padding: space.xl,
-    paddingBottom: space.section,
-  },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: color.canvas },
-  centeredInline: { paddingVertical: space.xxl, alignItems: 'center' },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space.xl },
-  eyebrow: {
+  filters: { marginBottom: space.sm },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
+  ref: {
     fontFamily: font.monoMedium,
     fontSize: fontSize.micro,
-    color: color.inkMuted,
-    letterSpacing: 2,
+    lineHeight: lineHeight.micro,
+    letterSpacing: letterSpacing.label,
     textTransform: 'uppercase',
+    color: color.primary,
     marginBottom: space.xs,
   },
-  title: { fontFamily: font.display, fontSize: fontSize.xl, color: color.ink },
-  logoutButton: { borderWidth: 1, borderColor: color.border, borderRadius: radius.md, paddingHorizontal: space.lg, paddingVertical: space.sm },
-  logoutLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
-  error: { fontFamily: font.body, fontSize: fontSize.sm, color: color.danger, marginBottom: space.lg },
-
-  sectionSubtitle: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted, marginBottom: space.md },
-  emptyState: {
-    padding: space.xxl,
-    alignItems: 'center',
-    backgroundColor: color.surface,
-    borderWidth: 1,
-    borderColor: color.borderFaint,
-    borderRadius: radius.lg,
-  },
-  emptyText: { fontFamily: font.body, fontSize: fontSize.base, color: color.inkMuted },
-
-  card: {
-    backgroundColor: color.surface,
-    borderWidth: 1,
-    borderColor: color.border,
-    borderRadius: radius.lg,
-    padding: space.lg,
-    marginBottom: space.md,
-  },
-  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.md, marginBottom: space.xs },
-  requirementTitle: { fontFamily: font.bodySemi, fontSize: fontSize.md, color: color.ink, flexShrink: 1, flex: 1 },
-  metaLine: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted, marginTop: 2 },
-  cardFooterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.md,
-    marginTop: space.sm,
-    paddingTop: space.sm,
-    borderTopWidth: 1,
-    borderTopColor: color.borderFaint,
-  },
-  metaLineFaint: { fontFamily: font.body, fontSize: fontSize.micro, color: color.inkFaint },
-
-  badge: { borderRadius: radius.sm, paddingHorizontal: space.sm, paddingVertical: 2 },
-  badgePrimary: { backgroundColor: color.primaryFaint },
-  badgeDanger: { backgroundColor: color.dangerFaint },
-  badgeNeutral: { backgroundColor: color.surfaceSunken },
-  badgeText: {
-    fontFamily: font.monoMedium,
-    fontSize: fontSize.micro,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  badgeLabelPrimary: { color: color.primary },
-  badgeLabelDanger: { color: color.danger },
-  badgeLabelNeutral: { color: color.inkMuted },
+  title: { fontFamily: font.bodySemi, fontSize: fontSize.md, lineHeight: lineHeight.md, color: color.ink },
+  sub: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted, marginTop: space.xs },
+  subStrong: { fontFamily: font.bodyMedium, color: color.ink },
 });

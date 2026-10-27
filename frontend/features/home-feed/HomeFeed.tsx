@@ -30,10 +30,12 @@ import {
   letterSpacing,
   space,
   radius,
+  elevation,
   layout,
   breakpoint,
 } from '../../components/ui/tokens';
 import { AvatarChip, initials } from '../../components/ui/AvatarChip';
+import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 import type {
   Business,
   BusinessId,
@@ -43,6 +45,8 @@ import type {
   ISODateTime,
   TrustTier,
   RequirementStatus,
+  TransactionCloseout,
+  CloseoutOutcome,
 } from '../../lib/types';
 
 /* ─── Props ─────────────────────────────────────────── */
@@ -53,7 +57,7 @@ type FeedBuyer = Pick<
   'id' | 'registeredName' | 'displayName' | 'category' | 'city' | 'province' | 'capabilities' | 'credibility'
 >;
 
-export interface HomeFeedProps {
+export type HomeFeedProps = {
   viewer: Business;
   requirements: Requirement[];
   requirementBuyers: Record<BusinessId, FeedBuyer>;
@@ -71,8 +75,12 @@ export interface HomeFeedProps {
    *  save/unsave call and the optimistic update, this component only ever
    *  reflects `requirement.isSaved` back, never its own local guess. */
   onToggleSave?: (requirementId: string, nextSaved: boolean) => void;
-  onSendMessage?: (threadId: string, body: string) => void;
+  /** With `file`, resolves to an error message or null — no optimistic bubble
+   *  for a file, the parent re-fetches the thread once it's uploaded. */
+  onSendMessage?: (threadId: string, body: string, file?: File) => Promise<string | null> | void;
   onOpenThread?: (threadId: string) => void;
+  onOpenAttachment?: (threadId: string, messageId: string) => void;
+} & CloseoutChatProps & {
   onCompleteVerification?: () => void;
   onAddMayorsPermit?: () => void;
   onUpdateCapabilities?: () => void;
@@ -86,6 +94,17 @@ export interface HomeFeedProps {
    *  posting business's name/location — "requirements or businesses" per the
    *  search field's own placeholder. */
   searchQuery?: string;
+};
+
+/** Transaction close-out, done from inside the award conversation (backend
+ *  closeout_service): either party marks it completed / did not push through,
+ *  the other confirms. Keyed by thread id; each handler resolves to an error
+ *  message, or null on success. */
+interface CloseoutChatProps {
+  closeoutByThread?: Record<string, TransactionCloseout | null>;
+  onProposeCloseout?: (threadId: string, outcome: CloseoutOutcome, note: string) => Promise<string | null>;
+  onRespondCloseout?: (threadId: string, confirm: boolean, note: string) => Promise<string | null>;
+  onWithdrawCloseout?: (threadId: string) => Promise<string | null>;
 }
 
 /* ─── Formatting helpers ────────────────────────────── */
@@ -127,6 +146,19 @@ function formatClockTime(iso: ISODateTime): string {
   h = h % 12 || 12;
   const mm = String(d.getMinutes()).padStart(2, '0');
   return `${h}:${mm} ${ampm}`;
+}
+
+/** "Today" / "Yesterday" / "Oct 21" (plus the year if it isn't this one) — the
+ *  conversation's day separators, by the device's calendar day. */
+function dayLabel(iso: ISODateTime): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOf(today) - startOf(d)) / 86_400_000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  const base = `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return d.getFullYear() === today.getFullYear() ? base : `${base}, ${d.getFullYear()}`;
 }
 
 function timeAgoCompact(iso: ISODateTime, now: number): string {
@@ -270,6 +302,27 @@ function ArrowIcon({ tone }: { tone: string }) {
 
 type ButtonVariant = 'primary' | 'outline' | 'text' | 'tinted';
 
+/** RN-web passes these straight through as CSS; native ignores them. */
+function webTransition(properties: string): ViewStyle {
+  return Platform.OS === 'web'
+    ? ({ transitionProperty: properties, transitionDuration: '160ms', transitionTimingFunction: 'ease-out' } as unknown as ViewStyle)
+    : {};
+}
+
+/** Hover is web-only; on native the handlers are simply not attached. */
+function useHover() {
+  const [hovered, setHovered] = useState(false);
+  const handlers =
+    Platform.OS === 'web' ? { onHoverIn: () => setHovered(true), onHoverOut: () => setHovered(false) } : {};
+  return [hovered, handlers] as const;
+}
+
+/** Soft resting shadow for white cards on the sunken page, and a lifted one on hover. */
+const cardShadow: ViewStyle =
+  Platform.OS === 'web' ? ({ boxShadow: '0 1px 2px rgba(20, 24, 31, 0.04)' } as unknown as ViewStyle) : {};
+const cardShadowHovered: ViewStyle =
+  Platform.OS === 'web' ? ({ boxShadow: '0 10px 24px rgba(20, 24, 31, 0.08)' } as unknown as ViewStyle) : {};
+
 function FeedButton({
   label,
   onPress,
@@ -283,21 +336,30 @@ function FeedButton({
   disabled?: boolean;
   icon?: ReactNode;
 }) {
+  const [hovered, hoverHandlers] = useHover();
+  const live = hovered && !disabled;
   return (
     <Pressable
+      {...hoverHandlers}
       onPress={disabled ? undefined : onPress}
       disabled={disabled}
       style={({ pressed }) => [
         styles.feedButton,
+        webTransition('background-color, border-color, transform'),
         {
           backgroundColor:
-            variant === 'primary' ? (pressed ? color.primaryPressed : color.primary)
+            variant === 'primary' ? (pressed || live ? color.primaryPressed : color.primary)
             : variant === 'tinted' ? color.primaryFaint
-            : variant === 'text' ? 'transparent'
+            : variant === 'outline' ? (live ? color.surfaceSunken : color.surface)
             : 'transparent',
-          borderColor: variant === 'primary' ? color.primary : variant === 'tinted' ? color.primaryBorder : variant === 'text' ? 'transparent' : color.border,
-          opacity: disabled ? 0.6 : pressed ? 0.85 : 1,
+          borderColor:
+            variant === 'primary' ? color.primary
+            : variant === 'tinted' ? (live ? color.primary : color.primaryBorder)
+            : variant === 'text' ? 'transparent'
+            : live ? color.borderStrong : color.border,
+          opacity: disabled ? 0.6 : 1,
         },
+        pressed && !disabled && styles.pressedScale,
       ]}
     >
       <View style={styles.feedButtonContent}>
@@ -338,7 +400,7 @@ function PulseDot({ dotColor, pulse }: { dotColor: string; pulse: boolean }) {
 
 function ThreadRow({ thread, now, onPress }: { thread: MessageThread; now: number; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={styles.threadRow}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.threadRow, pressed ? styles.threadRowPressed : null]}>
       <AvatarChip label={initials(thread.counterpartyName)} size={30} dark={!thread.unread} />
       <View style={{ flex: 1, minWidth: 0, gap: space.xs }}>
         <View style={styles.alertTopRow}>
@@ -352,7 +414,7 @@ function ThreadRow({ thread, now, onPress }: { thread: MessageThread; now: numbe
         </Text>
         <Text style={styles.threadRef}>{thread.requirementRef}</Text>
       </View>
-      {thread.unread && <View style={styles.dot} />}
+      {thread.unread && <View style={[styles.dot, styles.threadUnreadDot]} />}
     </Pressable>
   );
 }
@@ -364,10 +426,10 @@ function ThreadRow({ thread, now, onPress }: { thread: MessageThread; now: numbe
  * via fixedOnWeb.
  *
  * Every item in the dock — the thread-list card and each open conversation — is built the
- * same way: a fixed-height header pinned to the bottom edge, with a content pane above it
- * whose `height` alone is what GrowPanel animates between 0 (collapsed: the card *is* just
- * its header) and DOCK_OPEN_HEIGHT (expanded). Nothing ever slides or repositions; only that
- * height changes, so a header never moves relative to the bottom edge it's docked to.
+ * same way: a fixed-height header on top, with a content pane below it whose `height` alone
+ * is what GrowPanel animates between 0 (collapsed: the card *is* just its header, sitting on
+ * the bottom edge) and DOCK_OPEN_HEIGHT (expanded: the header rides up with the pane, like a
+ * chat window). The panel's bottom edge never moves; only that height changes.
  *
  * They lay out left-to-right in one row, right edge pinned via the container's own `right`
  * offset so the row grows leftward as windows open: conversation windows first (oldest
@@ -394,13 +456,167 @@ function ThreadRow({ thread, now, onPress }: { thread: MessageThread; now: numbe
 const DOCK_OPEN_HEIGHT = 400;
 const DOCK_ANIM_MS = 220;
 
-function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  return kb < 1024 ? `${Math.round(kb)} KB` : `${(kb / 1024).toFixed(1)} MB`;
+}
+
+function AttachmentCard({ attachment, onOpen }: { attachment: NonNullable<Message['attachment']>; onOpen?: () => void }) {
+  return (
+    <Pressable onPress={onOpen} disabled={!onOpen} style={({ pressed }) => [styles.attachmentCard, pressed ? { opacity: 0.7 } : null]}>
+      <Text style={styles.attachmentIcon}>📎</Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.attachmentName} numberOfLines={1}>{attachment.filename}</Text>
+        <Text style={styles.bubbleTime}>{formatFileSize(attachment.sizeBytes)}{onOpen ? ' · Open' : ''}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function MessageBubble({ message, mine, onOpenAttachment }: { message: Message; mine: boolean; onOpenAttachment?: () => void }) {
+  if (message.isSystem) {
+    return (
+      <View style={styles.systemBubble}>
+        <View style={styles.systemBubbleHead}>
+          <TrustlinkMark />
+          <Text style={styles.systemBubbleLabel}>TrustLink</Text>
+        </View>
+        <Text style={styles.bubbleText}>{message.body}</Text>
+        <Text style={styles.bubbleTime}>{formatClockTime(message.sentAt)}</Text>
+      </View>
+    );
+  }
   return (
     <View style={[styles.bubbleRow, mine ? styles.bubbleRowMine : null]}>
-      <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-        <Text style={styles.bubbleText}>{message.body}</Text>
+      <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs, { gap: space.xs }]}>
+        {message.attachment && <AttachmentCard attachment={message.attachment} onOpen={onOpenAttachment} />}
+        {message.body.length > 0 && <Text style={styles.bubbleText}>{message.body}</Text>}
       </View>
       <Text style={styles.bubbleTime}>{formatClockTime(message.sentAt)}</Text>
+    </View>
+  );
+}
+
+/* ─── Transaction close-out bar (top of a conversation) ─── */
+
+function closeoutPhrase(outcome: CloseoutOutcome): string {
+  return outcome === 'COMPLETED' ? 'completed' : 'not pushed through';
+}
+
+function ChatCloseoutBar({
+  closeout,
+  onPropose,
+  onRespond,
+  onWithdraw,
+}: {
+  closeout: TransactionCloseout | null | undefined;
+  onPropose?: (outcome: CloseoutOutcome, note: string) => Promise<string | null>;
+  onRespond?: (confirm: boolean, note: string) => Promise<string | null>;
+  onWithdraw?: () => Promise<string | null>;
+}) {
+  const [mode, setMode] = useState<CloseoutOutcome | 'REJECT' | null>(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!closeout || closeout.viewerRole === 'admin') return null;
+
+  const other = closeout.viewerRole === 'buyer' ? 'supplier' : 'buyer';
+  const noteRequired = mode === 'NOT_PUSHED_THROUGH' || mode === 'REJECT';
+  const canSubmit = !busy && (!noteRequired || note.trim().length >= 5);
+
+  const run = async (action: (() => Promise<string | null>) | undefined) => {
+    if (!action) return;
+    setBusy(true);
+    setError(null);
+    const err = await action().catch(() => 'Something went wrong. Try again.');
+    setBusy(false);
+    if (err) {
+      setError(err);
+    } else {
+      setMode(null);
+      setNote('');
+    }
+  };
+  const submit = () => {
+    if (!canSubmit || !mode) return;
+    run(mode === 'REJECT' ? () => onRespond!(false, note) : () => onPropose!(mode, note));
+  };
+
+  const { final, pending } = closeout;
+
+  if (final) {
+    const done = final.outcome === 'COMPLETED';
+    return (
+      <View style={[styles.closeoutBar, done ? styles.closeoutBarDone : null]}>
+        <Text style={[styles.closeoutTitle, done ? { color: color.primary } : null]}>
+          {done ? '✓ Transaction completed' : 'Transaction did not push through'}
+        </Text>
+        <Text style={styles.closeoutMuted}>Confirmed by both parties.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.closeoutBar}>
+      {mode !== null ? (
+        <View style={{ gap: space.sm }}>
+          <Text style={styles.closeoutTitle}>
+            {mode === 'COMPLETED' ? 'Mark as completed?' : mode === 'NOT_PUSHED_THROUGH' ? 'Did not push through?' : "Why isn't it done yet?"}
+          </Text>
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            placeholder={mode === 'COMPLETED' ? 'Note (optional)' : 'Reason (required)'}
+            placeholderTextColor={color.inkFaint}
+            maxLength={500}
+            style={styles.closeoutInput}
+          />
+          {mode !== 'REJECT' && <Text style={styles.closeoutMuted}>The {other} will be asked to confirm.</Text>}
+          <View style={styles.closeoutActions}>
+            <Pressable onPress={submit} disabled={!canSubmit} style={[styles.closeoutPrimary, !canSubmit ? { opacity: 0.4 } : null]}>
+              <Text style={styles.closeoutPrimaryLabel}>{busy ? 'Sending…' : 'Submit'}</Text>
+            </Pressable>
+            <Pressable onPress={() => { setMode(null); setNote(''); setError(null); }} hitSlop={6}>
+              <Text style={styles.closeoutLink}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : pending && closeout.awaitingViewer ? (
+        <View style={{ gap: space.sm }}>
+          <Text style={styles.closeoutTitle}>
+            The {pending.proposedByRole} marked this transaction as {closeoutPhrase(pending.outcome)}.
+          </Text>
+          {pending.note && <Text style={styles.closeoutMuted}>Note: {pending.note}</Text>}
+          <View style={styles.closeoutActions}>
+            <Pressable onPress={() => run(() => onRespond!(true, ''))} disabled={busy} style={[styles.closeoutPrimary, busy ? { opacity: 0.4 } : null]}>
+              <Text style={styles.closeoutPrimaryLabel}>{busy ? 'Confirming…' : 'Confirm'}</Text>
+            </Pressable>
+            <Pressable onPress={() => setMode('REJECT')} disabled={busy} style={styles.closeoutSecondary}>
+              <Text style={styles.closeoutSecondaryLabel}>Not yet</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : pending ? (
+        <View style={styles.closeoutActions}>
+          <Text style={[styles.closeoutMuted, { flex: 1 }]}>
+            Marked as {closeoutPhrase(pending.outcome)} — waiting for the {other} to confirm.
+          </Text>
+          <Pressable onPress={() => run(onWithdraw)} disabled={busy} hitSlop={6}>
+            <Text style={styles.closeoutLink}>Withdraw</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={styles.closeoutActions}>
+          <Pressable onPress={() => setMode('COMPLETED')} style={styles.closeoutPrimary}>
+            <Text style={styles.closeoutPrimaryLabel}>Mark as completed</Text>
+          </Pressable>
+          <Pressable onPress={() => setMode('NOT_PUSHED_THROUGH')} hitSlop={6}>
+            <Text style={styles.closeoutLink}>Did not push through</Text>
+          </Pressable>
+        </View>
+      )}
+      {error && <Text style={styles.closeoutError}>{error}</Text>}
     </View>
   );
 }
@@ -465,6 +681,17 @@ function ThreadListCard({
   const unread = threads.filter((t) => t.unread).length;
   return (
     <View style={[styles.dockPanel, { width }]}>
+      <Pressable onPress={onToggleOpen} style={[styles.dockBar, open ? styles.dockBarOpen : null]}>
+        <TrustlinkMark />
+        <Text style={styles.dockBarLabel}>Messages</Text>
+        <View style={{ flex: 1 }} />
+        {unread > 0 && (
+          <View style={styles.chatBadge}>
+            <Text style={styles.chatBadgeLabel}>{unread}</Text>
+          </View>
+        )}
+      </Pressable>
+
       <GrowPanel open={open}>
         {threads.length === 0 ? (
           <View style={styles.dockEmpty}>
@@ -480,17 +707,6 @@ function ThreadListCard({
           </ScrollView>
         )}
       </GrowPanel>
-
-      <Pressable onPress={onToggleOpen} style={[styles.dockBar, open ? styles.dockBarOpen : null]}>
-        <TrustlinkMark />
-        <Text style={styles.dockBarLabel}>Messages</Text>
-        <View style={{ flex: 1 }} />
-        {unread > 0 && (
-          <View style={styles.chatBadge}>
-            <Text style={styles.chatBadgeLabel}>{unread}</Text>
-          </View>
-        )}
-      </Pressable>
     </View>
   );
 }
@@ -506,8 +722,17 @@ function ConversationWindow({
   onClosed,
   onSend,
   width,
+  closeout,
+  onProposeCloseout,
+  onRespondCloseout,
+  onWithdrawCloseout,
+  onOpenAttachment,
 }: {
   thread: MessageThread;
+  closeout?: TransactionCloseout | null;
+  onProposeCloseout?: (outcome: CloseoutOutcome, note: string) => Promise<string | null>;
+  onRespondCloseout?: (confirm: boolean, note: string) => Promise<string | null>;
+  onWithdrawCloseout?: () => Promise<string | null>;
   messages: Message[];
   viewerId: BusinessId;
   collapsed: boolean;
@@ -515,56 +740,56 @@ function ConversationWindow({
   onToggleCollapse: () => void;
   onClose: () => void;
   onClosed: () => void;
-  onSend: (body: string) => void;
+  onSend: (body: string, file?: File) => Promise<string | null> | void;
+  onOpenAttachment?: (messageId: string) => void;
   width: number;
 }) {
   const [draft, setDraft] = useState('');
+  // One file per message — picked here, sent with whatever text is in the draft.
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const open = !collapsed && !closing;
+  const canSend = !uploading && (draft.trim().length > 0 || file !== null);
 
-  const handleSend = () => {
+  const pickFile = async () => {
+    if (uploading || !isWebFilePickerSupported()) return;
+    const picked = await pickWebFile('.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.ai,.psd,application/pdf,image/*');
+    if (!picked) return;
+    if (picked.size > 10 * 1024 * 1024) {
+      setSendError('Files can be up to 10 MB.');
+      return;
+    }
+    setSendError(null);
+    setFile(picked);
+  };
+
+  const handleSend = async () => {
+    if (!canSend) return;
     const body = draft.trim();
-    if (!body) return;
-    onSend(body);
-    setDraft('');
+    if (!file) {
+      onSend(body);
+      setDraft('');
+      return;
+    }
+    setUploading(true);
+    setSendError(null);
+    const err = await Promise.resolve(onSend(body, file)).catch(() => 'Could not send that file.');
+    setUploading(false);
+    if (err) {
+      setSendError(err);
+    } else {
+      setFile(null);
+      setDraft('');
+    }
   };
 
   return (
     <View style={[styles.dockPanel, { width }]}>
-      {/* onClosed only wired while an actual close is in flight — an ordinary collapse
-       *  also animates height to 0, but must not trigger the deferred unmount below. */}
-      <GrowPanel open={open} onClosed={closing ? onClosed : undefined}>
-        <View style={{ flex: 1 }}>
-          <ScrollView
-            ref={scrollRef}
-            style={styles.dockScroll}
-            contentContainerStyle={styles.bubbleList}
-            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
-          >
-            {messages.map((m) => (
-              <MessageBubble key={m.id} message={m} mine={m.senderId === viewerId} />
-            ))}
-          </ScrollView>
-          <View style={styles.composerRow}>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Write a message"
-              placeholderTextColor={color.inkFaint}
-              style={styles.composerInput}
-              multiline
-              onSubmitEditing={handleSend}
-            />
-            <Pressable onPress={handleSend} disabled={!draft.trim()} style={[styles.composerSend, !draft.trim() ? { opacity: 0.4 } : null]}>
-              <Text style={styles.composerSendLabel}>Send</Text>
-            </Pressable>
-          </View>
-        </View>
-      </GrowPanel>
-
       <View style={[styles.dockBar, open ? styles.dockBarOpen : null]}>
         <Pressable onPress={onToggleCollapse} hitSlop={8} style={styles.dockHeaderPress}>
-          <ChevronGlyph up={open} />
+          <ChevronGlyph up={!open} />
           <View style={{ minWidth: 0 }}>
             <Text style={styles.dockBarLabel} numberOfLines={1}>{thread.counterpartyName}</Text>
             <Text style={styles.dockMeta}>{thread.requirementRef}</Text>
@@ -575,6 +800,92 @@ function ConversationWindow({
           <CloseGlyph />
         </Pressable>
       </View>
+
+      {/* onClosed only wired while an actual close is in flight — an ordinary collapse
+       *  also animates height to 0, but must not trigger the deferred unmount below. */}
+      <GrowPanel open={open} onClosed={closing ? onClosed : undefined}>
+        <View style={{ flex: 1 }}>
+          <ChatCloseoutBar
+            closeout={closeout}
+            onPropose={onProposeCloseout}
+            onRespond={onRespondCloseout}
+            onWithdraw={onWithdrawCloseout}
+          />
+          <ScrollView
+            ref={scrollRef}
+            style={styles.dockScroll}
+            contentContainerStyle={styles.bubbleList}
+            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+          >
+            {messages.length === 0 && (
+              <Text style={styles.dockEmptyText}>No messages yet. Say hello to start coordinating.</Text>
+            )}
+            {messages.map((m, i) => {
+              const day = dayLabel(m.sentAt);
+              const newDay = i === 0 || dayLabel(messages[i - 1].sentAt) !== day;
+              return (
+                <View key={m.id} style={{ gap: space.sm }}>
+                  {newDay && (
+                    <View style={styles.daySeparator}>
+                      <View style={styles.daySeparatorLine} />
+                      <Text style={styles.daySeparatorLabel}>{day}</Text>
+                      <View style={styles.daySeparatorLine} />
+                    </View>
+                  )}
+                  <MessageBubble
+                    message={m}
+                    mine={!m.isSystem && m.senderId === viewerId}
+                    onOpenAttachment={m.attachment && onOpenAttachment ? () => onOpenAttachment(m.id) : undefined}
+                  />
+                </View>
+              );
+            })}
+          </ScrollView>
+          {(file || sendError) && (
+            <View style={styles.composerStaged}>
+              {file && (
+                <View style={styles.stagedChip}>
+                  <Text style={styles.attachmentIcon}>📎</Text>
+                  <Text style={[styles.attachmentName, { flex: 1 }]} numberOfLines={1}>{file.name}</Text>
+                  <Text style={styles.bubbleTime}>{formatFileSize(file.size)}</Text>
+                  {!uploading && (
+                    <Pressable onPress={() => setFile(null)} hitSlop={8}>
+                      <CloseGlyph />
+                    </Pressable>
+                  )}
+                </View>
+              )}
+              {sendError && <Text style={styles.closeoutError}>{sendError}</Text>}
+            </View>
+          )}
+          <View style={styles.composerRow}>
+            <Pressable onPress={pickFile} disabled={uploading} hitSlop={6} style={styles.composerAttach} accessibilityLabel="Attach a file">
+              <Text style={styles.composerAttachIcon}>📎</Text>
+            </Pressable>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder={file ? 'Add a message (optional)' : 'Write a message'}
+              placeholderTextColor={color.inkFaint}
+              style={styles.composerInput}
+              multiline
+              maxLength={2000}
+              // Web: Enter sends, Shift+Enter adds a new line. onSubmitEditing never
+              // fires for a multiline input, which left Enter doing nothing useful.
+              onKeyPress={(e) => {
+                const ev = e.nativeEvent as unknown as { key: string; shiftKey?: boolean };
+                if (ev.key === 'Enter' && !ev.shiftKey) {
+                  (e as unknown as { preventDefault?: () => void }).preventDefault?.();
+                  handleSend();
+                }
+              }}
+            />
+            <Pressable onPress={handleSend} disabled={!canSend} style={[styles.composerSend, !canSend ? { opacity: 0.4 } : null]}>
+              <Text style={styles.composerSendLabel}>{uploading ? 'Sending…' : 'Send'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </GrowPanel>
     </View>
   );
 }
@@ -586,15 +897,21 @@ function ChatWidget({
   now,
   onSend,
   onOpenThread,
+  onOpenAttachment,
   autoOpenThreadId,
-}: {
+  closeoutByThread,
+  onProposeCloseout,
+  onRespondCloseout,
+  onWithdrawCloseout,
+}: CloseoutChatProps & {
   threads: MessageThread[];
   messagesByThread: Record<string, Message[]>;
   viewerId: BusinessId;
   now: number;
   /** Parent persists the message for real; this component's own sentByThread
    *  state is only what makes it appear instantly, before that round-trip returns. */
-  onSend?: (threadId: string, body: string) => void;
+  onSend?: (threadId: string, body: string, file?: File) => Promise<string | null> | void;
+  onOpenAttachment?: (threadId: string, messageId: string) => void;
   /** Fired once per thread the moment its conversation window opens — the parent's
    *  cue to mark the thread read on the server. */
   onOpenThread?: (threadId: string) => void;
@@ -608,13 +925,24 @@ function ChatWidget({
   const [closingThreadIds, setClosingThreadIds] = useState<Set<string>>(new Set());
   const [sentByThread, setSentByThread] = useState<Record<string, Message[]>>({});
   const { width } = useWindowDimensions();
-  const panelWidth = Math.min(320, width - 40);
+  // Below this the list card and a conversation can't sit side by side — show one
+  // conversation at a time, in place of the list, full width minus the gutters.
+  const compact = width < 720;
+  const panelWidth = compact ? width - space.lg * 2 : 320;
   const autoOpenedRef = useRef<string | null>(null);
 
   const toggleList = () => setListOpen((v) => !v);
 
   const openThread = (id: string) => {
-    setOpenThreadIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setOpenThreadIds((prev) => (compact ? [id] : prev.includes(id) ? prev : [...prev, id]));
+    // The parent re-fetches this thread on open, which already includes anything sent
+    // optimistically here — keeping those local copies would show them twice.
+    setSentByThread((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     setCollapsedThreadIds((prev) => (prev.has(id) ? new Set([...prev].filter((x) => x !== id)) : prev));
     setClosingThreadIds((prev) => (prev.has(id) ? new Set([...prev].filter((x) => x !== id)) : prev));
     onOpenThread?.(id);
@@ -628,6 +956,22 @@ function ChatWidget({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenThreadId, threads]);
 
+  // Whenever the parent re-fetches a thread (on open, after a file or a close-out
+  // action), that list already has every message sent from here — drop the local
+  // optimistic copies for it so nothing shows twice.
+  const lastServerLists = useRef(messagesByThread);
+  useEffect(() => {
+    const changed = Object.keys(messagesByThread).filter((id) => messagesByThread[id] !== lastServerLists.current[id]);
+    lastServerLists.current = messagesByThread;
+    if (changed.length === 0) return;
+    setSentByThread((prev) => {
+      if (!changed.some((id) => prev[id])) return prev;
+      const next = { ...prev };
+      changed.forEach((id) => delete next[id]);
+      return next;
+    });
+  }, [messagesByThread]);
+
   const toggleCollapseThread = (id: string) =>
     setCollapsedThreadIds((prev) => {
       const next = new Set(prev);
@@ -640,23 +984,29 @@ function ChatWidget({
     setClosingThreadIds((prev) => new Set([...prev].filter((x) => x !== id)));
   };
 
-  const sendMessage = (threadId: string, body: string) => {
+  const sendMessage = (threadId: string, body: string, file?: File) => {
+    // A file has no optimistic bubble: it shows once the parent re-fetches.
+    if (file) return onSend?.(threadId, body, file);
     const message: Message = {
       id: `m-local-${Date.now()}`,
       threadId,
       senderId: viewerId,
       body,
+      isSystem: false,
+      attachment: null,
       sentAt: new Date().toISOString(),
       read: true,
     };
     setSentByThread((prev) => ({ ...prev, [threadId]: [...(prev[threadId] ?? []), message] }));
-    onSend?.(threadId, body);
+    return onSend?.(threadId, body);
   };
 
   if (Platform.OS !== 'web') return null;
 
+  const showList = !compact || openThreadIds.length === 0;
+
   return (
-    <View style={[styles.chatWidget, fixedOnWeb]} pointerEvents="box-none">
+    <View style={[styles.chatWidget, compact ? styles.chatWidgetCompact : null, fixedOnWeb]} pointerEvents="box-none">
       {openThreadIds.map((id) => {
         const thread = threads.find((t) => t.id === id);
         if (!thread) return null;
@@ -671,20 +1021,27 @@ function ChatWidget({
             onToggleCollapse={() => toggleCollapseThread(id)}
             onClose={() => requestCloseThread(id)}
             onClosed={() => finalizeCloseThread(id)}
-            onSend={(body) => sendMessage(id, body)}
+            onSend={(body, file) => sendMessage(id, body, file)}
+            onOpenAttachment={onOpenAttachment && ((messageId) => onOpenAttachment(id, messageId))}
             width={panelWidth}
+            closeout={closeoutByThread?.[id]}
+            onProposeCloseout={onProposeCloseout && ((outcome, note) => onProposeCloseout(id, outcome, note))}
+            onRespondCloseout={onRespondCloseout && ((confirm, note) => onRespondCloseout(id, confirm, note))}
+            onWithdrawCloseout={onWithdrawCloseout && (() => onWithdrawCloseout(id))}
           />
         );
       })}
 
-      <ThreadListCard
-        threads={threads}
-        now={now}
-        open={listOpen}
-        onToggleOpen={toggleList}
-        onSelectThread={openThread}
-        width={panelWidth}
-      />
+      {showList && (
+        <ThreadListCard
+          threads={threads}
+          now={now}
+          open={listOpen}
+          onToggleOpen={toggleList}
+          onSelectThread={openThread}
+          width={panelWidth}
+        />
+      )}
     </View>
   );
 }
@@ -702,20 +1059,32 @@ function CategoryPills({
 }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-      {categories.map((c) => {
-        const on = c.name === active;
-        return (
-          <Pressable
-            key={c.name}
-            onPress={() => onSelect(c.name)}
-            style={[styles.categoryPill, on ? styles.categoryPillActive : null]}
-          >
-            <Text style={[styles.categoryPillLabel, on ? styles.categoryPillLabelActive : null]}>{c.name}</Text>
-            <Text style={[styles.categoryPillCount, on ? styles.categoryPillCountActive : null]}>{c.count}</Text>
-          </Pressable>
-        );
-      })}
+      {categories.map((c) => (
+        <CategoryPill key={c.name} name={c.name} count={c.count} active={c.name === active} onPress={() => onSelect(c.name)} />
+      ))}
     </ScrollView>
+  );
+}
+
+function CategoryPill({ name, count, active, onPress }: { name: string; count: number; active: boolean; onPress: () => void }) {
+  const [hovered, hoverHandlers] = useHover();
+  return (
+    <Pressable
+      {...hoverHandlers}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.categoryPill,
+        webTransition('background-color, border-color, transform'),
+        hovered && !active && styles.categoryPillHovered,
+        active ? styles.categoryPillActive : null,
+        pressed && styles.pressedScale,
+      ]}
+    >
+      <Text style={[styles.categoryPillLabel, active ? styles.categoryPillLabelActive : null]}>{name}</Text>
+      <View style={[styles.categoryPillCountBubble, active && styles.categoryPillCountBubbleActive]}>
+        <Text style={[styles.categoryPillCount, active ? styles.categoryPillCountActive : null]}>{count}</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -894,7 +1263,7 @@ function RoleBanner(props: HomeFeedProps) {
 const cardHoverTransitionOnWeb: ViewStyle =
   Platform.OS === 'web'
     ? ({
-        transitionProperty: 'transform, border-color',
+        transitionProperty: 'transform, border-color, box-shadow',
         transitionDuration: '150ms',
         transitionTimingFunction: 'ease-out',
       } as unknown as ViewStyle)
@@ -937,15 +1306,18 @@ function RequirementCard({
         : null)}
       style={[
         styles.card,
+        cardShadow,
         cardHoverTransitionOnWeb,
-        { borderColor: urgent ? (hovered ? color.danger : color.dangerBorder) : hovered ? color.borderStrong : color.border },
-        hovered ? styles.cardHovered : null,
+        { borderColor: urgent ? (hovered ? color.danger : color.dangerBorder) : hovered ? color.borderStrong : color.borderFaint },
+        hovered ? [styles.cardHovered, cardShadowHovered] : null,
         matched ? styles.cardMatched : null,
       ]}
     >
       <View style={styles.cardTopRow}>
         <View style={styles.categoryBadge}>
-          <Text style={styles.categoryBadgeLabel}>{requirement.category}</Text>
+          <Text style={styles.categoryBadgeLabel}>
+            {requirement.itemName ? `${requirement.category} · ${requirement.itemName}` : requirement.category}
+          </Text>
         </View>
         {signal && (
           <View style={[styles.signalBadge, signal.urgent ? styles.signalBadgeUrgent : null]}>
@@ -1050,8 +1422,19 @@ function MyRequirementRow({
   const posted = requirement.publishedAt ? `Posted ${timeAgoWords(requirement.publishedAt, now)}` : 'Not yet published';
   const meta = `${posted} · ${requirement.category} · ${requirement.deliverySite.address} · ${formatBudget(requirement.budgetMin, requirement.budgetMax)}`;
 
+  const [hovered, hoverHandlers] = useHover();
+
   return (
-    <View style={styles.myReqRow}>
+    <Pressable
+      {...hoverHandlers}
+      onPress={onSelect}
+      style={[
+        styles.myReqRow,
+        cardShadow,
+        webTransition('transform, border-color, box-shadow'),
+        hovered && [styles.rowHovered, cardShadowHovered],
+      ]}
+    >
       <View style={{ flex: 1, minWidth: 200, gap: space.xs }}>
         <View style={styles.myReqStatusRow}>
           <View style={[styles.dot, { backgroundColor: statusColor }]} />
@@ -1072,7 +1455,7 @@ function MyRequirementRow({
           onPress={onSelect}
         />
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -1105,8 +1488,13 @@ function ClosedRequirementRow({ requirement, buyerName, now }: { requirement: Re
 
 function ClosingSoonItem({ requirement, buyerName, now, onSelect }: { requirement: Requirement; buyerName: string; now: number; onSelect: () => void }) {
   const { hoursLeft, closed } = formatCompactCountdown(requirement.closingAt, now);
+  const [hovered, hoverHandlers] = useHover();
   return (
-    <Pressable style={styles.closingSoonRow} onPress={onSelect}>
+    <Pressable
+      {...hoverHandlers}
+      style={[styles.closingSoonRow, webTransition('background-color'), hovered && styles.closingSoonRowHovered]}
+      onPress={onSelect}
+    >
       <Text style={styles.closingSoonTitle} numberOfLines={2}>{requirement.title}</Text>
       <Text style={styles.mutedSmall}>{buyerName} · {formatBudget(requirement.budgetMin, requirement.budgetMax)}</Text>
       <View style={styles.myReqStatusRow}>
@@ -1312,7 +1700,12 @@ function PhoneHomeFeed(props: HomeFeedProps) {
       now={st.now}
       onSend={props.onSendMessage}
       onOpenThread={props.onOpenThread}
+      onOpenAttachment={props.onOpenAttachment}
       autoOpenThreadId={props.autoOpenThreadId}
+      closeoutByThread={props.closeoutByThread}
+      onProposeCloseout={props.onProposeCloseout}
+      onRespondCloseout={props.onRespondCloseout}
+      onWithdrawCloseout={props.onWithdrawCloseout}
     />
     </View>
   );
@@ -1322,10 +1715,9 @@ function PhoneHomeFeed(props: HomeFeedProps) {
  * Reproduces docs/design/Trustlink Home Feed.dc.html's structure directly: left sidebar
  * (profile + stats), centre column (CTA, feed, your requirements, recently closed), right
  * sidebar (closing-soon rail, how-matching), floating messages widget. Capped at
- * layout.maxWidthDashboard (1760) — wider than RequirementDetail.tsx's two-column
- * layout.maxWidthWide, since a three-column dashboard needs the extra room, and wider
- * than the source design's own 1720px so the three columns use more of the window on
- * large screens.
+ * layout.maxWidthDashboard — the same centred width as the header and every other
+ * wide page (LinkedIn-style), so the three columns sit under the nav rather than
+ * stretching to the window edges.
  *
  * The top nav chrome (logo, search, primary nav, account block) lives in AppHeader,
  * mounted once above this screen by app/_layout.tsx — it is not part of this component.
@@ -1460,7 +1852,12 @@ function WideHomeFeed(props: HomeFeedProps) {
       now={st.now}
       onSend={props.onSendMessage}
       onOpenThread={props.onOpenThread}
+      onOpenAttachment={props.onOpenAttachment}
       autoOpenThreadId={props.autoOpenThreadId}
+      closeoutByThread={props.closeoutByThread}
+      onProposeCloseout={props.onProposeCloseout}
+      onRespondCloseout={props.onRespondCloseout}
+      onWithdrawCloseout={props.onWithdrawCloseout}
     />
     </View>
   );
@@ -1477,22 +1874,22 @@ export default function HomeFeed(props: HomeFeedProps) {
 /* ─── Styles ─────────────────────────────────────────── */
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.canvas },
+  root: { flex: 1, backgroundColor: color.surfaceSunken },
   scrollContent: { paddingBottom: space.section },
   scrollContentWide: { paddingBottom: space.section },
   page: { width: '100%', paddingHorizontal: layout.screenPadding, gap: space.lg, paddingTop: space.lg },
   pageWide: { width: '100%', maxWidth: layout.maxWidthDashboard, marginHorizontal: 'auto', paddingHorizontal: layout.screenPadding },
-  categorySticky: { backgroundColor: color.canvas, borderBottomWidth: 1, borderBottomColor: color.border, zIndex: 40 },
+  categorySticky: { backgroundColor: color.surfaceSunken, borderBottomWidth: 1, borderBottomColor: color.borderFaint, zIndex: 40 },
   columnsWide: { flexDirection: 'row', alignItems: 'flex-start', gap: space.xxl, paddingVertical: space.xl },
   sideColumn: { flex: 1, minWidth: layout.sideColumnMinWidth, maxWidth: 340, gap: space.lg },
   mainColumnWide: { flex: 3, minWidth: 0, gap: space.lg },
-  sectionBlock: { gap: space.md, marginTop: space.xl, paddingTop: space.xl, borderTopWidth: 1, borderTopColor: color.border },
+  sectionBlock: { gap: space.md, marginTop: space.xl },
 
   /* messages dock — one bordered card, flush to the bottom-right corner. dockPanel is the
    * whole card (content pane + bar); its rounded top corners read correctly whether the
    * pane above is open or collapsed to nothing, since the bar's own edges never carry a
    * radius of their own */
-  dockPanel: { backgroundColor: color.surface, borderWidth: 1, borderColor: color.border, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, overflow: 'hidden' },
+  dockPanel: { ...elevation.cardRaised, backgroundColor: color.surface, borderWidth: 1, borderColor: color.border, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, overflow: 'hidden' },
   dockScroll: { flex: 1 },
   dockMeta: { fontFamily: font.mono, fontSize: 10, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkFaint },
   dockEmpty: { padding: space.xl },
@@ -1502,33 +1899,80 @@ const styles = StyleSheet.create({
   alertTime: { fontFamily: font.mono, fontSize: fontSize.micro, color: color.inkFaint },
 
   threadRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, padding: space.md, borderBottomWidth: 1, borderBottomColor: color.borderFaint },
+  threadRowPressed: { backgroundColor: color.surfaceSunken },
+  threadUnreadDot: { backgroundColor: color.primary, marginTop: space.xs },
   threadName: { flex: 1, fontSize: fontSize.sm, color: color.ink },
   threadPreview: { fontFamily: font.body, fontSize: fontSize.sm },
   threadRef: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkFaint },
 
+  /* transaction close-out bar, top of a conversation */
+  closeoutBar: { gap: space.xs, paddingHorizontal: space.md, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.border, backgroundColor: color.surfaceSunken },
+  closeoutBarDone: { backgroundColor: color.primaryFaint },
+  closeoutTitle: { fontFamily: font.bodySemi, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.ink },
+  closeoutMuted: { fontFamily: font.body, fontSize: fontSize.micro, lineHeight: lineHeight.sm, color: color.inkMuted },
+  closeoutError: { fontFamily: font.body, fontSize: fontSize.micro, color: color.danger },
+  closeoutActions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.md },
+  closeoutPrimary: { backgroundColor: color.primary, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs },
+  closeoutPrimaryLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.onPrimary },
+  closeoutSecondary: { borderWidth: 1, borderColor: color.border, backgroundColor: color.surface, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs },
+  closeoutSecondaryLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
+  closeoutLink: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted, textDecorationLine: 'underline' },
+  closeoutInput: { minHeight: 34, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, backgroundColor: color.surface, paddingHorizontal: space.sm, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
+
   /* conversation view */
-  bubbleList: { padding: space.md, gap: space.sm },
+  bubbleList: { padding: space.md, gap: space.sm, flexGrow: 1 },
+  daySeparator: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginVertical: space.xs },
+  daySeparatorLine: { flex: 1, height: 1, backgroundColor: color.borderFaint },
+  daySeparatorLabel: { fontFamily: font.mono, fontSize: 10, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkFaint },
   bubbleRow: { alignSelf: 'flex-start', maxWidth: '82%', gap: 2 },
   bubbleRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   bubble: { borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm },
-  bubbleTheirs: { backgroundColor: color.surfaceSunken },
-  bubbleMine: { backgroundColor: color.primaryFaint, borderWidth: 1, borderColor: color.primaryBorder },
+  bubbleTheirs: { backgroundColor: color.surfaceSunken, borderBottomLeftRadius: radius.sm },
+  bubbleMine: { backgroundColor: color.primaryFaint, borderWidth: 1, borderColor: color.primaryBorder, borderBottomRightRadius: radius.sm },
   bubbleText: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.ink },
   bubbleTime: { fontFamily: font.mono, fontSize: 10, color: color.inkFaint },
+  systemBubble: {
+    alignSelf: 'stretch',
+    gap: space.sm,
+    borderWidth: 1,
+    borderColor: color.primaryBorder,
+    borderLeftWidth: 3,
+    borderLeftColor: color.primary,
+    borderRadius: radius.lg,
+    backgroundColor: color.primaryFaint,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
+  },
+  systemBubbleHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  systemBubbleLabel: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: letterSpacing.label,
+    textTransform: 'uppercase',
+    color: color.primary,
+  },
 
+  composerAttach: { width: 32, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
+  composerAttachIcon: { fontSize: fontSize.base, color: color.inkMuted },
+  composerStaged: { gap: space.xs, paddingHorizontal: space.md, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: color.border },
+  stagedChip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, backgroundColor: color.surfaceSunken, paddingHorizontal: space.sm, paddingVertical: space.xs },
+  attachmentCard: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, backgroundColor: color.surface, paddingHorizontal: space.sm, paddingVertical: space.xs, minWidth: 180 },
+  attachmentIcon: { fontSize: fontSize.sm },
+  attachmentName: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
   composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm, padding: space.md, borderTopWidth: 1, borderTopColor: color.border },
   composerInput: { flex: 1, minHeight: 36, maxHeight: 80, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
-  composerSend: { backgroundColor: color.primary, borderRadius: radius.pill, paddingHorizontal: space.lg, paddingVertical: space.sm },
+  composerSend: { minHeight: 36, justifyContent: 'center', backgroundColor: color.primary, borderRadius: radius.pill, paddingHorizontal: space.lg, paddingVertical: space.sm },
   composerSendLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.onPrimary },
 
   /* dock row — right edge pinned via `right`, grows leftward as conversation windows open;
    * every item (conversation windows, then the list card) shares the bottom edge */
   chatWidget: { right: space.xl, bottom: 0, flexDirection: 'row', alignItems: 'flex-end', gap: space.md, zIndex: 80 },
-  /* dock bar/header — fixed-height row pinned to the bottom of dockPanel, its top border
-   * only drawn while the pane above it is expanded so it reads as one divider, not a
+  chatWidgetCompact: { right: space.lg },
+  /* dock bar/header — fixed-height row at the top of dockPanel, its bottom border
+   * only drawn while the pane below it is expanded so it reads as one divider, not a
    * doubled edge */
   dockBar: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.lg, paddingVertical: space.md },
-  dockBarOpen: { borderTopWidth: 1, borderTopColor: color.border },
+  dockBarOpen: { borderBottomWidth: 1, borderBottomColor: color.border },
   dockBarLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
   dockMark: { width: 16, height: 16, borderRadius: radius.pill },
   dockHeaderPress: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flex: 1, minWidth: 0 },
@@ -1545,36 +1989,40 @@ const styles = StyleSheet.create({
 
   /* category pills */
   categoryRow: { flexDirection: 'row', gap: space.sm, paddingVertical: space.md },
-  categoryPill: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, paddingHorizontal: space.lg, paddingVertical: space.sm },
+  categoryPill: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, backgroundColor: color.surface, paddingHorizontal: space.lg, paddingVertical: space.sm },
+  categoryPillHovered: { borderColor: color.borderStrong },
   categoryPillActive: { backgroundColor: color.ink, borderColor: color.ink },
   categoryPillLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
   categoryPillLabelActive: { color: color.canvas },
-  categoryPillCount: { fontFamily: font.mono, fontSize: fontSize.micro, color: color.inkFaint },
+  categoryPillCountBubble: { minWidth: 20, alignItems: 'center', borderRadius: radius.pill, backgroundColor: color.surfaceSunken, paddingHorizontal: 6, paddingVertical: 1 },
+  categoryPillCountBubbleActive: { backgroundColor: 'rgba(255, 255, 255, 0.16)' },
+  categoryPillCount: { fontFamily: font.mono, fontSize: fontSize.micro, color: color.inkMuted },
   categoryPillCountActive: { color: color.canvas },
+  pressedScale: { transform: [{ scale: 0.97 }] },
 
   /* profile sidebar */
-  profileCard: { borderWidth: 1, borderColor: color.border, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.xl },
+  profileCard: { ...elevation.card, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.xl },
   profileTopRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   profileName: { fontFamily: font.display, fontSize: fontSize.md, color: color.ink },
   profileVerified: { marginTop: space.xs, fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.primary },
-  profileFactList: { gap: space.sm, marginTop: space.lg, paddingTop: space.lg, borderTopWidth: 1, borderTopColor: color.border },
+  profileFactList: { gap: space.sm, marginTop: space.lg, paddingTop: space.lg, borderTopWidth: 1, borderTopColor: color.borderFaint },
   profileFactRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   profileFact: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
-  profileSection: { marginTop: space.lg, paddingTop: space.lg, borderTopWidth: 1, borderTopColor: color.border },
+  profileSection: { marginTop: space.lg, paddingTop: space.lg, borderTopWidth: 1, borderTopColor: color.borderFaint },
   profileSectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   profileSectionValue: { fontFamily: font.display, fontSize: fontSize.sm, color: color.ink },
   profileSectionValueMono: { fontFamily: font.mono, fontSize: fontSize.sm, color: color.ink },
   profileSectionCaption: { marginTop: space.sm, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
   tierBarRow: { flexDirection: 'row', gap: space.xs, marginTop: space.sm },
   tierBarSegment: { flex: 1, height: 5, borderRadius: radius.pill, backgroundColor: color.borderFaint },
-  tierBarSegmentFilled: { backgroundColor: color.ink },
+  tierBarSegmentFilled: { backgroundColor: color.primary },
   progressTrack: { height: 5, borderRadius: radius.pill, backgroundColor: color.borderFaint, marginTop: space.sm, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: color.ink, borderRadius: radius.pill },
+  progressFill: { height: '100%', backgroundColor: color.primary, borderRadius: radius.pill },
   profileNextStep: { marginTop: space.md },
   profileNextStepLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
 
   /* activity stats */
-  statsCard: { borderWidth: 1, borderColor: color.border, borderRadius: radius.xl, padding: space.xl },
+  statsCard: { ...elevation.card, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.xl },
   statRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.borderFaint },
   statLabel: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
   statValue: { fontFamily: font.display, fontSize: fontSize.md, color: color.ink },
@@ -1582,7 +2030,7 @@ const styles = StyleSheet.create({
   howMatchingBody: { marginTop: space.sm, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
 
   /* CTA banner */
-  ctaBanner: { borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, backgroundColor: color.surface, padding: space.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.lg, flexWrap: 'wrap' },
+  ctaBanner: { borderWidth: 1, borderColor: color.primaryBorder, borderRadius: radius.xl, backgroundColor: color.primaryFaint, padding: space.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.lg, flexWrap: 'wrap' },
   ctaTitle: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
   ctaSubtitle: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
   ctaActions: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' },
@@ -1590,15 +2038,15 @@ const styles = StyleSheet.create({
   /* section headers */
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space.md },
   sectionHeading: { fontFamily: font.display, fontSize: fontSize.xl, color: color.ink },
-  manageAllLink: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
+  manageAllLink: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.primary },
   microLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkFaint },
   mutedSmall: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
-  emptyOpportunities: { borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, backgroundColor: color.surface, padding: space.lg, alignItems: 'center' },
+  emptyOpportunities: { borderWidth: 1, borderStyle: 'dashed', borderColor: color.border, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.xl, alignItems: 'center' },
 
   /* feed card */
   card: { borderWidth: 1, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.xl, gap: space.md },
   cardMatched: { borderLeftWidth: 3, borderLeftColor: color.primary },
-  cardHovered: { transform: [{ scale: 1.01 }] },
+  cardHovered: { transform: [{ translateY: -2 }] },
   cardTopRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
   categoryBadge: { borderWidth: 1, borderColor: color.primaryBorder, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs },
   categoryBadgeLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.primary },
@@ -1647,21 +2095,23 @@ const styles = StyleSheet.create({
   arrowIconHead: { width: 6, height: 6, borderTopWidth: 1.4, borderRightWidth: 1.4, transform: [{ rotate: '45deg' }], marginLeft: -3 },
 
   /* your requirements */
-  myReqRow: { borderWidth: 1, borderColor: color.border, borderRadius: radius.xl, padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.lg, flexWrap: 'wrap' },
+  myReqRow: { ...elevation.card, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.lg, flexWrap: 'wrap' },
   myReqStatusRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   myReqStatusLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase' },
   myReqTitle: { fontFamily: font.display, fontSize: fontSize.base, color: color.ink },
   myReqRight: { flexDirection: 'row', alignItems: 'center', gap: space.xl },
   myReqCount: { fontFamily: font.display, fontSize: fontSize.xl, color: color.ink },
+  rowHovered: { borderColor: color.borderStrong, transform: [{ translateY: -1 }] },
 
   /* recently closed */
-  closedRow: { borderWidth: 1, borderColor: color.borderFaint, borderRadius: radius.xl, backgroundColor: color.surfaceSunken, padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.lg, flexWrap: 'wrap' },
+  closedRow: { ...elevation.card, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.lg, flexWrap: 'wrap' },
   closedTitle: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
   outcomeTag: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.sm },
   outcomeLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm },
 
   /* closing soon */
-  closingSoonRow: { gap: space.xs, paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: color.borderFaint },
+  closingSoonRow: { gap: space.xs, paddingVertical: space.md, paddingHorizontal: space.sm, marginHorizontal: -space.sm, borderRadius: radius.md, borderBottomWidth: 1, borderBottomColor: color.borderFaint },
+  closingSoonRowHovered: { backgroundColor: color.surfaceSunken },
   closingSoonTitle: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
   closingSoonCountdown: { fontFamily: font.mono, fontSize: fontSize.sm, color: color.danger },
 });

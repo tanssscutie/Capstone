@@ -38,6 +38,7 @@ export interface VerificationStatusOut {
   capabilities: string[];
   service_areas: string[];
   business_description: string | null;
+  offered_items: { code: string; other_text: string | null }[];
 }
 
 export interface DashboardStatsOut {
@@ -67,6 +68,19 @@ export interface PublicBusinessProfileOut {
   member_since_year: number;
   requirements_posted_count: number;
   requirements_awarded_count: number;
+  member_since: string;
+  verification_status: string;
+  registration_document_types: string[];
+  quotations_submitted_count: number;
+  quotations_awarded_count: number;
+  requirements_cancelled_count: number;
+  quotations_withdrawn_count: number;
+  transactions_completed_count: number;
+  transactions_not_pushed_through_count: number;
+  includes_sealed_activity: boolean;
+  contact_details_visible: boolean;
+  contact_person: string | null;
+  contact_mobile: string | null;
 }
 
 /** POST /business/onboarding — identity + operations, combined into the
@@ -76,7 +90,8 @@ export async function submitOnboarding(identity: IdentityDraft, operations: Oper
     registered_name: identity.registeredName,
     display_name: identity.displayName.trim() || null,
     business_type: identity.businessType,
-    industry_category: identity.category,
+    // Omitted when blank: the backend then keeps the one from registration.
+    industry_category: operations.category || undefined,
     city: identity.city,
     province: identity.province,
     contact_person: identity.contactPerson,
@@ -84,26 +99,7 @@ export async function submitOnboarding(identity: IdentityDraft, operations: Oper
     capabilities: operations.capabilities,
     service_areas: operations.serviceAreas,
     business_description: operations.businessDescription.trim() || null,
-  });
-}
-
-export interface DescriptionSuggestionOut {
-  description: string | null;
-}
-
-/** POST /business/suggest-description — AI profile assistant's draft bio.
- *  A suggestion only: the caller decides whether to use it, same contract
- *  as extractDocumentFields and requirementsApi.suggestCategory. */
-export async function suggestDescription(
-  identity: IdentityDraft, capabilities: string[], serviceAreas: string[],
-): Promise<DescriptionSuggestionOut> {
-  return api.post<DescriptionSuggestionOut>('/business/suggest-description', {
-    business_type: identity.businessType,
-    industry_category: identity.category,
-    capabilities,
-    service_areas: serviceAreas,
-    city: identity.city,
-    province: identity.province,
+    offered_items: operations.offeredItems.map((i) => ({ code: i.code, other_text: i.otherText })),
   });
 }
 
@@ -162,7 +158,7 @@ export async function getDashboardStats(): Promise<DashboardStatsOut> {
 
 /** GET /business/{id}/profile — any other business's public-facing profile,
  *  e.g. "View buyer profile" from a requirement, or a respondent's card once
- *  quotations release. Never carries contact info — see PublicBusinessProfileOut. */
+ *  quotations release. Contact info is shown only to verified viewers, the owner and admin. */
 export async function getPublicProfile(businessId: number): Promise<PublicBusinessProfileOut> {
   return api.get<PublicBusinessProfileOut>(`/business/${businessId}/profile`);
 }

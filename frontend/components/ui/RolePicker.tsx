@@ -11,7 +11,16 @@ const OPTIONS: { value: AccountRole; title: string; blurb: string }[] = [
   { value: 'seller', title: "I'm a seller", blurb: 'Find open requirements and submit quotations.' },
 ];
 
-export function RolePicker({ value, onChange }: { value: AccountRole | null; onChange: (role: AccountRole) => void }) {
+/** `compact` (the register form) drops each option's blurb to keep the form short. */
+export function RolePicker({
+  value,
+  onChange,
+  compact,
+}: {
+  value: AccountRole | null;
+  onChange: (role: AccountRole) => void;
+  compact?: boolean;
+}) {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>Account type</Text>
@@ -22,12 +31,12 @@ export function RolePicker({ value, onChange }: { value: AccountRole | null; onC
             <Pressable
               key={opt.value}
               onPress={() => onChange(opt.value)}
-              style={[styles.option, active && styles.optionActive]}
+              style={[styles.option, compact && styles.optionCompact, active && styles.optionActive]}
               accessibilityRole="radio"
               accessibilityState={{ checked: active }}
             >
               <Text style={[styles.title, active && styles.titleActive]}>{opt.title}</Text>
-              <Text style={styles.blurb}>{opt.blurb}</Text>
+              {!compact && <Text style={styles.blurb}>{opt.blurb}</Text>}
             </Pressable>
           );
         })}
@@ -40,15 +49,18 @@ export function RolePicker({ value, onChange }: { value: AccountRole | null; onC
 const styles = StyleSheet.create({
   field: { marginBottom: space.lg },
   label: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink, marginBottom: space.xs },
-  row: { flexDirection: 'row', gap: space.sm },
+  // Wraps to a stack once each card would drop below ~140px (narrow phones).
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   option: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 140,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.md,
     padding: space.md,
     backgroundColor: color.canvas,
   },
+  optionCompact: { paddingVertical: space.sm, alignItems: 'center' },
   optionActive: { borderColor: color.primary, backgroundColor: color.primaryFaint },
   title: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
   titleActive: { color: color.primary },

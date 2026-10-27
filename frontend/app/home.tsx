@@ -6,12 +6,13 @@ import { me } from '../lib/api/auth';
 import { getVerificationStatus, getDashboardStats } from '../lib/api/business';
 import { requirementsApi } from '../lib/api/requirements';
 import { requirementsCache } from '../lib/api/requirementsCache';
-import { messagesApi } from '../lib/api/messages';
+import { messagesApi, openMessageAttachment } from '../lib/api/messages';
 import { postRequirementClone } from '../lib/postRequirementClone';
-import { mapRequirement, mapMyRequirement, mapPosterToFeedBuyer, mapViewerBusiness, mapMessageThread, mapMessage } from '../lib/api/mappers';
-import type { Business, Requirement, BusinessId, MessageThread, Message } from '../lib/types';
+import { mapRequirement, mapMyRequirement, mapPosterToFeedBuyer, mapViewerBusiness, mapMessageThread, mapMessage, mapCloseout } from '../lib/api/mappers';
+import type { Business, Requirement, BusinessId, MessageThread, Message, TransactionCloseout } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
 import { errorMessage } from '../lib/api/client';
+import type { CloseoutOut } from '../lib/api/requirements';
 
 const MESSAGE_THREADS_POLL_MS = 15_000;
 
@@ -27,6 +28,9 @@ export default function HomeRoute() {
   const [recentlyClosed, setRecentlyClosed] = useState<Requirement[]>([]);
   const [messageThreads, setMessageThreads] = useState<MessageThread[]>([]);
   const [messagesByThread, setMessagesByThread] = useState<Record<string, Message[]>>({});
+  // Transaction close-out per thread — every thread is an awarded deal, so each
+  // conversation can carry its "Mark as completed" bar.
+  const [closeoutByThread, setCloseoutByThread] = useState<Record<string, TransactionCloseout | null>>({});
   // Whether they've submitted for verification at least once — decides where "Complete
   // Verification" sends them: straight into the form (never submitted) vs the status
   // page (already submitted, no point re-doing onboarding from scratch to check on it).
@@ -112,6 +116,30 @@ export default function HomeRoute() {
     return () => clearInterval(id);
   }, []);
 
+  const requirementIdOf = (threadId: string) => Number(messageThreads.find((t) => t.id === threadId)?.requirementId);
+
+  async function reloadThreadMessages(threadId: string) {
+    try {
+      const rows = await messagesApi.listMessages(Number(threadId));
+      setMessagesByThread((prev) => ({ ...prev, [threadId]: rows.map(mapMessage) }));
+    } catch {
+      // The next open re-fetches anyway.
+    }
+  }
+
+  /** Runs one close-out call, stores the new state, and pulls in the TrustLink
+   *  message it posted. Resolves to an error message for the bar, or null. */
+  async function closeoutAction(threadId: string, call: (requirementId: number) => Promise<CloseoutOut>, fallback: string) {
+    try {
+      const out = await call(requirementIdOf(threadId));
+      setCloseoutByThread((prev) => ({ ...prev, [threadId]: mapCloseout(out) }));
+      await reloadThreadMessages(threadId);
+      return null;
+    } catch (e: any) {
+      return errorMessage(e, fallback);
+    }
+  }
+
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: color.canvas, alignItems: 'center', justifyContent: 'center', gap: space.md }}>
@@ -155,6 +183,8 @@ export default function HomeRoute() {
         postRequirementClone.set(
           {
             category: source.category,
+            // Null on an older requirement — the buyer picks an item again.
+            itemCode: source.itemCode ?? '',
             title: source.title,
             scope: source.scope,
             specifications: source.specifications,
@@ -179,6 +209,17 @@ export default function HomeRoute() {
           setRequirements((prev) => prev.map((r) => (r.id === requirementId ? { ...r, isSaved: !nextSaved } : r)));
         }
       }}
+      closeoutByThread={closeoutByThread}
+      onProposeCloseout={(threadId, outcome, note) =>
+        closeoutAction(
+          threadId,
+          (rid) => requirementsApi.proposeCloseout(rid, outcome === 'COMPLETED' ? 'completed' : 'not_pushed_through', note),
+          'Could not mark this transaction.',
+        )}
+      onRespondCloseout={(threadId, confirm, note) =>
+        closeoutAction(threadId, (rid) => requirementsApi.respondCloseout(rid, confirm, note), 'Could not send your response.')}
+      onWithdrawCloseout={(threadId) =>
+        closeoutAction(threadId, (rid) => requirementsApi.withdrawCloseout(rid), 'Could not withdraw.')}
       onOpenThread={async (threadId) => {
         try {
           const rows = await messagesApi.listMessages(Number(threadId));
@@ -187,6 +228,12 @@ export default function HomeRoute() {
           // Leave whatever was already loaded (or nothing) — the conversation window
           // still opens, it just won't have fresh content until the next attempt.
         }
+        // A failed fetch just leaves the bar out of this conversation.
+        const requirementId = requirementIdOf(threadId);
+        if (requirementId) {
+          const closeout = await requirementsApi.getCloseout(requirementId).then(mapCloseout).catch(() => null);
+          setCloseoutByThread((prev) => ({ ...prev, [threadId]: closeout }));
+        }
         try {
           await messagesApi.markRead(Number(threadId));
           setMessageThreads((prev) => prev.map((t) => (t.id === threadId ? { ...t, unread: false } : t)));
@@ -194,7 +241,26 @@ export default function HomeRoute() {
           // Not read-marked server-side; the unread dot just stays until the next poll.
         }
       }}
-      onSendMessage={async (threadId, body) => {
+      onOpenAttachment={(threadId, messageId) => {
+        openMessageAttachment(Number(threadId), Number(messageId)).catch(() => {
+          if (typeof window !== 'undefined') window.alert('Could not open that file. Try again.');
+        });
+      }}
+      onSendMessage={async (threadId, body, file) => {
+        if (file) {
+          try {
+            const sent = await messagesApi.sendAttachment(Number(threadId), file, file.name, body);
+            await reloadThreadMessages(threadId);
+            setMessageThreads((prev) =>
+              prev.map((t) => (t.id === threadId
+                ? { ...t, lastMessagePreview: sent.body || `Sent a file: ${file.name}`, lastMessageAt: sent.created_at }
+                : t)),
+            );
+            return null;
+          } catch (e: any) {
+            return errorMessage(e, 'Could not send that file.');
+          }
+        }
         // ChatWidget already shows its own optimistic copy the instant this fires (see
         // HomeFeed.tsx's sentByThread) — this only needs to persist it. Deliberately not
         // also appended into messagesByThread here, or it would render twice.
@@ -207,6 +273,7 @@ export default function HomeRoute() {
           // The optimistic bubble stays visible for this session even though it never
           // made it to the server — acceptable for a first pass; see ChatWidget's onSend.
         }
+        return null;
       }}
     />
   );

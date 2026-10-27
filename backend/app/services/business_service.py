@@ -1,22 +1,24 @@
+import json
 import os
 import re
 import uuid
 from datetime import date, datetime, timedelta
 from app.core.clock import now_ph
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
+from fastapi.concurrency import run_in_threadpool
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session
 
+from app.core.categories import OTHER_ITEM_CODE, items_for
 from app.core.database import engine
 from app.core import file_crypto
 from app.models.business_document import BusinessDocument
 from app.models.user import User
 from app.repositories import business_repository as repo
 from app.repositories import notification_repository as notif_repo
-from app.schemas.business import OnboardingSubmit, VerificationStatusOut, DocumentUploadOut, DocumentExtractionOut, DescriptionSuggestionOut, DashboardStatsOut, AdminFlaggedBusinessOut, AdminStatsOut, AdminBusinessOut, PublicBusinessProfileOut
+from app.schemas.business import OfferedItem, OnboardingSubmit, VerificationStatusOut, DocumentUploadOut, DocumentExtractionOut, DashboardStatsOut, AdminFlaggedBusinessOut, AdminStatsOut, AdminBusinessOut, PublicBusinessProfileOut
 from app.services import document_extraction_service
-from app.services import profile_assistant_service
 from app.services import matching_service
 
 UPLOAD_ROOT = os.path.join("uploads", "documents")
@@ -53,6 +55,13 @@ class BusinessService:
             user = session.get(User, user_id)
             if not user:
                 raise HTTPException(status_code=404, detail="User not found")
+            category = data.industry_category or user.industry_category
+            if not category:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Pick your business category.",
+                )
+            offered_items = self._validate_offered_items(user, category, data.offered_items)
             if user.role == "seller":
                 capabilities = [c for c in data.capabilities if c.strip()]
                 service_areas = [a for a in data.service_areas if a.strip()]
@@ -65,7 +74,8 @@ class BusinessService:
             user.registered_name = data.registered_name.strip()
             user.display_name = data.display_name.strip() if data.display_name and data.display_name.strip() else None
             user.business_type = data.business_type.strip()
-            user.industry_category = data.industry_category.strip()
+            user.industry_category = category
+            user.offered_items = offered_items
             user.city = data.city.strip()
             user.province = data.province.strip()
             user.contact_person = data.contact_person.strip()
@@ -80,19 +90,49 @@ class BusinessService:
                 matching_service.business_matching_text(user.industry_category, data.capabilities, data.service_areas)
             )
             user.onboarding_completed = True
+            # Only a first submission moves the status. Editing the profile later
+            # (category and offered items included) never touches verification.
             if user.verification_status == "unverified":
                 user.verification_status = "pending"
 
             repo.update_user(session, user)
 
-    # ---------- document upload + validation ----------
+    @staticmethod
+    def _validate_offered_items(user: User, category: str, items: List[OfferedItem]) -> Optional[str]:
+        """JSON for User.offered_items. A seller needs at least one item from
+        their category; a buyer isn't asked, so anything sent is dropped."""
+        if user.role != "seller":
+            return None
+        if not items:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Pick at least one item you offer.",
+            )
+        valid_codes = {i["code"] for i in items_for(category)}
+        stored, seen = [], set()
+        for item in items:
+            if item.code not in valid_codes:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"\"{item.code}\" isn't an item in {category}.",
+                )
+            if item.code in seen:
+                continue
+            seen.add(item.code)
+            other_text = (item.other_text or "").strip() if item.code == OTHER_ITEM_CODE else ""
+            if item.code == OTHER_ITEM_CODE and not other_text:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Describe the other item you offer.",
+                )
+            stored.append({"code": item.code, "other_text": other_text or None})
+        return json.dumps(stored)
 
-    def suggest_description(self, data) -> DescriptionSuggestionOut:
-        description = profile_assistant_service.suggest_description(
-            data.business_type, data.industry_category, data.capabilities,
-            data.service_areas, data.city, data.province,
-        )
-        return DescriptionSuggestionOut(description=description)
+    @staticmethod
+    def _offered_items_out(user: User) -> List[OfferedItem]:
+        return [OfferedItem(**i) for i in json.loads(user.offered_items or "[]")]
+
+    # ---------- document upload + validation ----------
 
     async def extract_document_fields(self, doc_type: str, file: UploadFile) -> DocumentExtractionOut:
         """Assistive Document Extraction — see document_extraction_service.py.
@@ -106,8 +146,12 @@ class BusinessService:
                 detail=f"doc_type must be one of {sorted(VALID_DOC_TYPES)}",
             )
         contents = await file.read()
-        id_number = document_extraction_service.extract_id_number(
-            doc_type, contents, file.content_type or ""
+        # The Gemini call is blocking (up to ~30s worst case). Run it on a worker
+        # thread: called directly inside this async handler it froze the whole
+        # server — every other request, including the other documents' own
+        # extractions, queued behind it.
+        id_number = await run_in_threadpool(
+            document_extraction_service.extract_id_number, doc_type, contents, file.content_type or ""
         )
         return DocumentExtractionOut(id_number=id_number)
 
@@ -448,15 +492,28 @@ class BusinessService:
                 capabilities=[c for c in (user.capabilities or "").split(",") if c],
                 service_areas=[a for a in (user.service_areas or "").split(",") if a],
                 business_description=user.business_description,
+                offered_items=self._offered_items_out(user),
             )
 
-    def get_public_profile(self, business_id: int) -> PublicBusinessProfileOut:
-        from app.repositories import requirement_repository as req_repo
-
+    def get_public_profile(self, business_id: int, viewer_id: int) -> PublicBusinessProfileOut:
         with Session(engine) as session:
+            viewer = session.get(User, viewer_id)
+            if not viewer or not viewer.is_active:
+                raise HTTPException(status_code=403, detail="Active account required")
             user = session.get(User, business_id)
-            if not user:
+            if not user or user.is_admin or not user.is_active:
                 raise HTTPException(status_code=404, detail="Business not found")
+            privileged = viewer.id == user.id or viewer.is_admin
+            # Panel Suggestion #7.6: contact person + mobile are shown so
+            # businesses can trust who they deal with. Limited to verified
+            # viewers so unverified sign-ups can't harvest numbers.
+            contacts_visible = privileged or (viewer.is_verified and viewer.verification_status == "verified")
+            verified = user.is_verified and user.verification_status == "verified"
+            documents = repo.list_documents_for_user(session, business_id)
+            registration_types = sorted({
+                d.doc_type for d in documents
+                if d.doc_type in REQUIRED_ONE_OF_TIER_1 and d.validation_status == "pass"
+            })
             return PublicBusinessProfileOut(
                 id=user.id,
                 role=user.role,
@@ -469,12 +526,18 @@ class BusinessService:
                 business_description=user.business_description,
                 capabilities=[c for c in (user.capabilities or "").split(",") if c],
                 service_areas=[a for a in (user.service_areas or "").split(",") if a],
-                is_verified=user.is_verified,
+                is_verified=verified,
                 tier=user.tier,
-                verification_date=user.verification_date,
+                verification_date=user.verification_date if verified else None,
                 member_since_year=user.created_at.year,
-                requirements_posted_count=req_repo.count_requirements_by_owner(session, user.id),
-                requirements_awarded_count=req_repo.count_awarded_quotations_for_business(session, user.id),
+                member_since=user.created_at,
+                verification_status=user.verification_status if not user.is_verified or verified else "unverified",
+                registration_document_types=registration_types,
+                includes_sealed_activity=privileged,
+                contact_details_visible=contacts_visible,
+                contact_person=user.contact_person if contacts_visible else None,
+                contact_mobile=user.contact_mobile if contacts_visible else None,
+                **repo.profile_activity_counts(session, user.id, include_sealed=privileged, now=now_ph()),
             )
 
     def list_flagged(self, session: Session) -> List[AdminFlaggedBusinessOut]:

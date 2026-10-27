@@ -1,10 +1,14 @@
 import json
+import logging
 from datetime import datetime, timedelta
 from typing import List
 
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile
 from sqlmodel import Session, select
 
+from app.core import addresses
+from app.core.categories import ATTRIBUTES, OTHER_ITEM_CODE, get_item_specs, item_name, validate_item_specs
+from app.core.units import normalize as normalize_units
 from app.core.database import engine
 from app.core.clock import now_ph, to_ph_naive
 from app.models.requirement import Requirement
@@ -27,6 +31,8 @@ from app.schemas.requirement import (
     LineItem,
     AttachmentOut,
     QuotationCreate,
+    SpecResponseIn,
+    SpecResponseOut,
     QuotationSealedReceipt,
     QuotationDetailOut,
     RequirementQuotationsView,
@@ -38,6 +44,8 @@ from app.schemas.requirement import (
     ClarificationQuestionOut,
     SiteNotesUpdate,
 )
+
+logger = logging.getLogger("trustlink.requirements")
 
 
 class RequirementNotFound(Exception):
@@ -166,6 +174,8 @@ class RequirementService:
             tags=[t for t in req.tags.split(",") if t],
             poster=poster,
             category=req.category,
+            item_code=req.item_code,
+            item_name=item_name(req.category, req.item_code),
             scope=req.scope,
             specifications=[SpecRow(**s) for s in json.loads(req.specifications_json or "[]")],
             quantity=req.quantity,
@@ -173,6 +183,8 @@ class RequirementService:
             price_max=req.price_max,
             city=req.city,
             site_address=req.site_address,
+            barangay=req.barangay,
+            zip_code=req.zip_code,
             location=req.location,
             site_access_hours=req.site_access_hours,
             site_access_notes=req.site_access_notes,
@@ -279,13 +291,52 @@ class RequirementService:
 
     # ---------- create ----------
 
+    @staticmethod
+    def _checked_specs(data: RequirementCreate) -> list[dict]:
+        """The rows to store: validated against the item's merged specs
+        (plain-string 422s, worded like the frontend's), each with its
+        value normalized to the standard unit where it has one."""
+        category = data.category.strip()
+        try:
+            validate_item_specs(category, data.item_code, [s.model_dump() for s in data.specifications], data.quantity)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        units = {s["id"]: s["unit"] for s in get_item_specs(category, data.item_code)}
+        rows = []
+        for s in data.specifications:
+            if s.attribute_id and s.attribute_id not in ATTRIBUTES:
+                raise HTTPException(status_code=422, detail=f"Unknown specification \"{s.attribute_id}\".")
+            default_unit = units.get(s.attribute_id) or (ATTRIBUTES[s.attribute_id]["unit"] if s.attribute_id else None)
+            normalized = normalize_units(s.value, default_unit)
+            rows.append({
+                "label": s.label.strip(),
+                "value": s.value.strip(),
+                "attribute_id": s.attribute_id,
+                "normalized_value": normalized[0] if normalized else None,
+                "normalized_unit": normalized[1] if normalized else None,
+            })
+        return rows
+
     def create(self, owner_id: int, data: RequirementCreate) -> RequirementOut:
+        specs = self._checked_specs(data)
         with Session(engine) as session:
             ref_code = repo.next_ref_code(session)
 
+            # Structured address: the barangay must be one of the city's (PSGC),
+            # and a ZIP is required alongside it.
+            barangay = None
+            if data.barangay and data.barangay.strip():
+                record = addresses.find_barangay(data.city.strip(), data.barangay)
+                if not record:
+                    raise HTTPException(status_code=422, detail=f"Pick a barangay in {data.city.strip()} from the list.")
+                barangay = record["name"]
+                if not data.zip_code:
+                    raise HTTPException(status_code=422, detail="Add the ZIP code for the delivery address.")
+            site_address = addresses.compose_site_address(data.site_address, barangay, data.zip_code)
+
             location = data.city.strip()
-            if data.site_address and data.site_address.strip():
-                location = f"{location} — {data.site_address.strip()}"
+            if site_address:
+                location = f"{location} — {site_address}"
 
             req = Requirement(
                 ref_code=ref_code,
@@ -293,13 +344,16 @@ class RequirementService:
                 tags=data.category.strip().upper(),
                 owner_id=owner_id,
                 category=data.category.strip(),
+                item_code=data.item_code,
                 scope=data.scope.strip(),
-                specifications_json=json.dumps([s.model_dump() for s in data.specifications]),
+                specifications_json=json.dumps(specs),
                 quantity=data.quantity.strip(),
                 price_min=data.price_min,
                 price_max=data.price_max,
                 city=data.city.strip(),
-                site_address=data.site_address.strip() if data.site_address else None,
+                site_address=site_address or None,
+                barangay=barangay,
+                zip_code=data.zip_code if barangay else None,
                 location=location,
                 required_documents=",".join(d.strip() for d in data.required_documents if d.strip()),
                 delivery_start=to_ph_naive(data.delivery_start) if data.delivery_start else None,
@@ -311,7 +365,65 @@ class RequirementService:
             )
             created = repo.create_requirement(session, req)
             matching_service.upsert_requirement_vector(created.id, created.embedding)
+            self._alert_matching_sellers(session, created)
             return self._to_out(session, created)
+
+    @staticmethod
+    def _seller_offers_item(seller: User, item_code: str | None) -> bool:
+        """A seller who picked items must offer this one (or "Other"); one who
+        never picked any (older accounts) matches on category alone."""
+        try:
+            codes = {i.get("code") for i in json.loads(seller.offered_items or "[]")}
+        except (ValueError, TypeError, AttributeError):
+            codes = set()
+        if not codes or not item_code or item_code == OTHER_ITEM_CODE:
+            return True
+        return item_code in codes or OTHER_ITEM_CODE in codes
+
+    def matching_sellers(self, session: Session, req: Requirement) -> List[User]:
+        """Panel Suggestion #2 (cold start): any verified seller in the
+        requirement's category qualifies — no history needed — as long as
+        they offer the item. Same rule as who sees it near the top of the feed."""
+        category = (req.category or "").strip().lower()
+        if not category:
+            return []
+        sellers = session.exec(
+            select(User).where(
+                User.role == "seller",
+                User.is_active == True,  # noqa: E712
+                User.is_verified == True,  # noqa: E712
+                User.verification_status == "verified",
+                User.id != req.owner_id,
+            )
+        ).all()
+        return [
+            u for u in sellers
+            if (u.industry_category or "").strip().lower() == category and self._seller_offers_item(u, req.item_code)
+        ]
+
+    def _alert_matching_sellers(self, session: Session, req: Requirement) -> int:
+        """One "new requirement that matches you" alert per matching seller,
+        the moment a requirement is published. Never fails the post itself."""
+        try:
+            sellers = self.matching_sellers(session, req)
+            item = item_name(req.category, req.item_code) if req.item_code and req.item_code != OTHER_ITEM_CODE else None
+            closes = req.closes_at.strftime("%b %d, %I:%M %p").replace(" 0", " ")
+            detail = f"{req.ref_code} · {req.title} — {req.city or req.location} · closes {closes}"
+            for seller in sellers:
+                notif_repo.create_if_allowed(
+                    session,
+                    user_id=seller.id,
+                    type_="REQUIREMENT_MATCH",
+                    category="activity",
+                    title=f"New {item or req.category} requirement that matches your business",
+                    detail=detail,
+                    related_requirement_id=req.id,
+                )
+            return len(sellers)
+        except Exception:
+            session.rollback()
+            logger.exception("Could not send match alerts for requirement %s", req.id)
+            return 0
 
     # ---------- attachments ----------
 
@@ -356,6 +468,8 @@ class RequirementService:
                     ref_code=req.ref_code,
                     title=req.title,
                     category=req.category,
+                    item_code=req.item_code,
+                    item_name=item_name(req.category, req.item_code),
                     scope=req.scope,
                     specifications=[SpecRow(**s) for s in json.loads(req.specifications_json or "[]")],
                     quantity=req.quantity,
@@ -494,6 +608,42 @@ class RequirementService:
 
     # ---------- sealed submission ----------
 
+    @staticmethod
+    def _checked_spec_responses(req: Requirement, responses: List[SpecResponseIn]) -> list[dict]:
+        """The rows to seal: exactly one answer per specification row of the
+        requirement, in its order, attribute_id copied from the requirement
+        (never from the client). 422 on a missing, extra or duplicate answer,
+        or a "doesn't comply" without what's offered instead."""
+        rows = json.loads(req.specifications_json or "[]")
+        by_label: dict[str, SpecResponseIn] = {}
+        for r in responses:
+            label = r.label.strip()
+            if label in by_label:
+                raise HTTPException(status_code=422, detail=f"\"{label}\" is answered more than once.")
+            if not any(row["label"].strip() == label for row in rows):
+                raise HTTPException(status_code=422, detail=f"\"{label}\" isn't one of this requirement's specifications.")
+            by_label[label] = r
+        out = []
+        for row in rows:
+            label = row["label"].strip()
+            answer = by_label.get(label)
+            if not answer:
+                raise HTTPException(status_code=422, detail=f"Confirm whether you meet {label}.")
+            offered = (answer.offered or "").strip()
+            if not answer.complies and not offered:
+                raise HTTPException(status_code=422, detail=f"Say what you're offering instead for {label}.")
+            out.append({
+                "label": label,
+                "attribute_id": row.get("attribute_id"),
+                "complies": answer.complies,
+                "offered": None if answer.complies else offered,
+            })
+        return out
+
+    @staticmethod
+    def _spec_responses_out(q: Quotation) -> List[SpecResponseOut]:
+        return [SpecResponseOut(**r) for r in json.loads(q.spec_responses)] if q.spec_responses else []
+
     def submit_quotation(self, requirement_id: int, business_id: int, data: QuotationCreate) -> QuotationSealedReceipt:
         with Session(engine) as session:
             req = repo.get_requirement(session, requirement_id)
@@ -513,6 +663,7 @@ class RequirementService:
                 raise AlreadyQuoted()
 
             line_items_json = json.dumps([li.model_dump() for li in data.line_items]) if data.line_items else ""
+            spec_responses = self._checked_spec_responses(req, data.spec_responses)
 
             payload = {
                 "requirement_id": requirement_id,
@@ -524,6 +675,9 @@ class RequirementService:
                 "validity_period": data.validity_period,
                 "notes": data.notes or "",
             }
+            # Only when there are any — _release_one recomputes it the same way.
+            if spec_responses:
+                payload["spec_responses"] = spec_responses
             prev_hash = ledger_repo.get_last_hash(session)
             entry_hash = ledger_service.compute_hash(prev_hash, payload)
 
@@ -536,6 +690,7 @@ class RequirementService:
                 payment_terms=data.payment_terms,
                 validity_period=data.validity_period,
                 notes=data.notes or "",
+                spec_responses=json.dumps(spec_responses) if spec_responses else None,
                 status="sealed",
                 submission_hash=entry_hash,
             )
@@ -750,6 +905,12 @@ class RequirementService:
                 "validity_period": q.validity_period,
                 "notes": q.notes,
             }
+            # Same rule as submit_quotation: the key exists only when the
+            # quotation has spec responses, so a quotation sealed before they
+            # existed recomputes exactly the hash it was sealed with — and an
+            # edited or deleted spec_responses column flags it.
+            if q.spec_responses:
+                payload["spec_responses"] = json.loads(q.spec_responses)
             submitted_entry = ledger_repo.get_entry(session, q.ledger_entry_id) if q.ledger_entry_id else None
             if submitted_entry:
                 recomputed = ledger_service.compute_hash(submitted_entry.prev_hash, payload)
@@ -762,13 +923,6 @@ class RequirementService:
             q.status = "released"
             q.released_at = now_ph()
             repo.update_quotation(session, q)
-
-            # One-to-one messaging opens at release, not at award — the buyer can talk
-            # to any respondent whose quotation actually released, not only the one
-            # eventually awarded. get_thread_for_business guards against ever creating
-            # a second thread for the same (requirement, business) pair.
-            if not msg_repo.get_thread_for_business(session, req.id, q.business_id):
-                msg_repo.create_thread(session, requirement_id=req.id, buyer_id=req.owner_id, business_id=q.business_id)
 
         req.status = "closed"
         req.released_at = now_ph()
@@ -826,6 +980,7 @@ class RequirementService:
                     payment_terms=q.payment_terms,
                     validity_period=q.validity_period,
                     notes=q.notes,
+                    spec_responses=self._spec_responses_out(q),
                     status=self._owner_view_status(req, q),
                     shortlisted=q.shortlisted,
                     submitted_at=q.created_at,
@@ -953,6 +1108,7 @@ class RequirementService:
                     payment_terms=q.payment_terms,
                     validity_period=q.validity_period,
                     notes=q.notes,
+                    spec_responses=self._spec_responses_out(q),
                     submitted_at=q.created_at,
                     integrity_status=q.integrity_status,
                     attachments=[
@@ -1080,7 +1236,68 @@ class RequirementService:
                     detail=f"{req.ref_code} · {req.title} was awarded to another business.",
                 )
 
+            self._open_award_thread(session, req, quotation)
+
             return self._to_out(session, updated)
+
+    @staticmethod
+    def _award_message_body(req: Requirement, quotation: Quotation, buyer: User | None, supplier: User | None) -> str:
+        def contact(user: User | None) -> str:
+            if not user:
+                return "—"
+            name = user.contact_person or user.display_name or user.registered_name or user.business_name
+            mobile = user.contact_mobile or user.mobile_number
+            return f"{name} · {mobile}" if mobile else name
+
+        price = f"₱{quotation.total_price:,.2f}" if quotation.total_price is not None else "the quoted amount"
+        return (
+            f"The award for {req.ref_code} · {req.title} is confirmed. "
+            f"Quotation QT-{quotation.id:06d} was awarded at {price}.\n\n"
+            "You can now coordinate delivery and payment here.\n"
+            f"Buyer contact: {contact(buyer)}\n"
+            f"Supplier contact: {contact(supplier)}\n\n"
+            "Reminder: TrustLink does not handle payment, delivery, or contracts — both parties settle these directly."
+        )
+
+    def _open_award_thread(self, session: Session, req: Requirement, quotation: Quotation) -> None:
+        """Post-procurement messaging opens only now, for the confirmed winner
+        (Panel Suggestion #3), starting with one system message. Idempotent:
+        reuses an existing thread (including one an older database opened at
+        release) and never adds a second system message — so it is also what
+        backfill_award_threads runs for awards that are missing one.
+
+        The award is already committed when this runs, so a failure here is
+        logged rather than raised — the winner must not see "could not accept"
+        for an award that did go through."""
+        try:
+            thread = msg_repo.get_thread_for_business(session, req.id, quotation.business_id)
+            if not thread:
+                thread = msg_repo.create_thread(session, requirement_id=req.id, buyer_id=req.owner_id, business_id=quotation.business_id)
+            if any(m.is_system for m in msg_repo.list_messages(session, thread.id)):
+                return
+            body = self._award_message_body(req, quotation, session.get(User, req.owner_id), session.get(User, quotation.business_id))
+            msg_repo.create_message(session, thread.id, quotation.business_id, body, is_system=True)
+        except Exception:
+            session.rollback()
+            logger.exception("Could not open the award thread for requirement %s", req.id)
+
+    def backfill_award_threads(self) -> int:
+        """Gives every awarded requirement its winner thread and system message
+        if it lacks one — e.g. awards accepted before this feature, or while the
+        message column was still too short. Run at startup; returns how many
+        requirements it touched, purely for the log."""
+        touched = 0
+        with Session(engine) as session:
+            for req in session.exec(select(Requirement).where(Requirement.status == "awarded")).all():
+                quotation = repo.get_quotation(session, req.awarded_quotation_id) if req.awarded_quotation_id else None
+                if not quotation:
+                    continue
+                thread = msg_repo.get_thread_for_business(session, req.id, quotation.business_id)
+                if thread and any(m.is_system for m in msg_repo.list_messages(session, thread.id)):
+                    continue
+                self._open_award_thread(session, req, quotation)
+                touched += 1
+        return touched
 
     def decline_award(self, requirement_id: int, business_id: int) -> RequirementOut:
         """The proposed winner turns it down. Reverts to 'closed' rather than

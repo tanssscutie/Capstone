@@ -21,7 +21,7 @@ import {
   Linking,
   useWindowDimensions,
 } from 'react-native';
-import type { ViewStyle } from 'react-native';
+import type { TextInputProps, ViewStyle } from 'react-native';
 import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
   color,
@@ -37,6 +37,7 @@ import {
 } from '../../components/ui/tokens';
 import { AvatarChip, initials } from '../../components/ui/AvatarChip';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
+import { PREFERRED_BRAND_ID, specDisplayValue } from '../../lib/data/categories';
 import type {
   Business,
   BusinessId,
@@ -47,6 +48,7 @@ import type {
   ISODateTime,
   TrustTier,
   QuotationSubmissionState,
+  QuotationSpecResponse,
 } from '../../lib/types';
 
 /* ─── Props ─────────────────────────────────────────── */
@@ -55,6 +57,8 @@ import type {
  *  submittedAt, integrity…) is assigned server-side once this is submitted. */
 export interface QuotationDraftInput {
   totalPrice: number;
+  /** One per requirement specification row, in its order. */
+  specResponses: QuotationSpecResponse[];
   /** Empty when the respondent chose "Total price only" instead of line items. */
   lineItems: { description: string; quantity: number; unitPrice: number }[];
   leadTimeDays: number;
@@ -69,6 +73,12 @@ interface FormProps {
   requirement: Requirement;
   buyer: Business;
   onSubmit?: (input: QuotationDraftInput) => void;
+  /** True while the submit request is in flight — blocks a second press, which
+   *  would otherwise hit the backend's one-quotation-per-business 409. */
+  submitting?: boolean;
+  /** Shown inline above the seal button so a failed submit keeps the form
+   *  (and everything typed into it) instead of replacing the screen. */
+  submitError?: string | null;
   onSaveDraft?: () => void;
   onBack?: () => void;
   onOpenBuyer?: (businessId: BusinessId) => void;
@@ -80,6 +90,9 @@ interface SealedReceiptProps {
   buyer: Business;
   quotation: Quotation;
   ledgerEntry: LedgerEntry;
+  /** Something the respondent needs to act on after sealing, e.g. an attachment
+   *  that failed to upload. */
+  notice?: string | null;
   onWithdraw?: () => void;
   onBack?: () => void;
   onTrack?: () => void;
@@ -183,15 +196,61 @@ function useCountdown(closingAt: ISODateTime): { label: string; closed: boolean;
 
 /* ─── Small building blocks ─────────────────────────── */
 
+/** RN-web passes these straight through as CSS; native ignores them. */
+function webTransition(properties: string): ViewStyle {
+  return Platform.OS === 'web'
+    ? ({ transitionProperty: properties, transitionDuration: '160ms', transitionTimingFunction: 'ease-out' } as unknown as ViewStyle)
+    : {};
+}
+
+/** Hover is web-only; on native the handlers are simply not attached. */
+function useHover() {
+  const [hovered, setHovered] = useState(false);
+  const handlers =
+    Platform.OS === 'web' ? { onHoverIn: () => setHovered(true), onHoverOut: () => setHovered(false) } : {};
+  return [hovered, handlers] as const;
+}
+
+/** TextInput that lights its border (plus a soft ring on web) while focused —
+ *  same as PostRequirement.tsx's. */
+function FormInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      placeholderTextColor={color.inkFaint}
+      {...props}
+      onFocus={(e) => {
+        setFocused(true);
+        onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocused(false);
+        onBlur?.(e);
+      }}
+      style={[style, webTransition('border-color, background-color, box-shadow'), focused && styles.inputFocused]}
+    />
+  );
+}
+
+/** Soft resting shadow for white cards on the sunken page. */
+const cardShadow: ViewStyle =
+  Platform.OS === 'web' ? ({ boxShadow: '0 1px 2px rgba(20, 24, 31, 0.04)' } as unknown as ViewStyle) : {};
+
 function SectionLabel({ children }: { children: string }) {
   return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
-function StepLabel({ n, label, primary = false }: { n: string; label: string; primary?: boolean }) {
+/** Numbered section heading — same badge + title as PostRequirement.tsx's SectionCard. */
+function StepLabel({ n, label, primary = false }: { n?: string; label: string; primary?: boolean }) {
   return (
-    <Text style={[styles.stepLabel, primary ? styles.stepLabelPrimary : null]}>
-      {n} — {label}
-    </Text>
+    <View style={styles.stepHeader}>
+      {!!n && (
+        <View style={[styles.stepBadge, primary && styles.stepBadgePrimary]}>
+          <Text style={[styles.stepBadgeLabel, primary && styles.stepBadgeLabelPrimary]}>{Number(n)}</Text>
+        </View>
+      )}
+      <Text style={styles.stepTitle}>{label}</Text>
+    </View>
   );
 }
 
@@ -209,10 +268,18 @@ function Pill({
   variant?: 'chip' | 'segment';
 }) {
   const segment = variant === 'segment';
+  const [hovered, hoverHandlers] = useHover();
   return (
     <Pressable
+      {...hoverHandlers}
       onPress={onPress}
-      style={[segment ? styles.segment : styles.pill, active ? (segment ? styles.segmentActive : styles.pillActive) : null]}
+      style={({ pressed }) => [
+        segment ? styles.segment : styles.pill,
+        webTransition('background-color, border-color, transform'),
+        hovered && !active && (segment ? styles.segmentHovered : styles.pillHovered),
+        active ? (segment ? styles.segmentActive : styles.pillActive) : null,
+        pressed && !segment && styles.pressedScale,
+      ]}
     >
       <Text style={[segment ? styles.segmentLabel : styles.pillLabel, active ? (segment ? styles.segmentLabelActive : styles.pillLabelActive) : null]}>
         {label}
@@ -231,8 +298,18 @@ function XGlyph({ tone }: { tone: string }) {
 }
 
 function AddDashedButton({ label, onPress, prominent = false }: { label: string; onPress: () => void; prominent?: boolean }) {
+  const [hovered, hoverHandlers] = useHover();
   return (
-    <Pressable onPress={onPress} style={[styles.addDashed, prominent ? styles.addDashedProminent : null]}>
+    <Pressable
+      {...hoverHandlers}
+      onPress={onPress}
+      style={[
+        styles.addDashed,
+        webTransition('background-color, border-color'),
+        prominent ? styles.addDashedProminent : null,
+        hovered && (prominent ? styles.addDashedProminentHovered : styles.addDashedHovered),
+      ]}
+    >
       <Text style={[styles.addDashedLabel, prominent ? styles.addDashedLabelProminent : null]}>+ {label}</Text>
     </Pressable>
   );
@@ -251,17 +328,23 @@ function ActionButton({
   variant?: ActionVariant;
   disabled?: boolean;
 }) {
+  const [hovered, hoverHandlers] = useHover();
+  const live = hovered && !disabled;
   return (
     <Pressable
+      {...hoverHandlers}
       onPress={disabled ? undefined : onPress}
       disabled={disabled}
       style={({ pressed }) => [
         styles.actionButton,
+        webTransition('background-color, border-color, transform, box-shadow, opacity'),
+        variant === 'primary' && live && styles.actionButtonPrimaryHovered,
+        pressed && !disabled && styles.pressedScale,
         {
           backgroundColor:
-            variant === 'primary' ? (pressed ? color.primaryPressed : color.primary)
+            variant === 'primary' ? (pressed || live ? color.primaryPressed : color.primary)
             : variant === 'text' ? 'transparent'
-            : color.surface,
+            : live ? color.surfaceSunken : color.surface,
           borderColor:
             variant === 'danger' ? color.dangerBorder
             : variant === 'outline' ? color.border
@@ -400,7 +483,7 @@ function ScopeSidebarCard({
             {requirement.specifications.map((row, i) => (
               <View key={row.label} style={[styles.specRow, i % 2 === 1 ? styles.specRowAlt : null]}>
                 <Text style={styles.specKey}>{row.label}</Text>
-                <Text style={styles.specValue}>{row.value}</Text>
+                <Text style={styles.specValue}>{specDisplayValue(row)}</Text>
               </View>
             ))}
           </View>
@@ -436,6 +519,13 @@ interface LineItemDraft {
   unit: string;
 }
 
+/** Same caps as the backend's QuotationCreate / LineItem schemas — past these it
+ *  rejects the whole submit with a 422. */
+const NOTES_MAX = 500;
+/** SpecResponseIn.offered max_length in backend/app/schemas/requirement.py. */
+const SPEC_OFFERED_MAX = 200;
+const LINE_ITEM_DESC_MAX = 200;
+
 const VALIDITY_OPTIONS = [15, 30, 60, 90];
 const PAYMENT_TERM_OPTIONS = ['50 / 50', '30 / 60 / 10', '20 / 70 / 10', '100% on completion'];
 
@@ -457,6 +547,19 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
   const [files, setFiles] = useState<Attachment[]>([]);
   const [ack1, setAck1] = useState(false);
   const [ack2, setAck2] = useState(false);
+  // One answer per requirement spec row, keyed by its label (unique per
+  // requirement). complies null = not answered yet.
+  const [specAnswers, setSpecAnswers] = useState<Record<string, { complies: boolean | null; offered: string }>>({});
+  const specAnswer = (label: string) => specAnswers[label] ?? { complies: null, offered: '' };
+  const setSpecComplies = (label: string, complies: boolean) =>
+    setSpecAnswers((prev) => ({ ...prev, [label]: { ...specAnswer(label), complies } }));
+  const setSpecOffered = (label: string, offered: string) =>
+    setSpecAnswers((prev) => ({ ...prev, [label]: { ...specAnswer(label), offered } }));
+  const specAnsweredCount = requirement.specifications.filter((s) => {
+    const a = specAnswer(s.label);
+    return a.complies === true || (a.complies === false && a.offered.trim() !== '');
+  }).length;
+  const specsDone = specAnsweredCount === requirement.specifications.length;
 
   const total =
     priceMode === 'LINES' ? items.reduce((a, i) => a + num(i.qty) * num(i.unit), 0) : num(totalOnly);
@@ -505,12 +608,16 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
   };
 
   const validUntilDate = new Date(Date.now() + validity * 86_400_000).toISOString();
-  const ready = ack1 && ack2 && total > 0;
+  const ready = ack1 && ack2 && total > 0 && specsDone;
 
   const handleSeal = () => {
     if (!ready) return;
     onSubmit?.({
       totalPrice: total,
+      specResponses: requirement.specifications.map((s) => {
+        const a = specAnswer(s.label);
+        return { label: s.label, attributeId: s.attributeId ?? null, complies: a.complies === true, offered: a.complies ? null : a.offered.trim() };
+      }),
       lineItems:
         priceMode === 'LINES'
           ? items
@@ -535,6 +642,7 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
     note, setNote,
     files, addFile, removeFile,
     ack1, setAck1, ack2, setAck2,
+    specAnswer, setSpecComplies, setSpecOffered, specAnsweredCount, specsDone,
     total, budgetNote,
     validUntilDate,
     ready,
@@ -573,7 +681,7 @@ function TitleBlock({ requirement, buyer }: { requirement: Requirement; buyer: B
 function ClosingBanner({ requirement }: { requirement: Requirement }) {
   const { label, closed, urgent } = useCountdown(requirement.closingAt);
   return (
-    <View style={styles.closingBanner}>
+    <View style={[styles.closingBanner, urgent ? styles.closingBannerUrgent : null]}>
       <View style={[styles.closingDot, { backgroundColor: urgent ? color.danger : color.ink }]} />
       <Text style={[styles.closingCountdown, urgent ? styles.closingCountdownUrgent : null]}>
         {closed ? 'Closed' : `Closes in ${label}`}
@@ -588,7 +696,7 @@ function ClosingBanner({ requirement }: { requirement: Requirement }) {
 
 function PriceSection({ requirement, st }: { requirement: Requirement; st: FormState }) {
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, cardShadow]}>
       <View style={styles.cardHeaderRow}>
         <StepLabel n="01" label="Your price" />
         <View style={{ flex: 1 }} />
@@ -616,14 +724,15 @@ function PriceSection({ requirement, st }: { requirement: Requirement; st: FormS
               </View>
               {st.items.map((item) => (
                 <View key={item.id} style={styles.lineItemRow}>
-                  <TextInput
+                  <FormInput
                     value={item.desc}
                     onChangeText={(v) => st.patchItem(item.id, 'desc', v)}
                     placeholder="Item description"
                     placeholderTextColor={color.inkFaint}
+                    maxLength={LINE_ITEM_DESC_MAX}
                     style={[styles.lineItemInput, { flex: 2.4 }]}
                   />
-                  <TextInput
+                  <FormInput
                     value={item.qty}
                     onChangeText={(v) => st.patchItem(item.id, 'qty', sanitizeNumeric(v))}
                     placeholder="1"
@@ -631,7 +740,7 @@ function PriceSection({ requirement, st }: { requirement: Requirement; st: FormS
                     keyboardType="decimal-pad"
                     style={[styles.lineItemInput, styles.mono, { flex: 0.7 }]}
                   />
-                  <TextInput
+                  <FormInput
                     value={item.unit}
                     onChangeText={(v) => st.patchItem(item.id, 'unit', sanitizeNumeric(v))}
                     placeholder="0"
@@ -656,7 +765,7 @@ function PriceSection({ requirement, st }: { requirement: Requirement; st: FormS
           <SectionLabel>Total price, all-in</SectionLabel>
           <View style={styles.totalOnlyField}>
             <Text style={styles.totalOnlyCurrency}>₱</Text>
-            <TextInput
+            <FormInput
               value={st.totalOnly}
               onChangeText={(v) => st.setTotalOnly(sanitizeNumeric(v))}
               placeholder="0"
@@ -679,7 +788,7 @@ function PriceSection({ requirement, st }: { requirement: Requirement; st: FormS
 
 function TermsSection({ requirement, st }: { requirement: Requirement; st: FormState }) {
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, cardShadow]}>
       <StepLabel n="02" label="Terms" />
 
       <View style={styles.termsGrid}>
@@ -687,7 +796,7 @@ function TermsSection({ requirement, st }: { requirement: Requirement; st: FormS
           <Text style={styles.fieldLabel}>How long will the work take?</Text>
           <Text style={styles.fieldCaption}>Counted from the day you're awarded, not from today.</Text>
           <View style={styles.leadField}>
-            <TextInput
+            <FormInput
               value={st.lead}
               onChangeText={(v) => st.setLead(sanitizeNumeric(v))}
               placeholder="6"
@@ -725,6 +834,64 @@ function TermsSection({ requirement, st }: { requirement: Requirement; st: FormS
   );
 }
 
+/** One answer per specification row — the buyer compares these side by side
+ *  once quotations release, so a cheaper price that skips a spec shows up as
+ *  a difference instead of hiding in the notes. */
+function SpecificationsSection({ requirement, st }: { requirement: Requirement; st: FormState }) {
+  const rows = requirement.specifications;
+  if (rows.length === 0) return null;
+  const done = st.specsDone;
+
+  return (
+    <View style={[styles.card, cardShadow]}>
+      <View style={styles.cardHeaderRow}>
+        <StepLabel label="Specifications" />
+        <View style={{ flex: 1 }} />
+        <View style={[styles.docCountPill, done && styles.docCountPillDone]}>
+          <Text style={[styles.docCountLabel, done && styles.docCountLabelDone]}>
+            {st.specAnsweredCount} of {rows.length} answered
+          </Text>
+        </View>
+      </View>
+      <Text style={styles.fieldCaption}>
+        Confirm each one, or say what you're quoting instead. Sealed with your price — the buyer sees every
+        quotation's answers side by side after closing.
+      </Text>
+      <View style={{ gap: space.sm, marginTop: space.sm }}>
+        {rows.map((row) => {
+          const brand = row.attributeId === PREFERRED_BRAND_ID;
+          const a = st.specAnswer(row.label);
+          const answered = a.complies === true || (a.complies === false && !!a.offered.trim());
+          return (
+            <View key={row.label} style={[styles.specAnswerRow, answered ? styles.requiredDocRowDone : null]}>
+              <View style={styles.specAnswerHead}>
+                <View style={{ flex: 1, minWidth: 160 }}>
+                  <Text style={styles.requiredDocLabel}>{row.label}</Text>
+                  <Text style={styles.fieldNote}>Buyer asked for: {specDisplayValue(row)}</Text>
+                </View>
+                <View style={styles.pillGroupWrap}>
+                  <Pill label={brand ? 'Same brand' : 'Meets this'} active={a.complies === true} onPress={() => st.setSpecComplies(row.label, true)} />
+                  <Pill label={brand ? 'Equivalent brand' : 'Different'} active={a.complies === false} onPress={() => st.setSpecComplies(row.label, false)} />
+                </View>
+              </View>
+              {a.complies === false && (
+                <FormInput
+                  value={a.offered}
+                  onChangeText={(v) => st.setSpecOffered(row.label, v)}
+                  maxLength={SPEC_OFFERED_MAX}
+                  placeholder={brand ? 'Brand you are quoting, e.g. Canon' : "What you're quoting instead"}
+                  placeholderTextColor={color.inkFaint}
+                  style={styles.specOfferedInput}
+                />
+              )}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function RequiredDocumentsSection({ requirement, st }: { requirement: Requirement; st: FormState }) {
   if (requirement.requiredDocuments.length === 0) return null;
   const attachedCount = requirement.requiredDocuments.filter((label) =>
@@ -732,11 +899,15 @@ function RequiredDocumentsSection({ requirement, st }: { requirement: Requiremen
   ).length;
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, cardShadow]}>
       <View style={styles.cardHeaderRow}>
-        <SectionLabel>Required documents</SectionLabel>
+        <StepLabel label="Required documents" />
         <View style={{ flex: 1 }} />
-        <Text style={styles.mutedSmall}>{attachedCount} of {requirement.requiredDocuments.length} attached</Text>
+        <View style={[styles.docCountPill, attachedCount === requirement.requiredDocuments.length && styles.docCountPillDone]}>
+          <Text style={[styles.docCountLabel, attachedCount === requirement.requiredDocuments.length && styles.docCountLabelDone]}>
+            {attachedCount} of {requirement.requiredDocuments.length} attached
+          </Text>
+        </View>
       </View>
       <Text style={styles.fieldCaption}>
         The buyer asked for these to be attached to your quotation. Not a hard block on submitting — but a
@@ -746,7 +917,8 @@ function RequiredDocumentsSection({ requirement, st }: { requirement: Requiremen
         {requirement.requiredDocuments.map((label) => {
           const file = st.files.find((f) => f.documentLabel === label);
           return (
-            <View key={label} style={styles.requiredDocRow}>
+            <View key={label} style={[styles.requiredDocRow, file ? styles.requiredDocRowDone : null]}>
+              <View style={[styles.docStatus, file ? styles.docStatusDone : null]}>{file && <CheckGlyph />}</View>
               <Text style={styles.requiredDocLabel} numberOfLines={1}>{label}</Text>
               {file ? (
                 <View style={styles.fileChip}>
@@ -773,16 +945,17 @@ function NotesAttachmentsSection({ st, isWide }: { st: FormState; isWide: boolea
       <Text style={styles.fieldCaption}>
         Inclusions, exclusions, assumptions, or anything that explains your price. Read only after closing.
       </Text>
-      <TextInput
+      <FormInput
         value={st.note}
         onChangeText={st.setNote}
         multiline
         numberOfLines={3}
         placeholder="e.g. Shop fabrication at our Cabuyao plant, erection sequenced in two phases so the east racking bay stays live."
         placeholderTextColor={color.inkFaint}
+        maxLength={NOTES_MAX}
         style={styles.noteInput}
       />
-      <Text style={styles.noteCount}>{st.note.length} characters</Text>
+      <Text style={styles.noteCount}>{st.note.length} / {NOTES_MAX} characters</Text>
     </>
   );
 
@@ -793,7 +966,9 @@ function NotesAttachmentsSection({ st, isWide }: { st: FormState; isWide: boolea
         Method statements, bills of quantities, certificates, past work. Sealed with the rest of your quotation.
       </Text>
       <View style={styles.filesRow}>
-        {st.files.map((f) => (
+        {/* Only general attachments — a file attached to a required document
+            already shows in that section's row. */}
+        {st.files.filter((f) => !f.documentLabel).map((f) => (
           <View key={f.id} style={styles.fileChip}>
             <Text style={styles.fileChipName} numberOfLines={1}>{f.filename}</Text>
             <Pressable onPress={() => st.removeFile(f.id)} hitSlop={8}>
@@ -807,7 +982,7 @@ function NotesAttachmentsSection({ st, isWide }: { st: FormState; isWide: boolea
   );
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, cardShadow]}>
       <StepLabel n="03" label="Notes and attachments" />
 
       {isWide ? (
@@ -830,13 +1005,17 @@ function SealSection({
   requirement,
   st,
   onSaveDraft,
+  submitting = false,
+  submitError = null,
 }: {
   requirement: Requirement;
   st: FormState;
   onSaveDraft?: () => void;
+  submitting?: boolean;
+  submitError?: string | null;
 }) {
   return (
-    <View style={[styles.card, styles.sealCard, { borderColor: st.ready ? color.primaryBorder : color.border }]}>
+    <View style={[styles.card, cardShadow, styles.sealCard, { borderColor: st.ready ? color.primaryBorder : color.border }]}>
       <StepLabel n="04" label="Seal and submit" primary />
       <Text style={styles.sealHeading}>This is a commitment, not a saved draft.</Text>
 
@@ -850,13 +1029,28 @@ function SealSection({
         </AckCheckbox>
       </View>
 
+      {!!submitError && <Text style={styles.sealError}>{submitError}</Text>}
+
       <View style={styles.sealFooterRow}>
         <ActionButton label="Save draft" variant="outline" onPress={onSaveDraft} />
         <View style={{ flex: 1, minWidth: 8 }} />
         <Text style={styles.sealHint}>
-          {st.ready ? 'Your quotation seals immediately.' : 'Confirm both statements above to submit.'}
+          {submitting
+            ? 'Sealing your quotation…'
+            : st.ready
+            ? 'Your quotation seals immediately.'
+            : !st.specsDone
+            ? 'Answer every specification above to submit.'
+            : st.total === 0
+            ? 'Enter your price above to submit.'
+            : 'Confirm both statements above to submit.'}
         </Text>
-        <ActionButton label="Seal and submit" variant="primary" disabled={!st.ready} onPress={st.handleSeal} />
+        <ActionButton
+          label={submitting ? 'Sealing…' : 'Seal and submit'}
+          variant="primary"
+          disabled={!st.ready || submitting}
+          onPress={st.handleSeal}
+        />
       </View>
     </View>
   );
@@ -883,11 +1077,18 @@ function FormScreen(props: FormProps) {
   const sections = (
     <>
       <ClosingBanner requirement={requirement} />
+      <SpecificationsSection requirement={requirement} st={st} />
       <PriceSection requirement={requirement} st={st} />
       <TermsSection requirement={requirement} st={st} />
       <RequiredDocumentsSection requirement={requirement} st={st} />
       <NotesAttachmentsSection st={st} isWide={isWide} />
-      <SealSection requirement={requirement} st={st} onSaveDraft={props.onSaveDraft} />
+      <SealSection
+        requirement={requirement}
+        st={st}
+        onSaveDraft={props.onSaveDraft}
+        submitting={props.submitting}
+        submitError={props.submitError}
+      />
     </>
   );
 
@@ -964,7 +1165,7 @@ function ReceiptCard({
   const summary = `${Math.round(quotation.leadTimeDays / 7)} week${Math.round(quotation.leadTimeDays / 7) === 1 ? '' : 's'} lead time · ${quotation.paymentTerms} payment terms · valid ${quotation.validityDays} days · ${attachmentCount} attachment${attachmentCount === 1 ? '' : 's'}`;
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, cardShadow]}>
       <SectionLabel>Your receipt</SectionLabel>
 
       <View style={styles.receiptGrid}>
@@ -1022,7 +1223,7 @@ const SAFETY_POINTS = [
 
 function WhySafeCard() {
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, cardShadow]}>
       <Text style={styles.sealHeading}>Why your price is safe</Text>
       <View style={{ gap: space.xl, marginTop: space.sm }}>
         {SAFETY_POINTS.map((p, i) => (
@@ -1080,7 +1281,7 @@ function buildTimeline(requirement: Requirement, quotation: Quotation): Timeline
 function TimelineCard({ requirement, quotation }: { requirement: Requirement; quotation: Quotation }) {
   const steps = buildTimeline(requirement, quotation);
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, cardShadow]}>
       <SectionLabel>What happens next</SectionLabel>
       <View style={{ marginTop: space.sm }}>
         {steps.map((s, i) => {
@@ -1140,6 +1341,7 @@ function ReceiptScreen(props: SealedReceiptProps) {
     <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={styles.receiptPage}>
         <ReceiptHero requirement={requirement} buyer={buyer} />
+        {!!props.notice && <Text style={styles.receiptNotice}>{props.notice}</Text>}
         <ReceiptCard requirement={requirement} quotation={quotation} ledgerEntry={ledgerEntry} />
         <WhySafeCard />
         <TimelineCard requirement={requirement} quotation={quotation} />
@@ -1161,7 +1363,7 @@ export default function QuotationSubmission(props: QuotationSubmissionProps) {
 /* ─── Styles ─────────────────────────────────────────── */
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.canvas },
+  root: { flex: 1, backgroundColor: color.surfaceSunken },
   scrollContent: { alignItems: 'center', paddingVertical: space.lg },
 
   page: { width: '100%', maxWidth: layout.maxWidth, paddingHorizontal: layout.screenPadding, gap: space.md },
@@ -1186,7 +1388,7 @@ const styles = StyleSheet.create({
   },
   pageSubtitle: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
 
-  card: { ...elevation.cardRaised, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.lg, gap: space.sm },
+  card: { ...elevation.card, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.xl, gap: space.md },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
 
   sectionLabel: {
@@ -1206,12 +1408,29 @@ const styles = StyleSheet.create({
     color: color.ink,
   },
   stepLabelPrimary: { color: color.primary },
+  stepHeader: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  stepBadge: { width: 24, height: 24, borderRadius: radius.pill, backgroundColor: color.primaryFaint, alignItems: 'center', justifyContent: 'center' },
+  stepBadgePrimary: { backgroundColor: color.primary },
+  stepBadgeLabel: { fontFamily: font.monoMedium, fontSize: fontSize.micro, color: color.primary },
+  stepBadgeLabelPrimary: { color: color.onPrimary },
+  stepTitle: { fontFamily: font.display, fontSize: fontSize.md, letterSpacing: letterSpacing.tight, color: color.ink },
+  inputFocused: {
+    borderColor: color.primary,
+    backgroundColor: color.surface,
+    ...(Platform.OS === 'web' ? ({ boxShadow: `0 0 0 3px ${color.primaryFaint}`, outlineStyle: 'none' } as object) : null),
+  },
+  pressedScale: { transform: [{ scale: 0.97 }] },
+  actionButtonPrimaryHovered: {
+    transform: [{ translateY: -1 }],
+    ...(Platform.OS === 'web' ? ({ boxShadow: `0 6px 16px ${color.primaryBorder}` } as object) : null),
+  },
 
   mutedSmall: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
   mono: { fontFamily: font.monoMedium },
 
   /* pills */
   pill: { borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.sm },
+  pillHovered: { borderColor: color.borderStrong, backgroundColor: color.surface },
   pillActive: { backgroundColor: color.primaryFaint, borderColor: color.primary },
   pillLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
   pillLabelActive: { color: color.primary },
@@ -1221,12 +1440,14 @@ const styles = StyleSheet.create({
    *  visually distinct from the freestanding filter chips above */
   segmentGroup: { flexDirection: 'row', backgroundColor: color.surfaceSunken, borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, padding: 2 },
   segment: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.md, paddingVertical: space.xs, borderRadius: radius.pill },
+  segmentHovered: { backgroundColor: color.surface },
   segmentActive: { backgroundColor: color.primary },
   segmentLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
   segmentLabelActive: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.onPrimary },
 
   /* closing banner */
-  closingBanner: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
+  closingBanner: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap', borderWidth: 1, borderColor: color.primaryBorder, backgroundColor: color.primaryFaint, borderRadius: radius.xl, paddingHorizontal: space.lg, paddingVertical: space.md },
+  closingBannerUrgent: { borderColor: color.dangerBorder, backgroundColor: color.dangerFaint },
   closingDot: { width: 7, height: 7, borderRadius: radius.pill },
   closingCountdown: { fontFamily: font.display, fontSize: fontSize.md, letterSpacing: letterSpacing.tight, color: color.ink },
   closingCountdownUrgent: { color: color.danger },
@@ -1247,9 +1468,11 @@ const styles = StyleSheet.create({
   addDashedLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
   addDashedProminent: { borderStyle: 'solid', borderColor: color.primary, backgroundColor: color.primaryFaint },
   addDashedLabelProminent: { fontFamily: font.bodySemi, color: color.primary },
+  addDashedHovered: { borderColor: color.borderStrong, backgroundColor: color.surfaceSunken },
+  addDashedProminentHovered: { backgroundColor: color.surface },
 
   totalOnlyBox: { maxWidth: 340 },
-  totalOnlyField: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm, marginTop: space.sm },
+  totalOnlyField: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, backgroundColor: color.canvas, paddingHorizontal: space.md, paddingVertical: space.sm, marginTop: space.sm },
   totalOnlyCurrency: { fontFamily: font.mono, fontSize: fontSize.lg, color: color.inkFaint },
   totalOnlyInput: { flex: 1, minWidth: 0, fontFamily: font.monoMedium, fontSize: fontSize.lg, color: color.ink },
 
@@ -1263,7 +1486,7 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
   fieldCaption: { marginTop: space.xs, fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
   fieldNote: { marginTop: space.xs, fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
-  leadField: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.sm, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.xs },
+  leadField: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.sm, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, backgroundColor: color.canvas, paddingHorizontal: space.md, paddingVertical: space.xs },
   leadInput: { flex: 1, minWidth: 0, fontFamily: font.monoMedium, fontSize: fontSize.base, color: color.ink },
   leadUnit: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
   dividedTop: { marginTop: space.sm, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: color.borderFaint },
@@ -1272,13 +1495,23 @@ const styles = StyleSheet.create({
   notesAttachmentsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.lg },
   notesAttachmentsCol: { flex: 1, minWidth: 0 },
   notesAttachmentsDivider: { width: 1, alignSelf: 'stretch', backgroundColor: color.borderFaint },
-  noteInput: { marginTop: space.xs, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, padding: space.sm, fontFamily: font.body, fontSize: fontSize.base, lineHeight: lineHeight.base, color: color.ink, textAlignVertical: 'top' },
+  noteInput: { marginTop: space.xs, minHeight: 96, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, backgroundColor: color.canvas, padding: space.md, fontFamily: font.body, fontSize: fontSize.base, lineHeight: lineHeight.base, color: color.ink, textAlignVertical: 'top' },
   noteCount: { marginTop: space.xs, textAlign: 'right', fontFamily: font.body, fontSize: fontSize.sm, color: color.inkFaint },
   filesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm },
-  fileChip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.xs, maxWidth: 220 },
+  fileChip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: color.primaryBorder, backgroundColor: color.primaryFaint, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs, maxWidth: 240 },
   fileChipName: { flexShrink: 1, fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
-  requiredDocRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, flexWrap: 'wrap' },
+  requiredDocRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap', borderWidth: 1, borderColor: color.borderFaint, backgroundColor: color.canvas, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm },
+  requiredDocRowDone: { borderColor: color.primaryBorder },
+  docStatus: { width: 18, height: 18, borderRadius: radius.pill, borderWidth: 1.4, borderColor: color.border, alignItems: 'center', justifyContent: 'center' },
+  docStatusDone: { backgroundColor: color.primary, borderColor: color.primary },
+  docCountPill: { borderRadius: radius.pill, backgroundColor: color.surfaceSunken, paddingHorizontal: space.sm, paddingVertical: 3 },
+  docCountPillDone: { backgroundColor: color.primaryFaint },
+  docCountLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkMuted },
+  docCountLabelDone: { color: color.primary },
   requiredDocLabel: { flex: 1, fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
+  specAnswerRow: { gap: space.sm, borderWidth: 1, borderColor: color.borderFaint, backgroundColor: color.canvas, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm },
+  specAnswerHead: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap' },
+  specOfferedInput: { borderWidth: 1, borderColor: color.border, borderRadius: radius.md, backgroundColor: color.surface, paddingHorizontal: space.md, paddingVertical: space.sm, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
 
   /* x glyph */
   xGlyph: { width: 12, height: 12, alignItems: 'center', justifyContent: 'center' },
@@ -1297,12 +1530,14 @@ const styles = StyleSheet.create({
   ackBold: { fontFamily: font.bodySemi, color: color.ink },
   sealFooterRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap', marginTop: space.sm, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: color.borderFaint },
   sealHint: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted, maxWidth: 220 },
+  sealError: { marginTop: space.sm, fontFamily: font.body, fontSize: fontSize.sm, color: color.danger },
+  receiptNotice: { fontFamily: font.body, fontSize: fontSize.sm, color: color.danger, textAlign: 'center' },
 
   actionButton: { minHeight: layout.minTouchTarget, borderRadius: radius.pill, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xl },
   actionButtonLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm },
 
   /* sidebar */
-  sidebarCard: { ...elevation.cardRaised, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.md, gap: space.sm },
+  sidebarCard: { ...elevation.card, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.lg, gap: space.sm },
   sidebarTitle: { fontFamily: font.display, fontSize: fontSize.md, lineHeight: lineHeight.md, letterSpacing: letterSpacing.tight, color: color.ink },
   sidebarBuyerRow: {
     flexDirection: 'row',

@@ -11,7 +11,7 @@ import type { PostRequirementState, Business } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
 import { me } from '../lib/api/auth';
 import { getVerificationStatus, getDashboardStats } from '../lib/api/business';
-import { mapViewerBusiness } from '../lib/api/mappers';
+import { mapViewerBusiness, toSpecRowsOut } from '../lib/api/mappers';
 import { requirementsApi } from '../lib/api/requirements';
 import { requirementsCache } from '../lib/api/requirementsCache';
 import { errorMessage } from '../lib/api/client';
@@ -128,14 +128,17 @@ export default function PostRequirementRoute() {
           try {
             const created = await requirementsApi.create({
               category: input.category,
+              item_code: input.itemCode,
               title: input.title,
               scope: input.scope,
-              specifications: input.specifications,
+              specifications: toSpecRowsOut(input.specifications),
               quantity: input.quantity,
               price_min: input.budgetMin,
               price_max: input.budgetMax,
               city: input.deliveryCity,
               site_address: input.deliveryAddress || null,
+              barangay: input.deliveryBarangay || null,
+              zip_code: input.deliveryZip || null,
               delivery_start: input.deliveryWindowFrom ? new Date(input.deliveryWindowFrom).toISOString() : null,
               delivery_end: input.deliveryWindowTo ? new Date(input.deliveryWindowTo).toISOString() : null,
               required_documents: input.requiredDocuments,

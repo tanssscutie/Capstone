@@ -1,12 +1,22 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from app.core.clock import now_ph
 
 
 class SpecRow(BaseModel):
     label: str = Field(min_length=1, max_length=100)
     value: str = Field(min_length=1, max_length=200)
+    # The ATTRIBUTES id (app/core/categories.py) for a template row, or for a
+    # custom row the buyer matched to one ("Ito ba ay …?"). Null on the buyer's
+    # own rows and on requirements posted before attribute ids existed.
+    attribute_id: Optional[str] = Field(default=None, max_length=60)
+    # value in its standard unit (app/core/units.py). Set by the server on
+    # create, never taken from the client; value stays as the buyer typed it.
+    normalized_value: Optional[str] = None
+    normalized_unit: Optional[str] = None
 
 
 class LineItem(BaseModel):
@@ -30,15 +40,26 @@ class CategorySuggestionOut(BaseModel):
 
 class RequirementCreate(BaseModel):
     category: str = Field(min_length=2, max_length=100)
+    # One of the category's items (app/core/categories.py) — its merged specs
+    # decide which specifications are required; checked in
+    # requirement_service.create. "other" = general + category specs only.
+    item_code: str = Field(min_length=1, max_length=60)
     title: str = Field(min_length=5, max_length=200)
     scope: str = Field(min_length=10, max_length=3000)
     specifications: List[SpecRow] = []
     quantity: str = Field(min_length=1, max_length=200)
-    price_min: Optional[float] = Field(default=None, ge=0)
-    price_max: Optional[float] = Field(default=None, ge=0)
+    # Indicative budget — required on create (both ends, above zero).
+    price_min: float = Field(gt=0)
+    price_max: float = Field(gt=0)
 
     city: str = Field(min_length=2, max_length=120)
-    site_address: str = Field(min_length=1, max_length=300)
+    # Street / building / unit number. With barangay + zip_code the server
+    # composes the full address line (app/core/addresses.py).
+    site_address: str = Field(min_length=1, max_length=200)
+    # Must be one of the city's PSGC barangays. Optional only for older clients —
+    # Post a Requirement always sends both.
+    barangay: Optional[str] = Field(default=None, max_length=120)
+    zip_code: Optional[str] = Field(default=None, pattern=r"^\d{4}$")
     delivery_start: Optional[datetime] = None
     delivery_end: Optional[datetime] = None
 
@@ -50,6 +71,25 @@ class RequirementCreate(BaseModel):
     required_documents: List[str] = Field(min_length=1)
 
     closes_at: datetime
+
+    @model_validator(mode="after")
+    def _check_budget(self):
+        if self.price_max < self.price_min:
+            raise ValueError("price_max can't be less than price_min")
+        return self
+
+    @model_validator(mode="after")
+    def _check_delivery_window(self):
+        # Compared by calendar day in PHT (see app/core/clock.py) — a delivery
+        # starting today is fine, one starting yesterday is not.
+        today = now_ph().date()
+        if self.delivery_start and self.delivery_start.date() < today:
+            raise ValueError("delivery_start can't be a date that has already passed")
+        if self.delivery_end and self.delivery_end.date() < today:
+            raise ValueError("delivery_end can't be a date that has already passed")
+        if self.delivery_start and self.delivery_end and self.delivery_end < self.delivery_start:
+            raise ValueError("delivery_end can't be before delivery_start")
+        return self
 
 
 class AttachmentOut(BaseModel):
@@ -91,6 +131,9 @@ class RequirementOut(BaseModel):
     poster: PosterOut
 
     category: str
+    # Null on requirements posted before items existed.
+    item_code: Optional[str] = None
+    item_name: Optional[str] = None
     scope: str
     specifications: List[SpecRow]
     quantity: str
@@ -99,6 +142,8 @@ class RequirementOut(BaseModel):
 
     city: str
     site_address: Optional[str]
+    barangay: Optional[str] = None
+    zip_code: Optional[str] = None
     location: str
     site_access_hours: str = ""
     site_access_notes: str = ""
@@ -131,6 +176,23 @@ class RequirementOut(BaseModel):
 
 # ---------- sealed quotation submission ----------
 
+class SpecResponseIn(BaseModel):
+    """A respondent's answer to one of the requirement's specification rows."""
+    # Matches the requirement's row by label — labels are unique per requirement.
+    label: str = Field(min_length=1, max_length=100)
+    complies: bool
+    # What's quoted instead — required when complies is false. For the
+    # preferred brand, the equivalent brand offered.
+    offered: Optional[str] = Field(default=None, max_length=200)
+
+
+class SpecResponseOut(BaseModel):
+    label: str
+    attribute_id: Optional[str] = None
+    complies: bool
+    offered: Optional[str] = None
+
+
 class QuotationCreate(BaseModel):
     # Required and > 0 — matches the frontend's own "ready" gate (ack1 && ack2 &&
     # total > 0), enforced here too so a quotation can never be sealed empty
@@ -144,6 +206,10 @@ class QuotationCreate(BaseModel):
     payment_terms: Optional[str] = Field(default=None, max_length=100)
     validity_period: Optional[str] = Field(default=None, max_length=100)
     notes: Optional[str] = Field(default=None, max_length=500)
+    # One answer per specification row of the requirement — all of them, no
+    # more (checked in requirement_service.submit_quotation). Empty for a
+    # requirement with no specifications.
+    spec_responses: List[SpecResponseIn] = []
 
 
 class QuotationSealedReceipt(BaseModel):
@@ -170,6 +236,8 @@ class QuotationDetailOut(BaseModel):
     payment_terms: Optional[str]
     validity_period: Optional[str]
     notes: str
+    # Empty on quotations submitted before spec responses existed.
+    spec_responses: List[SpecResponseOut] = []
     status: str  # released | withdrawn | voided | shortlisted | award_pending | awarded | not_selected
     shortlisted: bool = False
     submitted_at: datetime
@@ -243,6 +311,58 @@ class AnswerCreate(BaseModel):
     answer: str = Field(min_length=1, max_length=1000)
 
 
+class CloseoutProposeIn(BaseModel):
+    outcome: str = Field(pattern="^(completed|not_pushed_through)$")
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class CloseoutRespondIn(BaseModel):
+    confirm: bool
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class CloseoutProposalOut(BaseModel):
+    id: int
+    outcome: str  # completed | not_pushed_through
+    proposed_by_role: str  # buyer | supplier
+    note: Optional[str]
+    status: str  # pending | confirmed | rejected | withdrawn
+    response_note: Optional[str]
+    created_at: datetime
+    responded_at: Optional[datetime]
+
+
+class CloseoutOut(BaseModel):
+    requirement_id: int
+    # open: awarded, nothing proposed yet (or the last claim was rejected/withdrawn)
+    # pending: one party proposed, waiting on the other
+    # completed | not_pushed_through: confirmed by both — final
+    state: str
+    viewer_role: str  # buyer | supplier | admin
+    pending: Optional[CloseoutProposalOut] = None
+    awaiting_viewer: bool = False
+    final: Optional[CloseoutProposalOut] = None
+    history: List[CloseoutProposalOut] = []
+
+
+class DocumentRequestCreate(BaseModel):
+    document_label: str = Field(min_length=2, max_length=120)
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class DocumentRequestOut(BaseModel):
+    id: int
+    requirement_id: int
+    quotation_id: int
+    document_label: str
+    note: Optional[str]
+    status: str  # pending | submitted | cancelled
+    filename: Optional[str]
+    response_note: Optional[str]
+    created_at: datetime
+    submitted_at: Optional[datetime]
+
+
 # ---------- "My Requirements" tracking page ----------
 
 class MyRequirementOut(BaseModel):
@@ -252,6 +372,8 @@ class MyRequirementOut(BaseModel):
     ref_code: str
     title: str
     category: str
+    item_code: Optional[str] = None
+    item_name: Optional[str] = None
     scope: str = ""
     specifications: List[SpecRow] = []
     quantity: str = ""
@@ -304,6 +426,7 @@ class MyQuotationOut(BaseModel):
     payment_terms: Optional[str]
     validity_period: Optional[str]
     notes: str
+    spec_responses: List[SpecResponseOut] = []
     submitted_at: datetime
     integrity_status: Optional[str]
     attachments: List[AttachmentOut] = []

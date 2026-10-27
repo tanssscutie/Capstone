@@ -6,7 +6,7 @@
 // AccountSettings.tsx (breadcrumb, hero, bordered cards).
 
 import { useState } from 'react';
-import { Linking, View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
   color,
@@ -128,9 +128,8 @@ export default function HelpSupport({ onBack }: HelpSupportProps) {
           <SectionLabel>Contact us</SectionLabel>
           <View style={{ marginTop: space.sm, gap: space.sm }}>
             <Text style={styles.mutedSmall}>Didn't find your answer above? Email us and we'll get back to you.</Text>
-            <Pressable onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)} hitSlop={6}>
-              <Text style={styles.contactLink}>{SUPPORT_EMAIL}</Text>
-            </Pressable>
+            {/* Plain text, not a mailto: link — selectable so it can be copied. */}
+            <Text style={styles.contactEmail} selectable>{SUPPORT_EMAIL}</Text>
           </View>
         </View>
 
@@ -186,7 +185,7 @@ const styles = StyleSheet.create({
   faqAnswer: { marginTop: space.sm, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
   faqDivider: { height: 1, backgroundColor: color.borderFaint },
 
-  contactLink: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.primary },
+  contactEmail: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
 
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap', marginTop: space.sm },
   actionButton: { minHeight: layout.minTouchTarget, borderRadius: radius.pill, borderWidth: 1, borderColor: color.border, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xl },

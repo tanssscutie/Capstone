@@ -102,7 +102,7 @@ export default function RootLayout() {
 
   return (
     <View style={{ flex: 1 }}>
-      {headerShown && <AppHeader viewer={viewer ?? undefined} alertCount={alertCount} />}
+      {headerShown && <AppHeader viewer={viewer ?? undefined} alertCount={alertCount} onAlertCountChange={setAlertCount} />}
       {/* The header floats via position: absolute (AppHeader.tsx) so it can condense over
        *  content while scrolling — this reserves its expanded height so page content
        *  starts below it instead of sliding under it. */}

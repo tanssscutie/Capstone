@@ -7,12 +7,13 @@ from sqlmodel import SQLModel, Field
 
 
 class MessageThread(SQLModel, table=True):
-    """Created automatically the instant a requirement's sealed quotations release
-    (see RequirementService._release_one) — one per (requirement, business) whose
-    quotation actually released. There is no "start a chat" action anywhere in the
-    product; a thread's existence IS the record that this business's quotation
-    released on this requirement, so the buyer can talk to them about it — before,
-    not only after, an award is decided."""
+    """Post-procurement messaging (Panel Suggestion #3): created only when the
+    proposed winner accepts the Notice of Award (RequirementService.accept_award),
+    one per awarded (requirement, business), opened with a system message. There
+    is no "start a chat" action anywhere in the product.
+
+    Databases from before this rule may still hold threads opened at release for
+    respondents that never won — message_service hides and refuses those."""
 
     __table_args__ = (UniqueConstraint("requirement_id", "business_id", name="uq_thread_requirement_business"),)
 

@@ -34,7 +34,7 @@ export default function AlertsRoute() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: color.canvas, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: color.surfaceSunken, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={color.primary} />
       </View>
     );
@@ -42,7 +42,7 @@ export default function AlertsRoute() {
 
   if (error) {
     return (
-      <View style={{ flex: 1, backgroundColor: color.canvas, alignItems: 'center', justifyContent: 'center', padding: space.xl }}>
+      <View style={{ flex: 1, backgroundColor: color.surfaceSunken, alignItems: 'center', justifyContent: 'center', padding: space.xl }}>
         <Text style={{ fontFamily: font.body, fontSize: fontSize.base, color: color.danger, textAlign: 'center' }}>{error}</Text>
       </View>
     );

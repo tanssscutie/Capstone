@@ -5,7 +5,7 @@ import Onboarding, { pickedDocumentFiles } from '../features/onboarding/Onboardi
 import type { IdentityDraft, OperationsDraft, DocumentsDraft } from '../features/onboarding/Onboarding';
 import type { AccountRole, Business, OnboardingStep } from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
-import { submitOnboarding, uploadDocument, submitForVerification, getVerificationStatus, extractDocumentFields, suggestDescription } from '../lib/api/business';
+import { submitOnboarding, uploadDocument, submitForVerification, getVerificationStatus, extractDocumentFields } from '../lib/api/business';
 import { mapViewerBusiness } from '../lib/api/mappers';
 import { me } from '../lib/api/auth';
 import { getDashboardStats } from '../lib/api/business';
@@ -28,6 +28,9 @@ export default function OnboardingRoute() {
   const [business, setBusiness] = useState<Business | null>(null);
   const [role, setRole] = useState<AccountRole | null>(null);
   const [seeding, setSeeding] = useState(true);
+  // The category picked at registration — seeds OPERATIONS for a business
+  // that hasn't finished onboarding yet, so it isn't asked a second time.
+  const [registeredCategory, setRegisteredCategory] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -45,18 +48,20 @@ export default function OnboardingRoute() {
       try {
         const [status, user] = await Promise.all([getVerificationStatus(), me()]);
         setRole(user.role);
+        setRegisteredCategory(status.industry_category ?? '');
         if (!status.onboarding_completed) return;
         setIdentity({
           registeredName: status.registered_name ?? '',
           displayName: status.display_name ?? '',
           businessType: (status.business_type as IdentityDraft['businessType']) ?? 'SOLE_PROP',
-          category: status.industry_category ?? '',
           city: status.city ?? '',
           province: status.province ?? '',
           contactPerson: status.contact_person ?? '',
           contactMobile: status.contact_mobile ?? '',
         });
         setOperations({
+          category: status.industry_category ?? '',
+          offeredItems: status.offered_items.map((i) => ({ code: i.code, otherText: i.other_text })),
           capabilities: status.capabilities,
           serviceAreas: status.service_areas,
           businessDescription: status.business_description ?? '',
@@ -161,7 +166,7 @@ export default function OnboardingRoute() {
         <Onboarding
           step="OPERATIONS"
           identity={identity}
-          initial={operations ?? undefined}
+          initial={operations ?? { category: registeredCategory }}
           operationsOptional={role === 'buyer'}
           editMode={editMode}
           onContinue={(draft) => {
@@ -173,14 +178,6 @@ export default function OnboardingRoute() {
             setStep('DOCUMENTS');
           }}
           onBack={() => setStep('IDENTITY')}
-          onSuggestDescription={async (capabilities, serviceAreas) => {
-            try {
-              const result = await suggestDescription(identity, capabilities, serviceAreas);
-              return result.description;
-            } catch {
-              return null;
-            }
-          }}
         />
       </View>
     );

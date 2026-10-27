@@ -5,11 +5,13 @@
 // submission — the buyer is never notified of one, only the running count they
 // can pull from the requirement itself.
 // Same page shell as MyQuotations.tsx / MyRequirements.tsx (breadcrumb, display
-// title, bordered rows) — a plain reverse-chronological list, since alerts have
-// no natural grouping the way quotations/requirements group by status.
+// title), on the sunken page with white cards like HomeFeed.tsx. Alerts are
+// grouped by day (Today / Yesterday / Earlier), newest first, with an
+// All / Unread filter.
 
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, useWindowDimensions } from 'react-native';
+import type { ViewStyle } from 'react-native';
 import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
   color,
@@ -19,6 +21,7 @@ import {
   letterSpacing,
   space,
   radius,
+  elevation,
   layout,
   breakpoint,
 } from '../../components/ui/tokens';
@@ -62,23 +65,115 @@ function alertTypeLabel(type: AlertType): string {
     case 'MESSAGE_RECEIVED': return 'Message';
     case 'QUESTION_ASKED': return 'Question';
     case 'QUESTION_ANSWERED': return 'Answer';
+    case 'REQUIREMENT_MATCH': return 'New match';
   }
+}
+
+type Tone = 'primary' | 'danger' | 'neutral';
+
+/** Red for what went wrong or is about to, blue for progress, grey for plain endings. */
+function alertTone(alert: Alert): Tone {
+  if (alert.urgent) return 'danger';
+  switch (alert.type) {
+    case 'REQUIREMENT_CANCELLED':
+    case 'DOCUMENT_FLAGGED':
+      return 'danger';
+    case 'CLOSED_NO_AWARD':
+      return 'neutral';
+    default:
+      return 'primary';
+  }
+}
+
+const TONE_STYLES: Record<Tone, { bg: string; border: string; fg: string }> = {
+  primary: { bg: color.primaryFaint, border: color.primaryBorder, fg: color.primary },
+  danger: { bg: color.dangerFaint, border: color.dangerBorder, fg: color.danger },
+  neutral: { bg: color.surfaceSunken, border: color.border, fg: color.inkMuted },
+};
+
+/** Today / Yesterday / Earlier, by the device's calendar day. */
+function dayGroup(iso: ISODateTime): 'Today' | 'Yesterday' | 'Earlier' {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const t = new Date(iso).getTime();
+  if (t >= startOfToday.getTime()) return 'Today';
+  if (t >= startOfToday.getTime() - 86_400_000) return 'Yesterday';
+  return 'Earlier';
+}
+
+const GROUP_ORDER = ['Today', 'Yesterday', 'Earlier'] as const;
+
+/* ─── Web-only motion helpers (same as HomeFeed.tsx) ── */
+
+function webTransition(properties: string): ViewStyle {
+  return Platform.OS === 'web'
+    ? ({ transitionProperty: properties, transitionDuration: '160ms', transitionTimingFunction: 'ease-out' } as unknown as ViewStyle)
+    : {};
+}
+
+function useHover() {
+  const [hovered, setHovered] = useState(false);
+  const handlers =
+    Platform.OS === 'web' ? { onHoverIn: () => setHovered(true), onHoverOut: () => setHovered(false) } : {};
+  return [hovered, handlers] as const;
 }
 
 /* ─── Row ───────────────────────────────────────────── */
 
-function AlertRow({ alert, onPress }: { alert: Alert; onPress?: () => void }) {
-  const dotColor = !alert.read ? (alert.urgent ? color.danger : color.primary) : color.inkFaint;
+function AlertRow({ alert, last, onPress }: { alert: Alert; last: boolean; onPress?: () => void }) {
+  const [hovered, hoverHandlers] = useHover();
+  const unread = !alert.read;
+  const tone = TONE_STYLES[alertTone(alert)];
   return (
-    <Pressable onPress={onPress} style={[styles.row, !alert.read ? styles.rowUnread : null]}>
-      <View style={[styles.dot, { backgroundColor: dotColor }]} />
-      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+    <Pressable
+      {...hoverHandlers}
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityHint={unread ? 'Marks this alert as read' : undefined}
+      style={[
+        styles.row,
+        webTransition('background-color'),
+        unread && styles.rowUnread,
+        hovered && unread && styles.rowHovered,
+        !last && styles.rowDivider,
+      ]}
+    >
+      {/* Accent bar on the left edge — only while unread. */}
+      <View style={[styles.rowAccent, { backgroundColor: unread ? tone.fg : 'transparent' }]} />
+      <View style={{ flex: 1, minWidth: 0, gap: space.xs }}>
         <View style={styles.rowTopLine}>
-          <Text style={styles.rowTypeLabel}>{alertTypeLabel(alert.type)}</Text>
+          <View style={[styles.typeTag, { backgroundColor: tone.bg, borderColor: tone.border }]}>
+            <Text style={[styles.typeTagLabel, { color: tone.fg }]}>{alertTypeLabel(alert.type)}</Text>
+          </View>
+          <View style={{ flex: 1 }} />
           <Text style={styles.rowTime}>{timeAgoWords(alert.createdAt)}</Text>
+          {unread && <View style={[styles.unreadDot, { backgroundColor: tone.fg }]} />}
         </View>
-        <Text style={[styles.rowTitle, !alert.read ? styles.rowTitleUnread : null]}>{alert.title}</Text>
-        <Text style={styles.rowDetail}>{alert.detail}</Text>
+        <Text style={[styles.rowTitle, unread && styles.rowTitleUnread]}>{alert.title}</Text>
+        {!!alert.detail && <Text style={styles.rowDetail}>{alert.detail}</Text>}
+        {unread && hovered && <Text style={styles.markReadHint}>Click to mark as read</Text>}
+      </View>
+    </Pressable>
+  );
+}
+
+/* ─── Filter tabs ───────────────────────────────────── */
+
+type Filter = 'ALL' | 'UNREAD';
+
+function FilterTab({ label, count, active, onPress }: { label: string; count: number; active: boolean; onPress: () => void }) {
+  const [hovered, hoverHandlers] = useHover();
+  return (
+    <Pressable
+      {...hoverHandlers}
+      onPress={onPress}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      style={[styles.tab, webTransition('background-color, border-color'), hovered && !active && styles.tabHovered, active && styles.tabActive]}
+    >
+      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
+      <View style={[styles.tabCount, active && styles.tabCountActive]}>
+        <Text style={[styles.tabCountLabel, active && styles.tabCountLabelActive]}>{count}</Text>
       </View>
     </Pressable>
   );
@@ -90,7 +185,13 @@ export default function Alerts(props: AlertsProps) {
   const { alerts, onBack, onMarkRead, onMarkAllRead } = props;
   const { width } = useWindowDimensions();
   const isWide = width >= breakpoint.desktop;
+  const [filter, setFilter] = useState<Filter>('ALL');
   const unreadCount = alerts.filter((a) => !a.read).length;
+
+  const shown = filter === 'UNREAD' ? alerts.filter((a) => !a.read) : alerts;
+  const groups = GROUP_ORDER
+    .map((name) => ({ name, items: shown.filter((a) => dayGroup(a.createdAt) === name) }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
@@ -111,20 +212,47 @@ export default function Alerts(props: AlertsProps) {
             </Text>
           </View>
           {unreadCount > 0 && (
-            <Pressable onPress={onMarkAllRead} hitSlop={6}>
+            <Pressable onPress={onMarkAllRead} hitSlop={6} style={styles.markAllButton}>
               <Text style={styles.markAllLink}>Mark all as read</Text>
             </Pressable>
           )}
         </View>
 
-        {alerts.length === 0 ? (
+        {alerts.length > 0 && (
+          <View style={styles.tabRow} accessibilityRole="tablist">
+            <FilterTab label="All" count={alerts.length} active={filter === 'ALL'} onPress={() => setFilter('ALL')} />
+            <FilterTab label="Unread" count={unreadCount} active={filter === 'UNREAD'} onPress={() => setFilter('UNREAD')} />
+          </View>
+        )}
+
+        {groups.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.mutedSmall}>Nothing here yet.</Text>
+            <View style={styles.emptyMark}>
+              <View style={styles.emptyCheck} />
+            </View>
+            <Text style={styles.emptyTitle}>{alerts.length === 0 ? 'No alerts yet' : "You're all caught up"}</Text>
+            <Text style={[styles.mutedSmall, { textAlign: 'center' }]}>
+              {alerts.length === 0
+                ? 'Closing reminders, award decisions, messages and verification updates will show up here.'
+                : 'No unread alerts. Switch to All to see earlier ones.'}
+            </Text>
           </View>
         ) : (
-          <View style={{ marginTop: space.lg }}>
-            {alerts.map((a) => (
-              <AlertRow key={a.id} alert={a} onPress={a.read ? undefined : () => onMarkRead?.(a.id)} />
+          <View style={{ gap: space.xl, marginTop: space.lg }}>
+            {groups.map((g) => (
+              <View key={g.name} style={{ gap: space.sm }}>
+                <Text style={styles.groupLabel}>{g.name}</Text>
+                <View style={styles.groupCard}>
+                  {g.items.map((a, i) => (
+                    <AlertRow
+                      key={a.id}
+                      alert={a}
+                      last={i === g.items.length - 1}
+                      onPress={a.read ? undefined : () => onMarkRead?.(a.id)}
+                    />
+                  ))}
+                </View>
+              </View>
             ))}
           </View>
         )}
@@ -136,11 +264,11 @@ export default function Alerts(props: AlertsProps) {
 /* ─── Styles ─────────────────────────────────────────── */
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.canvas },
+  root: { flex: 1, backgroundColor: color.surfaceSunken },
   scrollContent: { alignItems: 'center', paddingVertical: space.lg, paddingBottom: space.xxl },
 
   page: { width: '100%', maxWidth: layout.maxWidth, paddingHorizontal: layout.screenPadding },
-  pageWide: { width: '100%', maxWidth: layout.maxWidthWide, paddingHorizontal: layout.screenPadding },
+  pageWide: { width: '100%', maxWidth: 820, paddingHorizontal: layout.screenPadding },
 
   breadcrumbRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
   breadcrumbLink: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkFaint },
@@ -150,18 +278,42 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: space.lg, flexWrap: 'wrap', marginTop: space.md },
   pageTitle: { fontFamily: font.display, fontSize: fontSize.display, lineHeight: lineHeight.display, letterSpacing: letterSpacing.tight, color: color.ink },
   pageSubtitle: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
+  markAllButton: { borderWidth: 1, borderColor: color.primaryBorder, backgroundColor: color.surface, borderRadius: radius.pill, paddingHorizontal: space.lg, paddingVertical: space.sm },
   markAllLink: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.primary },
 
-  mutedSmall: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
-  emptyCard: { marginTop: space.lg, borderWidth: 1, borderColor: color.borderFaint, borderRadius: radius.xl, padding: space.xl, alignItems: 'center' },
+  tabRow: { flexDirection: 'row', gap: space.sm, marginTop: space.lg },
+  tab: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: color.border, backgroundColor: color.surface, borderRadius: radius.pill, paddingHorizontal: space.lg, paddingVertical: space.sm },
+  tabHovered: { borderColor: color.borderStrong },
+  tabActive: { backgroundColor: color.ink, borderColor: color.ink },
+  tabLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
+  tabLabelActive: { color: color.canvas },
+  tabCount: { minWidth: 20, alignItems: 'center', borderRadius: radius.pill, backgroundColor: color.surfaceSunken, paddingHorizontal: 6, paddingVertical: 1 },
+  tabCountActive: { backgroundColor: 'rgba(255, 255, 255, 0.16)' },
+  tabCountLabel: { fontFamily: font.mono, fontSize: fontSize.micro, color: color.inkMuted },
+  tabCountLabelActive: { color: color.canvas },
 
-  row: { flexDirection: 'row', gap: space.md, padding: space.md, borderRadius: radius.lg, borderBottomWidth: 1, borderBottomColor: color.borderFaint },
-  rowUnread: { backgroundColor: color.primaryFaint, borderBottomColor: 'transparent' },
-  dot: { width: 7, height: 7, borderRadius: radius.pill, marginTop: 6 },
-  rowTopLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
-  rowTypeLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkFaint },
+  groupLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkFaint, paddingHorizontal: space.xs },
+  groupCard: { ...elevation.card, backgroundColor: color.surface, borderRadius: radius.xl, overflow: 'hidden' },
+
+  mutedSmall: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
+  emptyCard: { ...elevation.card, marginTop: space.lg, backgroundColor: color.surface, borderRadius: radius.xl, padding: space.xxl, alignItems: 'center', gap: space.sm },
+  emptyMark: { width: 44, height: 44, borderRadius: radius.pill, backgroundColor: color.primaryFaint, alignItems: 'center', justifyContent: 'center', marginBottom: space.xs },
+  // A check mark from two borders of a rotated box — no icon library in this project.
+  emptyCheck: { width: 10, height: 18, borderRightWidth: 2.5, borderBottomWidth: 2.5, borderColor: color.primary, transform: [{ rotate: '45deg' }], marginTop: -4 },
+  emptyTitle: { fontFamily: font.display, fontSize: fontSize.md, color: color.ink },
+
+  row: { flexDirection: 'row', gap: space.md, paddingVertical: space.lg, paddingRight: space.lg },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: color.borderFaint },
+  rowUnread: { backgroundColor: color.canvas },
+  rowHovered: { backgroundColor: color.primaryFaint },
+  rowAccent: { width: 3, alignSelf: 'stretch', borderTopRightRadius: 2, borderBottomRightRadius: 2 },
+  rowTopLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  typeTag: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: space.sm, paddingVertical: 2 },
+  typeTagLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase' },
   rowTime: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkFaint },
-  rowTitle: { fontFamily: font.bodyMedium, fontSize: fontSize.base, color: color.ink },
-  rowTitleUnread: { fontFamily: font.bodySemi },
+  unreadDot: { width: 8, height: 8, borderRadius: radius.pill },
+  rowTitle: { fontFamily: font.bodyMedium, fontSize: fontSize.base, lineHeight: lineHeight.base, color: color.inkMuted },
+  rowTitleUnread: { fontFamily: font.bodySemi, color: color.ink },
   rowDetail: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
+  markReadHint: { fontFamily: font.body, fontSize: fontSize.micro, color: color.primary },
 });

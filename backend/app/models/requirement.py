@@ -36,6 +36,10 @@ class Requirement(SQLModel, table=True):
     owner_id: int = Field(foreign_key="user.id", index=True)
 
     category: str = ""
+    # Which of the category's items this is (app/core/categories.py), "other"
+    # for free-form. Null on requirements posted before items existed —
+    # existing databases get the column from database._migrate_requirement_item_code.
+    item_code: Optional[str] = Field(default=None, max_length=60)
     scope: str = ""
     specifications_json: str = "[]"  # JSON list of {"label": str, "value": str}
     quantity: str = ""
@@ -44,7 +48,14 @@ class Requirement(SQLModel, table=True):
     price_max: Optional[float] = None
 
     city: str = ""
+    # The full address line, composed at creation (addresses.compose_site_address):
+    # "Unit 4B, Exchange Rd., Brgy. San Antonio 1605". Older requirements hold
+    # whatever was typed into the single field they had.
     site_address: Optional[str] = None
+    # Structured parts of the same address (PSGC barangay name, 4-digit ZIP).
+    # Null on requirements posted before the form asked for them.
+    barangay: Optional[str] = Field(default=None, max_length=120)
+    zip_code: Optional[str] = Field(default=None, max_length=4)
     location: str  # display string derived from city (+ site_address) at creation
     site_access_hours: str = ""  # e.g. "Mon-Sat, 7:00 AM - 6:00 PM" — editable any time, never locked
     site_access_notes: str = ""  # e.g. gate codes, warehouse status — same, never locked

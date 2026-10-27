@@ -22,7 +22,21 @@ export interface RegisterInput {
   email: string;
   password: string;
   role: AccountRole;
+  /** Buyer: primary procurement category. Seller: business category. */
+  category: string;
+  /** Seller only — ignored (and cleared) by the backend for a buyer. */
+  yearsInBusiness?: YearsInBusiness;
 }
+
+/** Codes the backend stores (schemas.auth.YearsInBusiness). */
+export type YearsInBusiness = 'LESS_THAN_1' | '1_TO_3' | '4_TO_6' | '7_PLUS';
+
+export const YEARS_IN_BUSINESS_OPTIONS: { value: YearsInBusiness; label: string }[] = [
+  { value: 'LESS_THAN_1', label: 'Less than 1 year' },
+  { value: '1_TO_3', label: '1–3 years' },
+  { value: '4_TO_6', label: '4–6 years' },
+  { value: '7_PLUS', label: '7 years or more' },
+];
 
 export interface LoginInput {
   mobileNumber: string;
@@ -39,6 +53,8 @@ export async function register(input: RegisterInput): Promise<BackendUser> {
       email: input.email,
       password: input.password,
       role: input.role,
+      industry_category: input.category,
+      years_in_business: input.role === 'seller' ? input.yearsInBusiness : undefined,
     },
     { auth: false },
   );

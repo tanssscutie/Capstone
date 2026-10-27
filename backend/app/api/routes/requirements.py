@@ -1,12 +1,15 @@
+import mimetypes
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 
 from app.core.security import get_current_user, require_admin, require_buyer, require_seller, require_verified
 from app.models.user import User
 from app.services import requirement_service as req_service_module
 from app.services.requirement_service import requirement_service
 from app.services import category_suggestion_service
+from app.services.document_request_service import document_request_service
+from app.services.closeout_service import closeout_service
 from app.schemas.requirement import (
     CategorySuggestionRequest,
     CategorySuggestionOut,
@@ -26,6 +29,11 @@ from app.schemas.requirement import (
     QuestionCreate,
     AnswerCreate,
     SiteNotesUpdate,
+    DocumentRequestCreate,
+    DocumentRequestOut,
+    CloseoutOut,
+    CloseoutProposeIn,
+    CloseoutRespondIn,
 )
 
 router = APIRouter()
@@ -42,6 +50,9 @@ def require_seller_role(current_user: User = Depends(get_current_user)) -> User:
 
 def _handle_service_errors(exc: Exception):
     E = req_service_module
+    # Already an HTTP answer (e.g. a 422 validation message) — pass it through.
+    if isinstance(exc, HTTPException):
+        raise exc
     if isinstance(exc, E.RequirementNotFound):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found")
     if isinstance(exc, E.NotOwner):
@@ -270,6 +281,103 @@ def shortlist_quotation(requirement_id: int, quotation_id: int, current_user=Dep
 def unshortlist_quotation(requirement_id: int, quotation_id: int, current_user=Depends(require_verified)):
     try:
         requirement_service.set_shortlist(requirement_id, quotation_id, current_user.id, False)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.get("/{requirement_id}/quotations/{quotation_id}/document-requests", response_model=List[DocumentRequestOut])
+def list_document_requests(requirement_id: int, quotation_id: int, current_user=Depends(get_current_user)):
+    try:
+        return document_request_service.list_for_quotation(requirement_id, quotation_id, current_user.id)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post(
+    "/{requirement_id}/quotations/{quotation_id}/document-requests",
+    response_model=DocumentRequestOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_document_request(
+    requirement_id: int, quotation_id: int, payload: DocumentRequestCreate, current_user=Depends(require_verified),
+):
+    """Buyer asks a shortlisted respondent for one more supporting document —
+    see document_request_service."""
+    try:
+        return document_request_service.create(requirement_id, quotation_id, current_user.id, payload)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/document-requests/{request_id}/cancel", response_model=DocumentRequestOut)
+def cancel_document_request(requirement_id: int, request_id: int, current_user=Depends(require_verified)):
+    try:
+        return document_request_service.cancel(requirement_id, request_id, current_user.id)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/document-requests/{request_id}/upload", response_model=DocumentRequestOut)
+async def upload_requested_document(
+    requirement_id: int,
+    request_id: int,
+    file: UploadFile = File(...),
+    response_note: Optional[str] = Form(default=None),
+    current_user=Depends(require_seller),
+):
+    try:
+        return await document_request_service.upload(requirement_id, request_id, current_user.id, file, response_note)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.get("/{requirement_id}/document-requests/{request_id}/file")
+def get_requested_document_file(requirement_id: int, request_id: int, current_user=Depends(get_current_user)):
+    # Decrypted here, same as business documents (see business.get_document_file).
+    try:
+        content, filename = document_request_service.get_file(requirement_id, request_id, current_user.id)
+    except Exception as exc:
+        _handle_service_errors(exc)
+    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    # Headers are latin-1 only — a respondent's "Sertipiko ñ.pdf" would 500 otherwise.
+    safe_name = filename.encode("ascii", "ignore").decode().replace('"', "") or "document"
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+    )
+
+
+@router.get("/{requirement_id}/closeout", response_model=CloseoutOut)
+def get_closeout(requirement_id: int, current_user=Depends(get_current_user)):
+    try:
+        return closeout_service.get(requirement_id, current_user.id)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/closeout", response_model=CloseoutOut)
+def propose_closeout(requirement_id: int, payload: CloseoutProposeIn, current_user=Depends(require_verified)):
+    """Buyer or awarded supplier claims the transaction completed / did not push
+    through — final only once the other party confirms. See closeout_service."""
+    try:
+        return closeout_service.propose(requirement_id, current_user.id, payload.outcome, payload.note)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/closeout/respond", response_model=CloseoutOut)
+def respond_closeout(requirement_id: int, payload: CloseoutRespondIn, current_user=Depends(require_verified)):
+    try:
+        return closeout_service.respond(requirement_id, current_user.id, payload.confirm, payload.note)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/closeout/withdraw", response_model=CloseoutOut)
+def withdraw_closeout(requirement_id: int, current_user=Depends(require_verified)):
+    try:
+        return closeout_service.withdraw(requirement_id, current_user.id)
     except Exception as exc:
         _handle_service_errors(exc)
 

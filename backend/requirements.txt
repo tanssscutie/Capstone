@@ -12,3 +12,4 @@ httpx
 google-genai
 fastembed
 qdrant-client
+Pillow  # downscales document photos before AI extraction

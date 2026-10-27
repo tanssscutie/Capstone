@@ -1,20 +1,32 @@
 // app/admin.tsx
-// Admin dashboard: a compact stats overview (from GET /business/admin/stats)
-// above the review queue (GET /business/admin/flagged + POST .../review).
+// Admin dashboard: an attention banner + KPI cards and a 7-day registrations
+// chart (from GET /business/admin/stats) above the review queue
+// (GET /business/admin/flagged + POST .../review).
 // Kept to the app's existing design tokens on purpose — no new colours, no
 // icon library, no chart dependency. The "chart" is plain Views sized by
 // proportion, same technique the rest of the app uses for hand-built icons.
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView, useWindowDimensions } from 'react-native';
-import { useRouter } from 'expo-router';
-import { color, font, fontSize, space, radius, layout, breakpoint } from '../components/ui/tokens';
-import { AdminSidebar } from '../components/ui/AdminSidebar';
-import { checkAdminAccess, listFlagged, reviewBusiness, getAdminStats } from '../lib/api/admin';
+import { View, Text, StyleSheet } from 'react-native';
+import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../components/ui/tokens';
+import { AvatarChip, initials } from '../components/ui/AvatarChip';
+import {
+  AdminShell,
+  AdminCard,
+  DocumentList,
+  EmptyState,
+  ErrorBanner,
+  GhostButton,
+  InfoGrid,
+  LoadingBlock,
+  Pill,
+  ReviewPanel,
+  SectionHeader,
+  timeAgo,
+  useAdminAccess,
+} from '../components/ui/AdminKit';
+import { listFlagged, reviewBusiness, getAdminStats } from '../lib/api/admin';
 import type { AdminFlaggedBusinessOut, AdminStatsOut } from '../lib/api/admin';
-import { logout } from '../lib/api/auth';
 import { errorMessage } from '../lib/api/client';
-
-type Access = 'CHECKING' | 'GRANTED' | 'DENIED';
 
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
@@ -22,27 +34,103 @@ function formatShortDate(iso: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+function todayLabel(): string {
+  return new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+/* ─── Overview ──────────────────────────────────────── */
+
+function AttentionBanner({ count }: { count: number }) {
+  const waiting = count > 0;
+  return (
+    <View style={[styles.banner, waiting ? styles.bannerWaiting : styles.bannerClear]}>
+      <View style={[styles.bannerBadge, waiting ? styles.bannerBadgeWaiting : styles.bannerBadgeClear]}>
+        <Text style={styles.bannerBadgeLabel}>{count}</Text>
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[styles.bannerTitle, waiting && { color: color.danger }]}>
+          {waiting
+            ? `${count} business${count === 1 ? '' : 'es'} waiting for verification review`
+            : 'All caught up — nothing waiting for review'}
+        </Text>
+        <Text style={styles.bannerBody}>
+          {waiting
+            ? 'Check their documents in the review queue below, then approve or reject.'
+            : 'New submissions will appear in the review queue as soon as they arrive.'}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  caption,
+  progress,
+}: {
+  label: string;
+  value: number;
+  caption: string;
+  /** 0–1; draws a thin progress bar under the caption when set. */
+  progress?: number;
+}) {
+  return (
+    <View style={styles.statCard}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue}>{value.toLocaleString()}</Text>
+      <Text style={styles.statCaption}>{caption}</Text>
+      {progress !== undefined && (
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${Math.round(Math.min(1, Math.max(0, progress)) * 100)}%` }]} />
+        </View>
+      )}
+    </View>
+  );
+}
+
 /** Small monochrome bar chart — no chart library in this project, and one
  *  week of data doesn't need one. Bars are plain Views, heights scaled to
- *  the week's max so a quiet week doesn't look identical to a busy one. */
+ *  the week's max so a quiet week doesn't look identical to a busy one.
+ *  The last bar (today) is solid; earlier days are lighter. */
 function RegistrationsChart({ data }: { data: AdminStatsOut['registrations_last_7_days'] }) {
   const max = Math.max(1, ...data.map((d) => d.count));
-  const CHART_HEIGHT = 96;
+  const total = data.reduce((a, d) => a + d.count, 0);
+  const CHART_HEIGHT = 120;
 
   return (
     <View style={styles.chartCard}>
-      <Text style={styles.chartTitle}>New registrations · last 7 days</Text>
+      <View style={styles.chartHeader}>
+        <View>
+          <Text style={styles.statLabel}>New registrations</Text>
+          <Text style={styles.chartSub}>Last 7 days</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.chartTotal}>{total}</Text>
+          <Text style={styles.chartSub}>this week</Text>
+        </View>
+      </View>
       <View style={styles.chartBars}>
-        {data.map((d) => {
-          const barHeight = Math.max(3, Math.round((d.count / max) * CHART_HEIGHT));
+        {data.map((d, i) => {
+          const isToday = i === data.length - 1;
+          const barHeight = d.count === 0 ? 3 : Math.max(6, Math.round((d.count / max) * CHART_HEIGHT));
           return (
             <View key={d.date} style={styles.chartColumn}>
-              <Text style={styles.chartValue}>{d.count}</Text>
-              <View style={styles.chartTrack}>
-                <View style={[styles.chartBar, { height: barHeight }]} />
+              <Text style={[styles.chartValue, isToday && styles.chartValueToday]}>{d.count}</Text>
+              <View style={[styles.chartTrack, { height: CHART_HEIGHT }]}>
+                <View style={[styles.chartBar, { height: barHeight }, isToday ? styles.chartBarToday : null]} />
               </View>
-              <Text style={styles.chartLabel}>{formatShortDate(d.date)}</Text>
             </View>
+          );
+        })}
+      </View>
+      <View style={styles.chartLabels}>
+        {data.map((d, i) => {
+          const isToday = i === data.length - 1;
+          return (
+            <Text key={d.date} style={[styles.chartLabel, isToday && styles.chartLabelToday]} numberOfLines={1}>
+              {isToday ? 'Today' : formatShortDate(d.date)}
+            </Text>
           );
         })}
       </View>
@@ -50,11 +138,64 @@ function RegistrationsChart({ data }: { data: AdminStatsOut['registrations_last_
   );
 }
 
+/* ─── Review queue ──────────────────────────────────── */
+
+function QueueCard({
+  b,
+  notes,
+  onChangeNotes,
+  busy,
+  onReview,
+  onError,
+}: {
+  b: AdminFlaggedBusinessOut;
+  notes: string;
+  onChangeNotes: (v: string) => void;
+  busy: boolean;
+  onReview: (approve: boolean) => void;
+  onError: (message: string) => void;
+}) {
+  const name = b.registered_name || b.business_name;
+  const location = [b.city, b.province].filter(Boolean).join(', ');
+  return (
+    <AdminCard highlight>
+      <View style={styles.queueHeader}>
+        <AvatarChip label={initials(name)} size={44} dark={false} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.queueName} numberOfLines={1}>{name}</Text>
+          <Text style={styles.queueSub}>Submitted {timeAgo(b.submitted_at)}</Text>
+        </View>
+        <View style={styles.pillRow}>
+          {b.role && <Pill label={b.role} tone="solid" />}
+          {b.business_type && <Pill label={b.business_type} />}
+        </View>
+      </View>
+
+      <InfoGrid
+        items={[
+          { label: 'Industry', value: b.industry_category || '—' },
+          { label: 'Location', value: location || '—' },
+          { label: 'Contact person', value: b.contact_person || '—' },
+          { label: 'Contact mobile', value: b.contact_mobile || '—' },
+          { label: 'Login mobile', value: b.mobile_number || '—' },
+        ]}
+      />
+
+      <DocumentList docs={b.documents} onError={onError} />
+
+      <ReviewPanel
+        notes={notes}
+        onChangeNotes={onChangeNotes}
+        busy={busy}
+        onApprove={() => onReview(true)}
+        onReject={() => onReview(false)}
+      />
+    </AdminCard>
+  );
+}
+
 export default function AdminRoute() {
-  const router = useRouter();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= breakpoint.desktop;
-  const [access, setAccess] = useState<Access>('CHECKING');
+  const access = useAdminAccess();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [businesses, setBusinesses] = useState<AdminFlaggedBusinessOut[]>([]);
@@ -77,17 +218,8 @@ export default function AdminRoute() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      const isAdmin = await checkAdminAccess();
-      if (!isAdmin) {
-        setAccess('DENIED');
-        router.replace('/admin-login');
-        return;
-      }
-      setAccess('GRANTED');
-      await loadAll();
-    })();
-  }, [loadAll, router]);
+    if (access === 'GRANTED') loadAll();
+  }, [access, loadAll]);
 
   async function handleReview(userId: number, approve: boolean) {
     setActingOn(userId);
@@ -103,449 +235,162 @@ export default function AdminRoute() {
     }
   }
 
-  function handleLogout() {
-    logout();
-    router.replace('/admin-login');
-  }
-
-  if (access === 'CHECKING') {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={color.primary} />
-      </View>
-    );
-  }
-
-  if (access === 'DENIED') {
-    return null; // redirecting
-  }
-
-  const statCards = stats
-    ? [
-        { label: 'Pending review', value: stats.pending_review_count, emphasis: true },
-        { label: 'Total businesses', value: stats.total_businesses },
-        { label: 'Buyers', value: stats.total_buyers },
-        { label: 'Sellers', value: stats.total_sellers },
-        { label: 'Verified businesses', value: stats.verified_businesses },
-        { label: 'Open requirements', value: stats.open_requirements },
-        { label: 'Total quotations', value: stats.total_quotations },
-      ]
-    : [];
+  const verifiedShare = stats && stats.total_businesses > 0 ? stats.verified_businesses / stats.total_businesses : 0;
 
   return (
-    <View style={styles.root}>
-      {isDesktop && <AdminSidebar onLogout={handleLogout} />}
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.eyebrow}>TrustLink Admin</Text>
-            <Text style={styles.title}>Dashboard</Text>
-          </View>
-          {!isDesktop && (
-            <Pressable onPress={handleLogout} style={styles.logoutButton}>
-              <Text style={styles.logoutLabel}>Log out</Text>
-            </Pressable>
-          )}
-        </View>
-
-      {error && <Text style={styles.error}>{error}</Text>}
+    <AdminShell
+      access={access}
+      title="Dashboard"
+      subtitle={todayLabel()}
+      actions={<GhostButton label="Refresh" onPress={loadAll} busy={loading} />}
+    >
+      {error && <ErrorBanner message={error} />}
 
       {loading && !stats ? (
-        <View style={styles.centeredInline}>
-          <ActivityIndicator color={color.primary} />
-        </View>
+        <LoadingBlock />
       ) : (
         <>
           {stats && (
-            <View style={styles.statsRow}>
-              {statCards.map((s) => (
-                <View key={s.label} style={[styles.statCard, s.emphasis && styles.statCardEmphasis]}>
-                  <Text style={[styles.statValue, s.emphasis && styles.statValueEmphasis]}>{s.value}</Text>
-                  <Text style={styles.statLabel}>{s.label}</Text>
-                </View>
-              ))}
-            </View>
+            <>
+              <AttentionBanner count={stats.pending_review_count} />
+
+              <View style={styles.statsGrid}>
+                <StatCard
+                  label="Businesses"
+                  value={stats.total_businesses}
+                  caption={`${stats.total_buyers} buyer${stats.total_buyers === 1 ? '' : 's'} · ${stats.total_sellers} seller${stats.total_sellers === 1 ? '' : 's'}`}
+                />
+                <StatCard
+                  label="Verified"
+                  value={stats.verified_businesses}
+                  caption={`${Math.round(verifiedShare * 100)}% of all businesses`}
+                  progress={verifiedShare}
+                />
+                <StatCard
+                  label="Requirements"
+                  value={stats.total_requirements}
+                  caption={`${stats.open_requirements} open right now`}
+                />
+                <StatCard label="Quotations" value={stats.total_quotations} caption="Submitted across all requirements" />
+              </View>
+
+              <RegistrationsChart data={stats.registrations_last_7_days} />
+            </>
           )}
 
-          {stats && <RegistrationsChart data={stats.registrations_last_7_days} />}
-
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Review queue</Text>
-            <Text style={styles.sectionSubtitle}>
-              {businesses.length} business{businesses.length === 1 ? '' : 'es'} waiting on a decision
-            </Text>
-          </View>
+          <SectionHeader
+            title="Review queue"
+            caption={`${businesses.length} business${businesses.length === 1 ? '' : 'es'} waiting on a decision`}
+          />
 
           {businesses.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>Nothing waiting on review right now.</Text>
-            </View>
+            <EmptyState
+              title="Nothing waiting on review"
+              body="When a business submits its verification documents, it shows up here for approval."
+            />
           ) : (
             businesses.map((b) => (
-              <View key={b.user_id} style={styles.card}>
-                <View style={styles.cardHeaderRow}>
-                  <Text style={styles.businessName}>{b.registered_name || b.business_name}</Text>
-                  <View style={{ flexDirection: 'row', gap: space.xs }}>
-                    {b.role && <Text style={styles.badge}>{b.role}</Text>}
-                    {b.business_type && <Text style={styles.badge}>{b.business_type}</Text>}
-                  </View>
-                </View>
-                <Text style={styles.metaLine}>
-                  {[b.industry_category, [b.city, b.province].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || '—'}
-                </Text>
-                <Text style={styles.metaLine}>
-                  Contact: {b.contact_person || '—'} {b.contact_mobile ? `(${b.contact_mobile})` : ''}
-                </Text>
-                <Text style={styles.metaLine}>Login mobile: {b.mobile_number}</Text>
-                {b.submitted_at && (
-                  <Text style={styles.metaLine}>Submitted: {new Date(b.submitted_at).toLocaleString()}</Text>
-                )}
-
-                <View style={styles.docsSection}>
-                  <Text style={styles.docsLabel}>Documents ({b.documents.length})</Text>
-                  {b.documents.map((doc) => (
-                    <View key={doc.id} style={styles.docRow}>
-                      <Text style={styles.docType}>{doc.doc_type}</Text>
-                      <Text style={styles.docStatus}>{doc.validation_status}</Text>
-                      {doc.validation_notes ? <Text style={styles.docNotes}>{doc.validation_notes}</Text> : null}
-                    </View>
-                  ))}
-                </View>
-
-                <TextInput
-                  style={styles.notesInput}
-                  value={notesByUser[b.user_id] ?? ''}
-                  onChangeText={(text) => setNotesByUser((prev) => ({ ...prev, [b.user_id]: text }))}
-                  placeholder="Notes for this decision (optional)"
-                  placeholderTextColor={color.inkFaint}
-                  multiline
-                />
-
-                <View style={styles.actionsRow}>
-                  <Pressable
-                    style={[styles.actionButton, styles.approveButton, actingOn === b.user_id && styles.actionButtonDisabled]}
-                    disabled={actingOn === b.user_id}
-                    onPress={() => handleReview(b.user_id, true)}
-                  >
-                    {actingOn === b.user_id ? (
-                      <ActivityIndicator color={color.onPrimary} />
-                    ) : (
-                      <Text style={styles.approveLabel}>Approve</Text>
-                    )}
-                  </Pressable>
-                  <Pressable
-                    style={[styles.actionButton, styles.rejectButton, actingOn === b.user_id && styles.actionButtonDisabled]}
-                    disabled={actingOn === b.user_id}
-                    onPress={() => handleReview(b.user_id, false)}
-                  >
-                    {actingOn === b.user_id ? (
-                      <ActivityIndicator color={color.danger} />
-                    ) : (
-                      <Text style={styles.rejectLabel}>Reject</Text>
-                    )}
-                  </Pressable>
-                </View>
-              </View>
+              <QueueCard
+                key={b.user_id}
+                b={b}
+                notes={notesByUser[b.user_id] ?? ''}
+                onChangeNotes={(text) => setNotesByUser((prev) => ({ ...prev, [b.user_id]: text }))}
+                busy={actingOn === b.user_id}
+                onReview={(approve) => handleReview(b.user_id, approve)}
+                onError={setError}
+              />
             ))
           )}
         </>
       )}
-    </ScrollView>
-    </View>
+    </AdminShell>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
+  /* attention banner */
+  banner: {
     flexDirection: 'row',
-    backgroundColor: color.canvas,
-  },
-
-  screen: {
-    flex: 1,
-    backgroundColor: color.canvas,
-  },
-  content: {
-    width: '100%',
-    maxWidth: layout.maxWidthWide,
-    alignSelf: 'center',
-    padding: space.xl,
-    paddingBottom: space.section,
-  },
-  centered: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: color.canvas,
-  },
-  centeredInline: {
-    paddingVertical: space.xxl,
-    alignItems: 'center',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: space.xl,
-  },
-  eyebrow: {
-    fontFamily: font.monoMedium,
-    fontSize: fontSize.micro,
-    color: color.inkMuted,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    marginBottom: space.xs,
-  },
-  title: {
-    fontFamily: font.display,
-    fontSize: fontSize.xl,
-    color: color.ink,
-  },
-  logoutButton: {
+    gap: space.lg,
+    borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: color.border,
-    borderRadius: radius.md,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.sm,
-  },
-  logoutLabel: {
-    fontFamily: font.bodyMedium,
-    fontSize: fontSize.sm,
-    color: color.ink,
-  },
-  error: {
-    fontFamily: font.body,
-    fontSize: fontSize.sm,
-    color: color.danger,
+    padding: space.xl,
     marginBottom: space.lg,
   },
+  bannerWaiting: { backgroundColor: color.dangerFaint, borderColor: color.dangerBorder },
+  bannerClear: { backgroundColor: color.primaryFaint, borderColor: color.primaryBorder },
+  bannerBadge: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  bannerBadgeWaiting: { backgroundColor: color.danger },
+  bannerBadgeClear: { backgroundColor: color.primary },
+  bannerBadgeLabel: { fontFamily: font.display, fontSize: fontSize.lg, color: color.onPrimary },
+  bannerTitle: { fontFamily: font.bodySemi, fontSize: fontSize.md, lineHeight: lineHeight.md, color: color.primary },
+  bannerBody: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted, marginTop: 2 },
 
-  /* ─── Stats ────────────────────────────── */
-  statsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.md,
-    marginBottom: space.lg,
-  },
+  /* KPI cards */
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, marginBottom: space.lg },
   statCard: {
     flexGrow: 1,
-    flexBasis: 150,
+    flexBasis: 200,
     backgroundColor: color.surface,
     borderWidth: 1,
     borderColor: color.border,
-    borderRadius: radius.lg,
-    paddingVertical: space.lg,
-    paddingHorizontal: space.lg,
+    borderRadius: radius.xl,
+    padding: space.xl,
   },
-  statCardEmphasis: {
-    borderColor: color.dangerBorder,
-    backgroundColor: color.dangerFaint,
+  statLabel: {
+    fontFamily: font.monoMedium,
+    fontSize: fontSize.micro,
+    lineHeight: lineHeight.micro,
+    letterSpacing: letterSpacing.label,
+    textTransform: 'uppercase',
+    color: color.inkMuted,
   },
   statValue: {
     fontFamily: font.display,
-    fontSize: fontSize.xl,
+    fontSize: fontSize.display,
+    lineHeight: lineHeight.display,
+    letterSpacing: letterSpacing.tight,
     color: color.ink,
-    marginBottom: space.xs,
+    marginTop: space.sm,
   },
-  statValueEmphasis: {
-    color: color.danger,
-  },
-  statLabel: {
-    fontFamily: font.bodyMedium,
-    fontSize: fontSize.sm,
-    color: color.inkMuted,
-  },
+  statCaption: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted, marginTop: space.xs },
+  progressTrack: { height: 4, borderRadius: 2, backgroundColor: color.surfaceSunken, marginTop: space.md, overflow: 'hidden' },
+  progressFill: { height: 4, borderRadius: 2, backgroundColor: color.primary },
 
-  /* ─── Chart ────────────────────────────── */
+  /* chart */
   chartCard: {
     backgroundColor: color.surface,
     borderWidth: 1,
     borderColor: color.border,
-    borderRadius: radius.lg,
-    padding: space.lg,
-    marginBottom: space.xl,
-  },
-  chartTitle: {
-    fontFamily: font.bodyMedium,
-    fontSize: fontSize.sm,
-    color: color.ink,
-    marginBottom: space.lg,
-  },
-  chartBars: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  chartColumn: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  chartValue: {
-    fontFamily: font.monoMedium,
-    fontSize: fontSize.micro,
-    color: color.inkMuted,
-    marginBottom: space.xs,
-  },
-  chartTrack: {
-    height: 96,
-    width: 20,
-    justifyContent: 'flex-end',
-  },
-  chartBar: {
-    width: '100%',
-    backgroundColor: color.primary,
-    borderRadius: radius.sm,
-  },
-  chartLabel: {
-    fontFamily: font.body,
-    fontSize: fontSize.micro,
-    color: color.inkFaint,
-    marginTop: space.xs,
-  },
-
-  /* ─── Review queue ─────────────────────── */
-  sectionHeaderRow: {
+    borderRadius: radius.xl,
+    padding: space.xl,
     marginBottom: space.md,
   },
-  sectionTitle: {
-    fontFamily: font.bodySemi,
-    fontSize: fontSize.lg,
-    color: color.ink,
-  },
-  sectionSubtitle: {
-    fontFamily: font.body,
-    fontSize: fontSize.sm,
-    color: color.inkMuted,
-    marginTop: 2,
-  },
-  emptyState: {
-    padding: space.xxl,
-    alignItems: 'center',
-    backgroundColor: color.surface,
-    borderWidth: 1,
-    borderColor: color.borderFaint,
-    borderRadius: radius.lg,
-  },
-  emptyText: {
-    fontFamily: font.body,
-    fontSize: fontSize.base,
-    color: color.inkMuted,
-  },
-  card: {
-    backgroundColor: color.surface,
-    borderWidth: 1,
-    borderColor: color.border,
-    borderRadius: radius.lg,
-    padding: space.lg,
-    marginBottom: space.lg,
-  },
-  cardHeaderRow: {
+  chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space.xl },
+  chartSub: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkFaint, marginTop: 2 },
+  chartTotal: { fontFamily: font.display, fontSize: fontSize.xl, lineHeight: lineHeight.xl, color: color.ink },
+  chartBars: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: space.xs,
+    alignItems: 'flex-end',
+    gap: space.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: color.border,
+    paddingBottom: 0,
   },
-  businessName: {
-    fontFamily: font.bodySemi,
-    fontSize: fontSize.md,
-    color: color.ink,
-  },
-  badge: {
-    fontFamily: font.monoMedium,
-    fontSize: fontSize.micro,
-    color: color.primary,
-    backgroundColor: color.primaryFaint,
-    borderRadius: radius.sm,
-    paddingHorizontal: space.sm,
-    paddingVertical: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  metaLine: {
-    fontFamily: font.body,
-    fontSize: fontSize.sm,
-    color: color.inkMuted,
-    marginTop: 2,
-  },
-  docsSection: {
-    marginTop: space.md,
-    paddingTop: space.md,
-    borderTopWidth: 1,
-    borderTopColor: color.borderFaint,
-  },
-  docsLabel: {
-    fontFamily: font.bodyMedium,
-    fontSize: fontSize.sm,
-    color: color.ink,
-    marginBottom: space.xs,
-  },
-  docRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    marginBottom: space.xs,
-  },
-  docType: {
-    fontFamily: font.monoMedium,
-    fontSize: fontSize.micro,
-    color: color.ink,
-    marginRight: space.sm,
-  },
-  docStatus: {
-    fontFamily: font.body,
-    fontSize: fontSize.micro,
-    color: color.inkMuted,
-    marginRight: space.sm,
-  },
-  docNotes: {
-    fontFamily: font.body,
-    fontSize: fontSize.micro,
-    color: color.danger,
-  },
-  notesInput: {
-    borderWidth: 1,
-    borderColor: color.border,
-    borderRadius: radius.md,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    fontFamily: font.body,
-    fontSize: fontSize.sm,
-    color: color.ink,
-    backgroundColor: color.canvas,
-    marginTop: space.md,
-    minHeight: 44,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    marginTop: space.md,
-    gap: space.md,
-  },
-  actionButton: {
-    flex: 1,
-    borderRadius: radius.md,
-    paddingVertical: space.md,
-    alignItems: 'center',
-  },
-  actionButtonDisabled: {
-    opacity: 0.5,
-  },
-  approveButton: {
-    backgroundColor: color.primary,
-  },
-  approveLabel: {
-    fontFamily: font.bodySemi,
-    fontSize: fontSize.base,
-    color: color.onPrimary,
-  },
-  rejectButton: {
-    backgroundColor: color.surface,
-    borderWidth: 1,
-    borderColor: color.dangerBorder,
-  },
-  rejectLabel: {
-    fontFamily: font.bodySemi,
-    fontSize: fontSize.base,
-    color: color.danger,
-  },
+  chartColumn: { flex: 1, alignItems: 'center' },
+  chartValue: { fontFamily: font.monoMedium, fontSize: fontSize.micro, color: color.inkFaint, marginBottom: space.xs },
+  chartValueToday: { color: color.primary },
+  chartTrack: { width: '100%', maxWidth: 44, justifyContent: 'flex-end' },
+  chartBar: { width: '100%', backgroundColor: color.primaryBorder, borderTopLeftRadius: radius.sm, borderTopRightRadius: radius.sm },
+  chartBarToday: { backgroundColor: color.primary },
+  chartLabels: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
+  chartLabel: { flex: 1, textAlign: 'center', fontFamily: font.body, fontSize: fontSize.micro, color: color.inkFaint },
+  chartLabelToday: { fontFamily: font.bodySemi, color: color.primary },
+
+  /* queue */
+  queueHeader: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap' },
+  queueName: { fontFamily: font.bodySemi, fontSize: fontSize.md, lineHeight: lineHeight.md, color: color.ink },
+  queueSub: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
+  pillRow: { flexDirection: 'row', gap: space.xs, flexWrap: 'wrap' },
 });

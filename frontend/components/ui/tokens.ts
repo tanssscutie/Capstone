@@ -106,10 +106,13 @@ export const elevation = {
 /** Phone-width on every platform. One layout, three targets. */
 export const layout = {
   maxWidth: 480,
-  maxWidthWide: 1100,
-  /** Three-column dashboard screens (e.g. the home feed) need more room than the
-   *  two-column wide layout — this is that wider cap, not a replacement for it. */
-  maxWidthDashboard: 1760,
+  /** Every wide page and the header share one centred column (LinkedIn-style),
+   *  so content lines up under the nav instead of stretching to the window edges. */
+  maxWidthShell: 1180,
+  maxWidthWide: 1180,
+  /** Three-column dashboard screens (e.g. the home feed) — same centred width as
+   *  everything else; the columns compress inside it. */
+  maxWidthDashboard: 1180,
   screenPadding: 20,
   minTouchTarget: 44,
   sideColumnMinWidth: 270,

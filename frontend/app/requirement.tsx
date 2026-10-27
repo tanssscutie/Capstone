@@ -4,7 +4,7 @@ import { View, Text, ActivityIndicator, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import RequirementDetail from '../features/requirement-detail/RequirementDetail';
 import { me } from '../lib/api/auth';
-import { requirementsApi } from '../lib/api/requirements';
+import { requirementsApi, openRequestedDocumentFile } from '../lib/api/requirements';
 import { requirementsCache } from '../lib/api/requirementsCache';
 import { messagesApi } from '../lib/api/messages';
 import {
@@ -14,8 +14,17 @@ import {
   mapQuotationDetail,
   mapLedgerEntry,
   mapClarificationQuestion,
+  mapDocumentRequest,
 } from '../lib/api/mappers';
-import type { Business, BusinessId, ClarificationQuestion, LedgerEntry, Quotation, Requirement } from '../lib/types';
+import type {
+  Business,
+  BusinessId,
+  ClarificationQuestion,
+  DocumentRequest,
+  LedgerEntry,
+  Quotation,
+  Requirement,
+} from '../lib/types';
 import { color, font, fontSize, space } from '../components/ui/tokens';
 import { errorMessage } from '../lib/api/client';
 
@@ -44,6 +53,25 @@ export default function RequirementRoute() {
   const [respondents, setRespondents] = useState<Record<BusinessId, Respondent>>({});
   const [questions, setQuestions] = useState<ClarificationQuestion[]>([]);
   const [viewerIsBuyer, setViewerIsBuyer] = useState(false);
+  // Post-release document requests, keyed by quotation id — the owner's for
+  // every released quotation, a respondent's for their own one only.
+  const [documentRequests, setDocumentRequests] = useState<Record<string, DocumentRequest[]>>({});
+
+  async function fetchDocumentRequests(requirementId: number, quotationIds: string[]) {
+    // A failed list just shows no requests — it must not blank the whole
+    // requirement the way a failed initial load does.
+    const lists = await Promise.all(
+      quotationIds.map((qid) => requirementsApi.listDocumentRequests(requirementId, Number(qid)).catch(() => [])),
+    );
+    return Object.fromEntries(quotationIds.map((qid, i) => [qid, lists[i].map(mapDocumentRequest)]));
+  }
+
+  /** Refreshes one quotation's requests in place — no full-screen reload. */
+  async function reloadDocumentRequests(quotationId: string) {
+    if (!id) return;
+    const fresh = await fetchDocumentRequests(Number(id), [quotationId]);
+    setDocumentRequests((prev) => ({ ...prev, ...fresh }));
+  }
 
   async function load(forceRefresh = false) {
     if (!id) {
@@ -97,6 +125,8 @@ export default function RequirementRoute() {
           });
           setReleasedQuotations(quotations);
           setRespondents(respMap);
+          const released = quotations.filter((q) => q.status !== 'WITHDRAWN').map((q) => q.id);
+          setDocumentRequests(await fetchDocumentRequests(numericId, released));
         }
       } else {
         setBuyer(mapPosterToBusiness(raw.poster));
@@ -121,6 +151,9 @@ export default function RequirementRoute() {
           if (match) {
             setHasSubmitted(true);
             setOwnQuotation(mapMyQuotation(match));
+            setDocumentRequests(
+              match.outcome === 'sealed' ? {} : await fetchDocumentRequests(numericId, [String(match.quotation_id)]),
+            );
             const entry = ledgerView.entries.find(
               (e) => e.quotation_id === match.quotation_id && e.event_type === 'SUBMITTED',
             );
@@ -152,6 +185,14 @@ export default function RequirementRoute() {
       setQuestions(rows.map(mapClarificationQuestion));
     } catch (e: any) {
       setActionError(errorMessage(e, 'Could not refresh questions.'));
+    }
+  }
+
+  async function onOpenRequestedDocument(requestId: string) {
+    try {
+      await openRequestedDocumentFile(Number(id), Number(requestId));
+    } catch (e: any) {
+      setActionError(errorMessage(e, 'Could not open that document.'));
     }
   }
 
@@ -296,6 +337,29 @@ export default function RequirementRoute() {
           }
         }}
         onViewLedger={() => router.push({ pathname: '/ledger', params: { id } })}
+        documentRequests={documentRequests}
+        onRequestDocument={async (quotationId, documentLabel, note) => {
+          try {
+            await requirementsApi.requestDocument(Number(id), Number(quotationId), documentLabel, note);
+            await reloadDocumentRequests(quotationId);
+            return true;
+          } catch (e: any) {
+            setActionError(errorMessage(e, 'Could not send that document request.'));
+            return false;
+          }
+        }}
+        onCancelDocumentRequest={async (requestId) => {
+          const quotationId = Object.keys(documentRequests).find((qid) =>
+            documentRequests[qid].some((r) => r.id === requestId),
+          );
+          try {
+            await requirementsApi.cancelDocumentRequest(Number(id), Number(requestId));
+            if (quotationId) await reloadDocumentRequests(quotationId);
+          } catch (e: any) {
+            setActionError(errorMessage(e, 'Could not cancel that request.'));
+          }
+        }}
+        onOpenRequestedDocument={onOpenRequestedDocument}
       />
     );
   }
@@ -313,6 +377,7 @@ export default function RequirementRoute() {
   };
 
   if (hasSubmitted && ownQuotation && ledgerEntry) {
+    const ownQuotationId = ownQuotation.id;
     return withActionErrorBanner(
       <RequirementDetail
         state="RESPONDENT"
@@ -349,6 +414,18 @@ export default function RequirementRoute() {
         }}
         onViewBuyerProfile={() => router.push({ pathname: '/business-profile', params: { id: buyer.id } })}
         onViewLedger={() => router.push({ pathname: '/ledger', params: { id } })}
+        documentRequests={documentRequests[ownQuotationId] ?? []}
+        onUploadRequestedDocument={async (requestId, file, responseNote) => {
+          try {
+            await requirementsApi.uploadRequestedDocument(Number(id), Number(requestId), file, file.name, responseNote);
+            await reloadDocumentRequests(ownQuotationId);
+            return true;
+          } catch (e: any) {
+            setActionError(errorMessage(e, 'Could not upload that document.'));
+            return false;
+          }
+        }}
+        onOpenRequestedDocument={onOpenRequestedDocument}
       />
     );
   }

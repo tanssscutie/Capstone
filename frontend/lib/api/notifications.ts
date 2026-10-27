@@ -10,6 +10,7 @@ export interface NotificationOut {
   urgent: boolean;
   read: boolean;
   created_at: string;
+  related_requirement_id: number | null;
 }
 
 export const notificationsApi = {

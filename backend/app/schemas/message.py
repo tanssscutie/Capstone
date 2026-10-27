@@ -24,6 +24,11 @@ class MessageOut(BaseModel):
     thread_id: int
     sender_id: int
     body: str
+    is_system: bool = False
+    # Set when the message carries a file — fetch it from
+    # GET /messages/threads/{thread_id}/messages/{id}/file.
+    attachment_filename: Optional[str] = None
+    attachment_size: Optional[int] = None
     created_at: datetime
     read: bool
 

@@ -3,8 +3,7 @@
 // "View buyer profile" (RequirementDetail, respondent view) and "View
 // profile" (RequirementDetail, owner viewing a released respondent). Same
 // page shell as AccountProfile.tsx, but nothing here is the viewer's own —
-// no edit actions, no contact info (that stays private; see
-// PublicBusinessProfile in lib/api/mappers.ts for what's deliberately left out).
+// Contact details stay private to the account owner and administrators.
 
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import ScreenScroll from '../../components/ui/ScreenScroll';
@@ -46,10 +45,6 @@ const BUSINESS_TYPE_LABELS: Record<string, string> = {
 
 function businessTypeLabel(type: string): string {
   return BUSINESS_TYPE_LABELS[type] ?? type;
-}
-
-function tierLabel(tier: 1 | 2 | 3 | null): string {
-  return tier === null ? 'Unrated' : `Tier ${tier} of 3`;
 }
 
 type Tone = 'primary' | 'neutral';
@@ -100,9 +95,11 @@ export default function BusinessProfile({ profile, onBack }: BusinessProfileProp
   const c = profile.credibility;
 
   const statRows: { label: string; value: string }[] = [
-    { label: 'Requirements posted', value: String(c.requirementsPosted) },
-    { label: 'Requirements awarded', value: String(c.requirementsAwarded) },
-    { label: 'Member since', value: String(profile.memberSinceYear) },
+    { label: 'Requirements posted · As buyer', value: String(c.requirementsPosted) },
+    { label: 'Requirements awarded · As buyer', value: String(c.requirementsAwarded) },
+    { label: 'Quotations submitted · As supplier', value: String(c.quotationsSubmitted) },
+    { label: 'Quotations awarded · As supplier', value: String(c.quotationsAwarded) },
+    { label: 'Completed transactions · Confirmed by both parties', value: String(profile.transactionsCompleted) },
   ];
 
   return (
@@ -122,14 +119,13 @@ export default function BusinessProfile({ profile, onBack }: BusinessProfileProp
             <View style={{ minWidth: 0, flex: 1, gap: space.xs }}>
               <Text style={styles.heroName}>{profile.registeredName}</Text>
               <View style={styles.heroBadgeRow}>
-                <StatusBadge label={verified ? 'Verified' : 'Not yet verified'} tone={verified ? 'primary' : 'neutral'} />
-                <StatusBadge label={tierLabel(c.tier)} tone="neutral" />
+                <StatusBadge label={verified ? 'Verified Business' : 'Not Yet Verified'} tone={verified ? 'primary' : 'neutral'} />
               </View>
             </View>
           </View>
-          {verified && c.verifiedAt && (
-            <Text style={styles.mutedSmall}>Verified {formatMonthYear(c.verifiedAt)}</Text>
-          )}
+          {!!profile.category && <Text style={styles.mutedSmall}>{profile.category}</Text>}
+          <FactRow label="Member Since" value={formatMonthYear(profile.memberSince)} />
+          <FactRow label="Verified Since" value={verified ? (c.verifiedAt ? formatMonthYear(c.verifiedAt) : 'Date not recorded') : 'Not Yet Verified'} />
           {!!profile.description && <Text style={styles.heroBio}>{profile.description}</Text>}
         </View>
 
@@ -158,7 +154,7 @@ export default function BusinessProfile({ profile, onBack }: BusinessProfileProp
         </View>
 
         <View style={styles.card}>
-          <SectionLabel>Activity on Trustlink</SectionLabel>
+          <SectionLabel>Business activity overview</SectionLabel>
           <View style={styles.statsGrid}>
             {statRows.map((r) => (
               <View key={r.label} style={styles.statCell}>
@@ -167,6 +163,29 @@ export default function BusinessProfile({ profile, onBack }: BusinessProfileProp
               </View>
             ))}
           </View>
+          <Text style={[styles.mutedSmall, { marginTop: space.md }]}>
+            {profile.includesSealedActivity
+              ? 'Supplier counts include your private sealed activity.'
+              : 'Supplier counts exclude sealed activity and submissions or withdrawals before the closing deadline.'}
+            {' '}Submitted counts include recorded withdrawals and voided quotations. Awards record an accepted opportunity. Completed transactions are ones both the buyer and the supplier confirmed — TrustLink does not track delivery or payment.
+          </Text>
+        </View>
+
+        <View style={styles.card}>
+          <SectionLabel>Business transparency</SectionLabel>
+          <View style={{ gap: space.sm, marginTop: space.sm }}>
+            <FactRow label="Registration documents" value={profile.registrationDocumentTypes.join(', ') || 'No passing registration document recorded'} />
+            <FactRow label="Verification status" value={profile.verificationStatus.replace(/_/g, ' ')} />
+            <FactRow label="Registration verification" value={verified ? 'Administrator-confirmed' : 'Not Yet Verified'} />
+            <FactRow label="Requirements cancelled · As buyer" value={String(profile.requirementsCancelled)} />
+            <FactRow label="Quotations withdrawn · As supplier" value={String(profile.quotationsWithdrawn)} />
+            <FactRow label="Transactions that did not push through" value={String(profile.transactionsNotPushedThrough)} />
+            <FactRow label="Authorized contact person" value={profile.contactDetailsVisible ? (profile.contactPerson || 'Not provided') : 'Visible once your account is verified'} />
+            <FactRow label="Business contact number" value={profile.contactDetailsVisible ? (profile.contactMobile || 'Not provided') : 'Visible once your account is verified'} />
+          </View>
+          <Text style={[styles.mutedSmall, { marginTop: space.md }]}>
+            TrustLink administrators review uploaded documents. Verification is not performed directly by DTI or SEC. Document contents and registration numbers remain private.
+          </Text>
         </View>
 
         <View style={styles.footerRow}>

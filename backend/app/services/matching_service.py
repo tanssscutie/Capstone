@@ -88,6 +88,18 @@ def embed(text: str) -> list[float]:
         return []
 
 
+def embed_many(texts: list[str]) -> list[list[float]]:
+    """Batch embed() for spec_suggestion_service's attribute phrases — same
+    model, one pass. Empty list (not an error) on a model failure."""
+    if not texts:
+        return []
+    try:
+        return [v.tolist() for v in _get_model().embed(texts)]
+    except Exception:
+        logger.exception("Embedding failed")
+        return []
+
+
 def embed_to_json(text: str) -> str:
     """Embeds text and returns it JSON-encoded, ready to store in a TEXT
     column — empty string (not an error) for blank input or a model

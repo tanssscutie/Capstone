@@ -69,6 +69,8 @@ class AuthService:
                 email=email,
                 hashed_password=get_password_hash(user_in.password),
                 role=user_in.role,
+                industry_category=user_in.industry_category,
+                years_in_business=user_in.years_in_business,
             )
             user = create_user(session, user)
             try:

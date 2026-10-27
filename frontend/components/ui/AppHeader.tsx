@@ -9,7 +9,7 @@
 // HeaderScrollContext. When no provider is present (e.g. a screen without a
 // scroll view), the header stays in its expanded state.
 
-import type { ComponentType } from 'react';
+import type { ComponentType, Ref } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
@@ -38,6 +38,7 @@ import type { Business, TrustTier } from '../../lib/types';
 import { useHeaderScroll, HEADER_CONDENSE_AT } from './HeaderScrollContext';
 import { useViewer } from '../../lib/api/viewer';
 import AccountDropdown from './AccountDropdown';
+import AlertsPopover from './AlertsPopover';
 import MobileNavMenu from './MobileNavMenu';
 
 function tierLabel(tier: TrustTier | null): string {
@@ -121,9 +122,11 @@ export interface AppHeaderProps {
   viewer?: Business;
   /** Unread alert count shown on the Alerts nav item's badge. */
   alertCount?: number;
+  /** The alerts popover read or marked alerts — the new unread count. */
+  onAlertCountChange?: (count: number) => void;
 }
 
-export default function AppHeader({ viewer: viewerOverride, alertCount = 0 }: AppHeaderProps) {
+export default function AppHeader({ viewer: viewerOverride, alertCount = 0, onAlertCountChange }: AppHeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { q: routeQuery } = useGlobalSearchParams<{ q?: string }>();
@@ -262,11 +265,36 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0 }: Ap
     });
   };
 
-  const renderNavItem = (item: NavItem) => {
-    const active = pathname === item.href;
+  // Alerts popover: the bell opens a small panel instead of the full screen —
+  // only its "See all alerts" goes to /alerts. Anchored the same way as the
+  // account menu above.
+  const bellRef = useRef<View>(null);
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const [bellLayout, setBellLayout] = useState<{ top: number; right: number } | null>(null);
+
+  const toggleAlerts = () => {
+    if (alertsOpen) {
+      setAlertsOpen(false);
+      return;
+    }
+    const node = bellRef.current;
+    if (!node) return;
+    node.measureInWindow((x, y, bellWidth, bellHeight) => {
+      setBellLayout({ top: Math.round(y + bellHeight), right: Math.max(8, Math.round(width - (x + bellWidth))) });
+      setAlertsOpen(true);
+    });
+  };
+
+  const renderNavItem = (item: NavItem, opts?: { onPress?: () => void; ref?: Ref<View>; active?: boolean }) => {
+    const active = opts?.active ?? pathname === item.href;
     const tone = active ? color.ink : color.inkMuted;
     return (
-      <Pressable key={item.label} style={[styles.navItem, active ? styles.navItemActive : null]} onPress={() => router.push(item.href)}>
+      <Pressable
+        key={item.label}
+        ref={opts?.ref}
+        style={[styles.navItem, active ? styles.navItemActive : null]}
+        onPress={opts?.onPress ?? (() => router.push(item.href))}
+      >
         <View style={styles.navIconWrap}>
           <item.Icon tone={tone} />
           {!!item.badge && (
@@ -348,14 +376,16 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0 }: Ap
 
         <View style={styles.headerRight}>
           {isWide ? (
-            <View style={styles.navRow}>{primaryNav.map(renderNavItem)}</View>
+            <View style={styles.navRow}>{primaryNav.map((item) => renderNavItem(item))}</View>
           ) : (
             <Pressable ref={hamburgerRef} style={styles.hamburgerButton} onPress={openNavMenu} accessibilityLabel="Open navigation menu">
               <HamburgerIcon tone={color.ink} />
             </Pressable>
           )}
 
-          {renderNavItem(alertsNav)}
+          {renderNavItem(alertsNav, { onPress: toggleAlerts, ref: bellRef, active: alertsOpen || pathname === '/alerts' })}
+
+          <View style={styles.headerDivider} />
 
           <Pressable
             ref={chipRef}
@@ -365,7 +395,7 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0 }: Ap
             <AvatarChip label={initials(name)} size={32} />
             <View style={{ minWidth: 0 }}>
               <Text style={styles.profileChipName} numberOfLines={1}>{name}</Text>
-              <Animated.Text style={[styles.profileChipTier, { opacity: profileTierOpacity }]}>
+              <Animated.Text style={[styles.profileChipTier, { opacity: profileTierOpacity }]} numberOfLines={1}>
                 Verified · {tierLabel(viewer.credibility.tier)}
               </Animated.Text>
             </View>
@@ -378,6 +408,15 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0 }: Ap
           onDismiss={() => setAccountMenuOpen(false)}
           anchorTop={chipLayout.top}
           anchorRight={chipLayout.right}
+        />
+      )}
+
+      {alertsOpen && bellLayout && (
+        <AlertsPopover
+          onDismiss={() => setAlertsOpen(false)}
+          anchorTop={bellLayout.top}
+          anchorRight={bellLayout.right}
+          onUnreadCountChange={onAlertCountChange}
         />
       )}
 
@@ -423,24 +462,26 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     width: '100%',
+    maxWidth: layout.maxWidthShell,
+    alignSelf: 'center',
     paddingHorizontal: layout.screenPadding,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.md,
-    flexWrap: 'wrap',
+    gap: space.xl,
   },
-  headerLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' },
-  headerCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  headerRight: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: space.md, flexWrap: 'wrap' },
+  headerLeft: { flexShrink: 0, flexDirection: 'row', alignItems: 'center' },
+  headerCenter: { flex: 1, minWidth: 0, alignItems: 'flex-start', justifyContent: 'center', overflow: 'hidden' },
+  headerRight: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  headerDivider: { width: 1, height: 28, backgroundColor: color.border, marginHorizontal: space.xs },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   logoMark: { borderRadius: radius.pill },
   logoText: { fontFamily: font.display, fontSize: fontSize.base, color: color.ink },
-  searchField: { width: '100%', minWidth: 140, maxWidth: 340, backgroundColor: color.surfaceSunken, borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.sm },
+  searchField: { width: '100%', minWidth: 140, maxWidth: 380, backgroundColor: color.surfaceSunken, borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.sm },
   searchInput: { fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
 
   /* nav items: icon above label, count badge pinned to the icon, underline on active */
-  navRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.xs },
-  navItem: { alignItems: 'center', paddingHorizontal: space.sm, paddingTop: space.xs, paddingBottom: space.sm, gap: 4, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  navRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  navItem: { alignItems: 'center', justifyContent: 'center', minWidth: 64, paddingHorizontal: space.sm, paddingTop: space.xs, paddingBottom: space.xs, gap: 4, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   navItemActive: { borderBottomColor: color.ink },
   navIconWrap: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   navLabel: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
@@ -468,7 +509,7 @@ const styles = StyleSheet.create({
   bellBase: { width: 12, height: 1.3, marginTop: 1, borderRadius: 1 },
   bellClapper: { width: 2.5, height: 2.5, marginTop: 1, borderRadius: 2 },
 
-  profileChip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minWidth: 0 },
-  profileChipName: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
+  profileChip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minWidth: 0, paddingVertical: space.xs },
+  profileChipName: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink, maxWidth: 160 },
   profileChipTier: { fontFamily: font.mono, fontSize: 10, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.primary },
 });

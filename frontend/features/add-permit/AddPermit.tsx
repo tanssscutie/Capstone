@@ -22,6 +22,7 @@ import {
 } from '../../components/ui/tokens';
 import { errorMessage } from '../../lib/api/client';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
+import { VALIDATION_ERROR_MARK, scrollToFirstError } from '../../lib/scrollToFirstError';
 
 /** Mirrors the backend's ID_FORMAT_PATTERNS["MAYORS_PERMIT"] (business_service.py). */
 const PERMIT_NUMBER_PATTERN = /^[A-Za-z0-9\-/]{4,30}$/;
@@ -64,6 +65,7 @@ export default function AddPermit({ onBack, onSubmit }: AddPermitProps) {
   const handleSubmit = async () => {
     if (!picked || numberBad) {
       setAttempted(true);
+      scrollToFirstError();
       return;
     }
     setSubmitting(true);
@@ -135,7 +137,7 @@ export default function AddPermit({ onBack, onSubmit }: AddPermitProps) {
                 <Text style={styles.addDashedLabel}>+ Add a photo or file</Text>
               </Pressable>
             )}
-            {attempted && !picked && <Text style={styles.errorText}>Attach your Mayor's permit to submit.</Text>}
+            {attempted && !picked && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Attach your Mayor's permit to submit.</Text>}
           </View>
 
           <View style={{ marginTop: space.md }}>
@@ -149,7 +151,7 @@ export default function AddPermit({ onBack, onSubmit }: AddPermitProps) {
               style={[styles.input, attempted && numberBad ? styles.inputError : null]}
             />
             {attempted && numberBad && (
-              <Text style={styles.errorText}>That doesn't look like a valid permit number — check it against the document.</Text>
+              <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>That doesn't look like a valid permit number — check it against the document.</Text>
             )}
           </View>
         </View>

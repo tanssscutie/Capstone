@@ -8,6 +8,7 @@ from app.core.database import create_db_and_tables
 from app.api.api import api_router
 from app.services.release_scheduler import start_scheduler, stop_scheduler
 from app.services import matching_service
+from app.services.requirement_service import requirement_service
 
 logger = logging.getLogger("trustlink.startup")
 
@@ -40,6 +41,11 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
+    # Awards accepted before post-award messaging existed (or while a system
+    # message couldn't be saved) get their winner thread now. Idempotent.
+    backfilled = requirement_service.backfill_award_threads()
+    if backfilled:
+        logger.info("Opened %d missing award thread(s).", backfilled)
     # This is what makes release "triggered by the system clock rather
     # than by any person" — nothing in the API can flip a requirement from
     # open to closed; only this background job can, once closes_at passes.

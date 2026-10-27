@@ -2,6 +2,7 @@ from datetime import datetime
 from app.core.clock import now_ph
 from typing import Optional
 
+from sqlalchemy import Text
 from sqlmodel import SQLModel, Field
 
 
@@ -30,6 +31,15 @@ class Quotation(SQLModel, table=True):
     payment_terms: Optional[str] = None
     validity_period: Optional[str] = None
     notes: str = ""
+    # Sealed too: the respondent's answer to each of the requirement's
+    # specification rows — JSON list of {"label": str, "attribute_id": str | null,
+    # "complies": bool, "offered": str | null}, in the requirement's row order
+    # ("offered" = what they quote instead, when complies is false). Null on
+    # quotations submitted before this existed — and then also left out of the
+    # hashed payload, so their integrity check still recomputes the same hash.
+    # Added after launch: existing databases get the column from
+    # database._migrate_quotation_spec_responses.
+    spec_responses: Optional[str] = Field(default=None, sa_type=Text)
 
     # sealed -> released (normal path)
     # sealed -> withdrawn (business pulled it back before closing)
