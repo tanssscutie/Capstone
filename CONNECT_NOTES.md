@@ -76,6 +76,16 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**AI quotation draft (Gemini) para sa seller**
+- Sa Submit Quotation, may **"✨ Draft with AI"** sa itaas ng form. Pinupunan nito ang line items at unit prices, ang sagot sa bawat specification, ang lead time (linggo), payment terms, validity, at note sa buyer.
+- **Pagkapuno:** may banner na "AI draft — review every line and price before sealing", may **Undo** (babalik sa dati), at **nili-linis ang dalawang checkbox** ng seal para i-confirm ulit ng seller. **Hindi ito kusang nagsa-submit.**
+- **Input:** ang requirement (title, scope, item, specs, quantity, budget, required documents), ang capabilities at items ng seller, at ang **sariling** dating quotation niya (hanggang 5, inuuna ang parehong category). **Hindi kailanman** ginagamit ang presyo ng ibang supplier.
+- Realistic ang presyo. Hindi nito ibinababa para lang magkasya sa budget, at sinasabi sa note kung lampas. Hindi rin ito nangangako ng documents.
+- **Kapag walang `GEMINI_API_KEY` o pumalya ang tawag:** template na **walang presyo** (isang line item mula sa title at quantity, at "Meets this" sa bawat spec). Hindi masisira ang demo kahit maubos ang free quota.
+- **Walang sinesave at walang ledger.** Pareho ang gate ng pag-submit: verified seller, open requirement, hindi sarili, at wala pang sealed quotation.
+- Code: `services/quotation_draft_service.py`, `POST /requirements/{id}/quotation-draft`, `QuotationDraftOut` sa `schemas/requirement.py`, at `AiDraftSection` / `applyDraft` / `undoDraft` sa `QuotationSubmission.tsx` (wiring sa `app/submit-quotation.tsx`). Tests: `backend/tests/test_quotation_draft.py`.
+- Para sa demo: kailangan ng **open** na requirement. Wala ngayon sa DB, kaya mag-post muna bilang buyer.
+
 **Saved: "Still open" at "Closed"**
 - Dalawa na ang section ng `/saved`. Ang **Still open** ay ang mga puwede pang i-quote-an. Ang **Closed** naman ay may "Closed — you can no longer quote", "View" at **Remove** sa bawat row, at may **"Clear closed"** sa header (inuulit lang ang dating unsave, kaya walang bagong endpoint).
 - **Alert 24 oras bago magsara:** bawat nag-save ng open requirement ay may "A requirement you saved closes soon" (`REQUIREMENT_CLOSING`), tig-iisa lang. Hindi kasama ang may-ari, at ang mga may sealed quotation na.

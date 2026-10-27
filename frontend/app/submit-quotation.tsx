@@ -130,6 +130,23 @@ export default function QuotationRoute() {
       buyer={buyer}
       onBack={() => router.back()}
       onOpenBuyer={(businessId) => router.push({ pathname: '/business-profile', params: { id: businessId } })}
+      onDraftWithAI={async () => {
+        try {
+          const d = await requirementsApi.quotationDraft(Number(id));
+          return {
+            source: d.source,
+            message: d.message,
+            lineItems: d.line_items.map((li) => ({ description: li.description, quantity: li.quantity, unitPrice: li.unit_price })),
+            specResponses: d.spec_responses,
+            leadTimeWeeks: d.lead_time_weeks,
+            paymentTerms: d.payment_terms,
+            validityDays: d.validity_days,
+            notes: d.notes,
+          };
+        } catch (e: any) {
+          throw new Error(errorMessage(e, 'Could not draft this right now. Try again, or fill it in yourself.'));
+        }
+      }}
       submitting={submitting}
       submitError={submitError}
       onSubmit={async (input: QuotationDraftInput) => {

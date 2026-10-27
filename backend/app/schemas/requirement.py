@@ -216,6 +216,31 @@ class QuotationCreate(BaseModel):
     spec_responses: List[SpecResponseIn] = []
 
 
+class QuotationDraftLine(BaseModel):
+    description: str
+    quantity: float
+    unit_price: float  # 0 = no price suggested (template draft)
+
+
+class QuotationDraftSpec(BaseModel):
+    label: str
+    complies: bool
+    offered: Optional[str] = None
+
+
+class QuotationDraftOut(BaseModel):
+    """A first draft for the Submit Quotation form (quotation_draft_service).
+    Never saved, never on the ledger — the seller reviews and seals it."""
+    source: str  # ai | template (no prices)
+    message: str
+    line_items: List[QuotationDraftLine] = []
+    spec_responses: List[QuotationDraftSpec] = []
+    lead_time_weeks: int
+    payment_terms: str
+    validity_days: int
+    notes: str = ""
+
+
 class QuotationSealedReceipt(BaseModel):
     """What a business gets back immediately after submitting — proof the
     submission was recorded, without revealing anything about other

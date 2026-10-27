@@ -9,6 +9,7 @@ from app.models.user import User
 from app.services import requirement_service as req_service_module
 from app.services.requirement_service import requirement_service
 from app.services import category_suggestion_service
+from app.services import quotation_draft_service
 from app.services.document_request_service import document_request_service
 from app.services.closeout_service import closeout_service
 from app.services.fulfillment_service import fulfillment_service
@@ -19,6 +20,7 @@ from app.schemas.requirement import (
     RequirementOut,
     QuotationCreate,
     QuotationSealedReceipt,
+    QuotationDraftOut,
     RequirementQuotationsView,
     ExtendClosingRequest,
     AwardRequest,
@@ -230,6 +232,16 @@ def update_site_notes(requirement_id: int, payload: SiteNotesUpdate, current_use
 def cancel_requirement(requirement_id: int, current_user=Depends(require_verified)):
     try:
         return requirement_service.cancel(requirement_id, current_user.id)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/quotation-draft", response_model=QuotationDraftOut)
+def quotation_draft(requirement_id: int, current_user=Depends(require_seller)):
+    """"Draft with AI": a first draft for the form. Nothing is saved or sealed.
+    A plain def, so FastAPI runs the Gemini call in its thread pool."""
+    try:
+        return quotation_draft_service.draft(requirement_id, current_user.id)
     except Exception as exc:
         _handle_service_errors(exc)
 

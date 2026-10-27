@@ -302,6 +302,18 @@ export interface CategorySuggestionOut {
   category: string | null;
 }
 
+/** POST /requirements/{id}/quotation-draft — never saved, never sealed. */
+export interface QuotationDraftOut {
+  source: 'ai' | 'template';
+  message: string;
+  line_items: { description: string; quantity: number; unit_price: number }[];
+  spec_responses: { label: string; complies: boolean; offered: string | null }[];
+  lead_time_weeks: number;
+  payment_terms: string;
+  validity_days: number;
+  notes: string;
+}
+
 export const requirementsApi = {
   listOpen: () => api.get<RequirementOut[]>('/requirements'),
   suggestCategory: (title: string, scope: string) =>
@@ -333,6 +345,8 @@ export const requirementsApi = {
       site_access_notes: siteAccessNotes,
     }),
 
+  quotationDraft: (requirementId: number) =>
+    api.post<QuotationDraftOut>(`/requirements/${requirementId}/quotation-draft`, {}),
   submitQuotation: (requirementId: number, data: QuotationCreateInput) =>
     api.post<QuotationSealedReceipt>(`/requirements/${requirementId}/quotations`, data),
 

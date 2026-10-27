@@ -69,6 +69,18 @@ export interface QuotationDraftInput {
   attachments: Attachment[];
 }
 
+/** "Draft with AI" result, already mapped from the API. Unit price 0 = none suggested. */
+export interface AiQuotationDraft {
+  source: 'ai' | 'template';
+  message: string;
+  lineItems: { description: string; quantity: number; unitPrice: number }[];
+  specResponses: { label: string; complies: boolean; offered: string | null }[];
+  leadTimeWeeks: number;
+  paymentTerms: string;
+  validityDays: number;
+  notes: string;
+}
+
 interface FormProps {
   state: Extract<QuotationSubmissionState, 'FORM'>;
   requirement: Requirement;
@@ -83,6 +95,8 @@ interface FormProps {
   onSaveDraft?: () => void;
   onBack?: () => void;
   onOpenBuyer?: (businessId: BusinessId) => void;
+  /** Fills the form with a draft. Rejects with a message on failure. */
+  onDraftWithAI?: () => Promise<AiQuotationDraft>;
 }
 
 interface SealedReceiptProps {
@@ -562,6 +576,49 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
   }).length;
   const specsDone = specAnsweredCount === requirement.specifications.length;
 
+  // "Draft with AI": fills the form, keeps what was there for Undo, and clears
+  // both acknowledgements so the seller confirms again after reviewing.
+  const [aiDraft, setAiDraft] = useState<{ source: AiQuotationDraft['source']; message: string } | null>(null);
+  const [beforeAi, setBeforeAi] = useState<{
+    priceMode: PriceMode; items: LineItemDraft[]; totalOnly: string; lead: string; validity: number; term: string; note: string;
+    specAnswers: typeof specAnswers;
+  } | null>(null);
+  const applyDraft = (d: AiQuotationDraft) => {
+    if (!beforeAi) setBeforeAi({ priceMode, items, totalOnly, lead, validity, term, note, specAnswers });
+    const stamp = Date.now();
+    setPriceMode('LINES');
+    setItems(d.lineItems.map((li, i) => ({
+      id: `ai${stamp}-${i}`,
+      desc: li.description,
+      qty: String(li.quantity),
+      unit: li.unitPrice > 0 ? String(li.unitPrice) : '',
+    })));
+    setLead(String(d.leadTimeWeeks));
+    if (VALIDITY_OPTIONS.includes(d.validityDays)) setValidity(d.validityDays);
+    if (PAYMENT_TERM_OPTIONS.includes(d.paymentTerms)) setTerm(d.paymentTerms);
+    if (d.notes) setNote(d.notes);
+    const answers: typeof specAnswers = {};
+    d.specResponses.forEach((r) => { answers[r.label] = { complies: r.complies, offered: r.offered ?? '' }; });
+    setSpecAnswers(answers);
+    setAck1(false);
+    setAck2(false);
+    setAiDraft({ source: d.source, message: d.message });
+  };
+  const undoDraft = () => {
+    if (beforeAi) {
+      setPriceMode(beforeAi.priceMode);
+      setItems(beforeAi.items);
+      setTotalOnly(beforeAi.totalOnly);
+      setLead(beforeAi.lead);
+      setValidity(beforeAi.validity);
+      setTerm(beforeAi.term);
+      setNote(beforeAi.note);
+      setSpecAnswers(beforeAi.specAnswers);
+    }
+    setBeforeAi(null);
+    setAiDraft(null);
+  };
+
   const total =
     priceMode === 'LINES' ? items.reduce((a, i) => a + num(i.qty) * num(i.unit), 0) : num(totalOnly);
 
@@ -644,6 +701,7 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
     files, addFile, removeFile,
     ack1, setAck1, ack2, setAck2,
     specAnswer, setSpecComplies, setSpecOffered, specAnsweredCount, specsDone,
+    aiDraft, applyDraft, undoDraft,
     total, budgetNote,
     validUntilDate,
     ready,
@@ -691,6 +749,53 @@ function ClosingBanner({ requirement }: { requirement: Requirement }) {
         · Closes {formatDateTime(requirement.closingAt)} · Stays private until then — buyer and other businesses
         can't see it; withdraw and resend any time before closing.
       </Text>
+    </View>
+  );
+}
+
+function AiDraftSection({ st, onDraftWithAI }: { st: FormState; onDraftWithAI: () => Promise<AiQuotationDraft> }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      st.applyDraft(await onDraftWithAI());
+    } catch (e: any) {
+      setError(e?.message || 'Could not draft this right now. Try again, or fill it in yourself.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={[styles.card, cardShadow, { gap: space.sm }]}>
+      <View style={styles.cardHeaderRow}>
+        <Pressable
+          onPress={run}
+          disabled={busy}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.aiButton, pressed || busy ? { backgroundColor: color.primaryPressed } : null]}
+        >
+          <Text style={styles.aiButtonLabel}>{busy ? 'Drafting…' : st.aiDraft ? '✨ Draft again' : '✨ Draft with AI'}</Text>
+        </Pressable>
+        <Text style={[styles.aiHint, { flex: 1, minWidth: 200 }]}>
+          Fills the form from this requirement and your own past prices — never another supplier's. Nothing is sent until you seal it.
+        </Text>
+      </View>
+      {error && <Text style={styles.aiError}>{error}</Text>}
+      {st.aiDraft && (
+        <View style={styles.aiBanner}>
+          <Text style={styles.aiBannerTitle}>
+            {st.aiDraft.source === 'ai' ? 'AI draft — review every line and price before sealing.' : 'Template draft — add your prices.'}
+          </Text>
+          {st.aiDraft.source !== 'ai' && <Text style={styles.aiHint}>{st.aiDraft.message}</Text>}
+          <Text style={styles.aiHint}>Your two confirmations below were cleared so you check the draft first.</Text>
+          <Pressable onPress={st.undoDraft} hitSlop={6} style={{ alignSelf: 'flex-start' }}>
+            <Text style={styles.aiUndo}>Undo</Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -1070,6 +1175,7 @@ function FormScreen(props: FormProps) {
   const sections = (
     <>
       <ClosingBanner requirement={requirement} />
+      {props.onDraftWithAI && <AiDraftSection st={st} onDraftWithAI={props.onDraftWithAI} />}
       <SpecificationsSection requirement={requirement} st={st} />
       <PriceSection requirement={requirement} st={st} />
       <TermsSection requirement={requirement} st={st} />
@@ -1383,6 +1489,13 @@ const styles = StyleSheet.create({
 
   card: { ...elevation.card, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.xl, gap: space.md },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
+  aiButton: { minHeight: layout.minTouchTarget, justifyContent: 'center', borderRadius: radius.pill, backgroundColor: color.primary, paddingHorizontal: space.lg },
+  aiButtonLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.onPrimary },
+  aiHint: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
+  aiError: { fontFamily: font.body, fontSize: fontSize.sm, color: color.danger },
+  aiBanner: { gap: space.xs, borderLeftWidth: 3, borderLeftColor: color.primary, backgroundColor: color.primaryFaint, borderRadius: radius.md, padding: space.md },
+  aiBannerTitle: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
+  aiUndo: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
 
   sectionLabel: {
     fontFamily: font.mono,
