@@ -139,11 +139,25 @@ class PublicBusinessProfileOut(BaseModel):
     transactions_completed_count: int = 0
     transactions_not_pushed_through_count: int = 0
     transactions_unconfirmed_count: int = 0  # orders nobody updated (fulfillment_service)
+    # Facebook/LinkedIn-style profile (profile_media_service)
+    has_avatar: bool = False
+    has_cover: bool = False
+    headline: Optional[str] = None
+    website_url: Optional[str] = None
+    facebook_url: Optional[str] = None
+    years_in_business: Optional[str] = None  # LESS_THAN_1 | 1_TO_3 | 4_TO_6 | 7_PLUS (sellers)
     completion_rate: Optional[float] = None  # completed ÷ awarded (0–1)
     includes_sealed_activity: bool = False
     contact_details_visible: bool = False
     contact_person: Optional[str] = None
     contact_mobile: Optional[str] = None
+
+
+class ProfileDetailsIn(BaseModel):
+    headline: Optional[str] = Field(default=None, max_length=100)
+    about: Optional[str] = Field(default=None, max_length=1000)
+    website_url: Optional[str] = Field(default=None, max_length=300)
+    facebook_url: Optional[str] = Field(default=None, max_length=300)
 
 
 class AdminReviewAction(BaseModel):

@@ -11,6 +11,7 @@ from app.core.security import require_verified, get_current_user, require_admin
 from app.models.user import User
 from app.schemas.business import (
     BusinessSearchOut,
+    ProfileDetailsIn,
     ReportSuggestionOut,
     LiftRestriction,
     MyReportOut,
@@ -33,6 +34,7 @@ from app.services.business_service import business_service
 from app.services.report_service import report_service
 from app.services.moderation_service import moderation_service
 from app.services.portfolio_service import portfolio_service
+from app.services.profile_media_service import profile_media_service
 
 router = APIRouter()
 
@@ -93,6 +95,36 @@ def get_public_profile(business_id: int, current_user: User = Depends(get_curren
 
 
 # ---------- admin ----------
+
+@router.put("/profile/details", status_code=status.HTTP_204_NO_CONTENT)
+def update_profile_details(payload: ProfileDetailsIn, current_user: User = Depends(get_current_user)):
+    """Headline, About, website and Facebook links (http/https only)."""
+    profile_media_service.update_details(current_user.id, payload.headline, payload.about,
+                                         payload.website_url, payload.facebook_url)
+
+
+@router.post("/profile/{kind}", status_code=status.HTTP_204_NO_CONTENT)
+async def upload_profile_image(kind: str, file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+    """kind = avatar (512 square) | cover (1600x400) — see profile_media_service."""
+    await profile_media_service.set_image(current_user.id, kind, file)
+
+
+@router.delete("/profile/{kind}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_profile_image(kind: str, current_user: User = Depends(get_current_user)):
+    profile_media_service.remove_image(current_user.id, kind)
+
+
+@router.get("/{business_id}/avatar")
+def profile_avatar(business_id: int, current_user: User = Depends(get_current_user)):
+    return Response(content=profile_media_service.image(business_id, "avatar"), media_type="image/jpeg",
+                    headers={"Cache-Control": "private, no-cache"})
+
+
+@router.get("/{business_id}/cover")
+def profile_cover(business_id: int, current_user: User = Depends(get_current_user)):
+    return Response(content=profile_media_service.image(business_id, "cover"), media_type="image/jpeg",
+                    headers={"Cache-Control": "private, no-cache"})
+
 
 @router.get("/{business_id}/portfolio", response_model=List[PortfolioItemOut])
 def list_portfolio(business_id: int, current_user: User = Depends(get_current_user)):

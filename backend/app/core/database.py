@@ -31,6 +31,11 @@ def create_db_and_tables():
     _add_column_if_missing("requirement", "fulfillment_status", "VARCHAR(30) NOT NULL DEFAULT 'awarded'")
     _add_column_if_missing("requirement", "fulfillment_updated_at", "DATETIME NULL")
     _add_column_if_missing("requirement", "fulfillment_reminders", "INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing("user", "avatar_path", "VARCHAR(500) NULL")
+    _add_column_if_missing("user", "cover_path", "VARCHAR(500) NULL")
+    _add_column_if_missing("user", "headline", "VARCHAR(100) NULL")
+    _add_column_if_missing("user", "website_url", "VARCHAR(300) NULL")
+    _add_column_if_missing("user", "facebook_url", "VARCHAR(300) NULL")
 
 
 def _migrate_user_role():

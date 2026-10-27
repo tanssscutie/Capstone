@@ -39,6 +39,9 @@ class CategorySuggestionOut(BaseModel):
 
 
 class RequirementCreate(BaseModel):
+    # "Request a quote" from a seller's profile: those sellers get an invite
+    # alert. The requirement stays public and sealed — not a private deal.
+    invited_business_ids: List[int] = Field(default_factory=list, max_length=5)
     category: str = Field(min_length=2, max_length=100)
     # One of the category's items (app/core/categories.py) — its merged specs
     # decide which specifications are required; checked in

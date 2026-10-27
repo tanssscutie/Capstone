@@ -58,6 +58,13 @@ class User(SQLModel, table=True):
     # Short public-facing bio shown on the business's profile — optional,
     # written by the business itself.
     business_description: Optional[str] = None
+    # Facebook/LinkedIn-style profile (profile_media_service): encrypted
+    # avatar and cover photo paths, a one-line headline, and two links.
+    avatar_path: Optional[str] = Field(default=None, max_length=500)
+    cover_path: Optional[str] = Field(default=None, max_length=500)
+    headline: Optional[str] = Field(default=None, max_length=100)
+    website_url: Optional[str] = Field(default=None, max_length=300)
+    facebook_url: Optional[str] = Field(default=None, max_length=300)
     capabilities: str = ""    # comma-separated free text, used as matching input
     service_areas: str = ""   # comma-separated free text (cities/provinces)
     # Semantic matching (Specific Objective #4) — JSON-encoded embedding

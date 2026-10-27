@@ -372,7 +372,8 @@ class RequirementService:
             )
             created = repo.create_requirement(session, req)
             matching_service.upsert_requirement_vector(created.id, created.embedding)
-            self._alert_matching_sellers(session, created)
+            invited = self._alert_invited_sellers(session, created, data.invited_business_ids)
+            self._alert_matching_sellers(session, created, exclude_ids=frozenset(invited))
             return self._to_out(session, created)
 
     @staticmethod
@@ -407,6 +408,33 @@ class RequirementService:
             u for u in sellers
             if (u.industry_category or "").strip().lower() == category and self._seller_offers_item(u, req.item_code)
         ]
+
+    def _alert_invited_sellers(self, session: Session, req: Requirement, invited_ids: List[int]) -> List[int]:
+        """"Request a quote": an invite alert to each invited seller who could
+        quote anyway — verified, active, same category, not the buyer. Up
+        to 5. Inviting changes nothing else: still public, still sealed."""
+        alerted: List[int] = []
+        try:
+            owner = session.get(User, req.owner_id)
+            buyer = (owner.display_name or owner.registered_name or owner.business_name) if owner else "A buyer"
+            category = (req.category or "").strip().lower()
+            for uid in list(dict.fromkeys(invited_ids or []))[:5]:
+                u = session.get(User, uid)
+                if (not u or u.id == req.owner_id or u.role != "seller" or not u.is_active or u.is_admin
+                        or not (u.is_verified and u.verification_status == "verified")
+                        or (u.industry_category or "").strip().lower() != category):
+                    continue
+                notif_repo.create_if_allowed(
+                    session, user_id=u.id, type_="REQUIREMENT_MATCH", category="activity",
+                    title=f"{buyer} invited you to quote",
+                    detail=f"{req.ref_code} · {req.title} — open to every matching supplier, sealed until closing.",
+                    urgent=True, related_requirement_id=req.id,
+                )
+                alerted.append(u.id)
+        except Exception:
+            session.rollback()
+            logger.exception("Could not send invite alerts for requirement %s", req.id)
+        return alerted
 
     def _alert_matching_sellers(self, session: Session, req: Requirement, exclude_ids: frozenset = frozenset()) -> int:
         """One "new requirement that matches you" alert per matching seller,

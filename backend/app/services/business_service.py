@@ -537,6 +537,12 @@ class BusinessService:
                 contact_details_visible=contacts_visible,
                 contact_person=user.contact_person if contacts_visible else None,
                 contact_mobile=user.contact_mobile if contacts_visible else None,
+                has_avatar=bool(user.avatar_path),
+                has_cover=bool(user.cover_path),
+                headline=user.headline,
+                website_url=user.website_url,
+                facebook_url=user.facebook_url,
+                years_in_business=user.years_in_business if user.role == "seller" else None,
                 **repo.profile_activity_counts(session, user.id, include_sealed=privileged, now=now_ph()),
             )
 
