@@ -412,6 +412,7 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0, onAl
           onDismiss={() => setAccountMenuOpen(false)}
           anchorTop={chipLayout.top}
           anchorRight={chipLayout.right}
+          viewerId={viewer?.id || undefined}
         />
       )}
 

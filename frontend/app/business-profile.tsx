@@ -37,20 +37,22 @@ export default function BusinessProfileRoute() {
   const [portfolio, setPortfolio] = useState<PortfolioItemOut[] | undefined>(undefined);
 
   const load = useCallback(async () => {
-    if (!id) {
-      setError('No business specified.');
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
-      const [raw, user] = await Promise.all([getPublicProfile(Number(id)), me().catch(() => null)]);
+      // No ?id= → your own profile.
+      const user = await me().catch(() => null);
+      const targetId = id ? Number(id) : user?.id;
+      if (!targetId) {
+        setError('No business specified.');
+        return;
+      }
+      const raw = await getPublicProfile(targetId);
       setProfile(mapPublicBusinessProfile(raw));
       setViewerId(user?.id ?? null);
       setViewerRole(user?.role ?? null);
       // Sellers only; a failed list just hides the section.
-      setPortfolio(raw.role === 'seller' ? await listPortfolio(Number(id)).catch(() => []) : undefined);
+      setPortfolio(raw.role === 'seller' ? await listPortfolio(targetId).catch(() => []) : undefined);
     } catch (e: any) {
       setError(errorMessage(e, 'Could not load this business profile.'));
     } finally {

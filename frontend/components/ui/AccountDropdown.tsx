@@ -8,7 +8,6 @@ import { View, Text, Pressable, StyleSheet, Platform, type ViewStyle } from 'rea
 import { useRouter } from 'expo-router';
 import { color, font, fontSize, space, radius, elevation } from './tokens';
 import { logout } from '../../lib/api/auth';
-import { useViewer } from '../../lib/api/viewer';
 
 export interface AccountDropdownProps {
   onDismiss: () => void;
@@ -18,6 +17,8 @@ export interface AccountDropdownProps {
   /** Right offset of the chip in window space — the menu's right edge lines
    *  up with this. */
   anchorRight: number;
+  /** The signed-in business — "My Profile" opens its public profile. */
+  viewerId?: string;
 }
 
 interface MenuItem {
@@ -27,9 +28,8 @@ interface MenuItem {
   destructive?: boolean;
 }
 
-export default function AccountDropdown({ onDismiss, anchorTop, anchorRight }: AccountDropdownProps) {
+export default function AccountDropdown({ onDismiss, anchorTop, anchorRight, viewerId }: AccountDropdownProps) {
   const router = useRouter();
-  const { viewer } = useViewer();
 
   const handleLogout = () => {
     onDismiss();
@@ -44,8 +44,8 @@ export default function AccountDropdown({ onDismiss, anchorTop, anchorRight }: A
       description: 'Photo, cover, About, past work',
       onPress: () => {
         onDismiss();
-        if (viewer) router.push({ pathname: '/business-profile', params: { id: viewer.id } });
-        else router.push('/account');
+        // No id = the page opens your own profile (app/business-profile.tsx).
+        router.push(viewerId ? { pathname: '/business-profile', params: { id: viewerId } } : '/business-profile');
       },
     },
     {
