@@ -19,6 +19,18 @@ export const color = {
   dangerFaint: 'rgba(180,51,31,0.05)',
   dangerBorder: 'rgba(180,51,31,0.35)',
 
+  // Accents — status and highlights (profile tiles, section chips). Approved for
+  // the defense build; use sparingly, never for actions (actions stay primary).
+  success: '#2F7A4D',
+  successFaint: 'rgba(47,122,77,0.08)',
+  successBorder: 'rgba(47,122,77,0.35)',
+  warning: '#A86512',
+  warningFaint: 'rgba(168,101,18,0.08)',
+  warningBorder: 'rgba(168,101,18,0.35)',
+  accent: '#0F766E',
+  accentFaint: 'rgba(15,118,110,0.08)',
+  accentBorder: 'rgba(15,118,110,0.35)',
+
   // Surfaces
   canvas: '#FBFAF9',
   surface: '#FFFFFF',

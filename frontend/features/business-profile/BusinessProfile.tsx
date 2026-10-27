@@ -1,7 +1,11 @@
 // features/business-profile/BusinessProfile.tsx
 // Facebook + LinkedIn style: cover photo, overlapping profile picture, badges,
-// highlights, then section cards. On your own profile: change photo/cover,
-// Edit profile, and a completeness meter.
+// coloured highlight tiles, then section cards — two columns on desktop (main:
+// About, Past work, Activity; sticky sidebar: Profile strength, transparency,
+// capabilities, links), one column on a phone. On your own profile: change
+// photo/cover, a completeness meter, "View as others" (hides every owner
+// control), and Edit profile as a side drawer with a live preview of the page
+// as others will see it.
 // A read-only view of ANOTHER business's public profile — reached via
 // "View buyer profile" (RequirementDetail, respondent view) and "View
 // profile" (RequirementDetail, owner viewing a released respondent). Same
@@ -10,7 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { View, Text, Pressable, Modal, TextInput, Image, Linking, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, TextInput, Image, Linking, Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import type { ViewStyle } from 'react-native';
 import { PORTFOLIO_MAX_ITEMS, type ReportReason, type PortfolioItemOut, type ProfileDetailsIn, type ProfileImageKind, type CompletedWorkOut } from '../../lib/api/business';
 import { ReportBusinessModal } from '../../components/ui/ReportBusinessModal';
@@ -242,7 +246,7 @@ function PortfolioSection({ profile, items, load, onOpen, onAdd, onRemove, compl
   return (
     <View style={styles.card}>
       <View style={styles.portfolioHeader}>
-        <SectionLabel>Past work</SectionLabel>
+        <SectionLabel tone="warning" shape="square">Past work</SectionLabel>
         {isOwner && <Text style={styles.mutedSmall}>{items.length} of {PORTFOLIO_MAX_ITEMS}</Text>}
       </View>
       {isOwner && (
@@ -334,8 +338,51 @@ function StatusBadge({ label, tone }: { label: string; tone: Tone }) {
   );
 }
 
-function SectionLabel({ children }: { children: string }) {
-  return <Text style={styles.sectionLabel}>{children}</Text>;
+type ToneName = 'primary' | 'success' | 'warning' | 'accent';
+type ShapeName = 'dot' | 'square' | 'diamond' | 'bars' | 'ring';
+
+const TONES: Record<ToneName, { ink: string; faint: string; border: string }> = {
+  primary: { ink: color.primary, faint: color.primaryFaint, border: color.primaryBorder },
+  success: { ink: color.success, faint: color.successFaint, border: color.successBorder },
+  warning: { ink: color.warning, faint: color.warningFaint, border: color.warningBorder },
+  accent: { ink: color.accent, faint: color.accentFaint, border: color.accentBorder },
+};
+
+/** A small icon built from plain shapes (no icon library). */
+function Shape({ shape, tone, size = 8 }: { shape: ShapeName; tone: ToneName; size?: number }) {
+  const ink = TONES[tone].ink;
+  if (shape === 'bars') {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1.5, height: size + 2 }}>
+        {[0.5, 1, 0.75].map((h, i) => <View key={i} style={{ width: 2.5, height: (size + 2) * h, backgroundColor: ink, borderRadius: 1 }} />)}
+      </View>
+    );
+  }
+  if (shape === 'ring') return <View style={{ width: size, height: size, borderRadius: radius.pill, borderWidth: 2, borderColor: ink }} />;
+  return (
+    <View style={{
+      width: size, height: size, backgroundColor: ink,
+      borderRadius: shape === 'dot' ? radius.pill : 2,
+      transform: shape === 'diamond' ? [{ rotate: '45deg' }] : undefined,
+    }} />
+  );
+}
+
+function IconChip({ shape, tone }: { shape: ShapeName; tone: ToneName }) {
+  return (
+    <View style={[styles.iconChip, { backgroundColor: TONES[tone].faint, borderColor: TONES[tone].border }]}>
+      <Shape shape={shape} tone={tone} />
+    </View>
+  );
+}
+
+function SectionLabel({ children, tone = 'primary', shape = 'dot' }: { children: string; tone?: ToneName; shape?: ShapeName }) {
+  return (
+    <View style={styles.sectionTitleRow}>
+      <IconChip shape={shape} tone={tone} />
+      <Text style={styles.sectionLabel}>{children}</Text>
+    </View>
+  );
 }
 
 function FactRow({ label, value }: { label: string; value: string }) {
@@ -380,11 +427,14 @@ function linkLabel(url: string): string {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 }
 
-function Highlight({ value, label }: { value: string; label: string }) {
+function Highlight({ value, label, tone, shape }: { value: string; label: string; tone: ToneName; shape: ShapeName }) {
   return (
-    <View style={styles.highlight}>
-      <Text style={styles.highlightValue}>{value}</Text>
-      <Text style={styles.highlightLabel}>{label}</Text>
+    <View style={[styles.highlight, { backgroundColor: TONES[tone].faint, borderColor: TONES[tone].border }]}>
+      <View style={styles.highlightTop}>
+        <Shape shape={shape} tone={tone} size={10} />
+        <Text style={styles.highlightLabel}>{label}</Text>
+      </View>
+      <Text style={[styles.highlightValue, { color: TONES[tone].ink }]}>{value}</Text>
     </View>
   );
 }
@@ -398,7 +448,7 @@ function CompletenessMeter({ parts }: { parts: CompletenessPart[] }) {
   return (
     <View style={styles.card}>
       <View style={styles.portfolioHeader}>
-        <SectionLabel>Profile strength</SectionLabel>
+        <SectionLabel tone="success" shape="bars">Profile strength</SectionLabel>
         <Text style={styles.meterPct}>{pct}% complete</Text>
       </View>
       <View style={styles.meterTrack}>
@@ -420,63 +470,80 @@ function CompletenessMeter({ parts }: { parts: CompletenessPart[] }) {
   );
 }
 
-function EditProfileModal({ profile, onSave, onClose }: {
-  profile: PublicBusinessProfile;
+function draftFrom(profile: PublicBusinessProfile): ProfileDetailsIn {
+  return {
+    headline: profile.headline ?? '',
+    about: profile.description ?? '',
+    website_url: profile.websiteUrl ?? '',
+    facebook_url: profile.facebookUrl ?? '',
+  };
+}
+
+/** Right-hand drawer (desktop) / bottom sheet (phone). The page behind it
+ *  renders the draft live, as others will see it. */
+function EditProfileDrawer({ draft, setDraft, onSave, onClose, isWide }: {
+  draft: ProfileDetailsIn;
+  setDraft: (d: ProfileDetailsIn) => void;
   onSave: (details: ProfileDetailsIn) => Promise<string | null>;
   onClose: () => void;
+  isWide: boolean;
 }) {
-  const [headline, setHeadline] = useState(profile.headline ?? '');
-  const [about, setAbout] = useState(profile.description ?? '');
-  const [website, setWebsite] = useState(profile.websiteUrl ?? '');
-  const [facebook, setFacebook] = useState(profile.facebookUrl ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const set = (key: keyof ProfileDetailsIn) => (v: string) => setDraft({ ...draft, [key]: v });
 
   const save = async () => {
     setSaving(true);
     setError(null);
-    const err = await onSave({ headline, about, website_url: website, facebook_url: facebook }).catch(() => 'Could not save.');
+    const err = await onSave(draft).catch(() => 'Could not save.');
     setSaving(false);
     if (err) setError(err);
     else onClose();
   };
 
   return (
-    <Modal transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalCard, { gap: space.md }]}>
-          <Text style={styles.modalTitle}>Edit profile</Text>
-          <View style={{ gap: space.xs }}>
-            <Text style={styles.factLabel}>Headline</Text>
-            <TextInput value={headline} onChangeText={setHeadline} maxLength={100} placeholder="e.g. Large-format printing for events and retail in Pasig" placeholderTextColor={color.inkFaint} style={styles.editInput} />
-          </View>
-          <View style={{ gap: space.xs }}>
-            <Text style={styles.factLabel}>About</Text>
-            <TextInput value={about} onChangeText={setAbout} maxLength={1000} multiline placeholder="What your business does, who you serve, what you're known for." placeholderTextColor={color.inkFaint} style={styles.reportInput} />
-          </View>
-          <View style={{ gap: space.xs }}>
-            <Text style={styles.factLabel}>Website</Text>
-            <TextInput value={website} onChangeText={setWebsite} maxLength={300} autoCapitalize="none" placeholder="https://yourbusiness.ph" placeholderTextColor={color.inkFaint} style={styles.editInput} />
-          </View>
-          <View style={{ gap: space.xs }}>
-            <Text style={styles.factLabel}>Facebook page</Text>
-            <TextInput value={facebook} onChangeText={setFacebook} maxLength={300} autoCapitalize="none" placeholder="https://facebook.com/yourbusiness" placeholderTextColor={color.inkFaint} style={styles.editInput} />
-          </View>
-          {error && <Text style={styles.reportError}>{error}</Text>}
-          <View style={styles.footerRow}>
-            <View style={{ flex: 1 }} />
-            <Pressable onPress={onClose} style={styles.actionButton}>
-              <Text style={styles.actionButtonLabel}>Cancel</Text>
-            </Pressable>
-            <Pressable onPress={save} disabled={saving} style={[styles.actionButton, styles.primaryButton, saving ? { opacity: 0.5 } : null]}>
-              <Text style={[styles.actionButtonLabel, { color: color.onPrimary }]}>{saving ? 'Saving…' : 'Save'}</Text>
-            </Pressable>
-          </View>
+    <View style={[styles.drawer, isWide ? styles.drawerWide : styles.drawerSheet, FIXED]}>
+      <View style={styles.drawerHeader}>
+        <Text style={styles.modalTitle}>Edit profile</Text>
+        <View style={styles.liveBadge}>
+          <View style={styles.liveDot} />
+          <Text style={styles.liveLabel}>Live preview</Text>
         </View>
       </View>
-    </Modal>
+      <Text style={styles.mutedSmall}>{isWide ? 'The page on the left' : 'The page above'} shows your changes as other businesses will see them.</Text>
+      <View style={{ gap: space.xs }}>
+        <Text style={styles.factLabel}>Headline</Text>
+        <TextInput value={draft.headline} onChangeText={set('headline')} maxLength={100} placeholder="e.g. Large-format printing for events and retail in Pasig" placeholderTextColor={color.inkFaint} style={styles.editInput} />
+      </View>
+      <View style={{ gap: space.xs }}>
+        <Text style={styles.factLabel}>About</Text>
+        <TextInput value={draft.about} onChangeText={set('about')} maxLength={1000} multiline placeholder="What your business does, who you serve, what you're known for." placeholderTextColor={color.inkFaint} style={styles.reportInput} />
+      </View>
+      <View style={{ gap: space.xs }}>
+        <Text style={styles.factLabel}>Website</Text>
+        <TextInput value={draft.website_url} onChangeText={set('website_url')} maxLength={300} autoCapitalize="none" placeholder="https://yourbusiness.ph" placeholderTextColor={color.inkFaint} style={styles.editInput} />
+      </View>
+      <View style={{ gap: space.xs }}>
+        <Text style={styles.factLabel}>Facebook page</Text>
+        <TextInput value={draft.facebook_url} onChangeText={set('facebook_url')} maxLength={300} autoCapitalize="none" placeholder="https://facebook.com/yourbusiness" placeholderTextColor={color.inkFaint} style={styles.editInput} />
+      </View>
+      {error && <Text style={styles.reportError}>{error}</Text>}
+      <View style={styles.footerRow}>
+        <View style={{ flex: 1 }} />
+        <Pressable onPress={onClose} style={styles.actionButton}>
+          <Text style={styles.actionButtonLabel}>Cancel</Text>
+        </Pressable>
+        <Pressable onPress={save} disabled={saving} style={[styles.actionButton, styles.primaryButton, saving ? { opacity: 0.5 } : null]}>
+          <Text style={[styles.actionButtonLabel, { color: color.onPrimary }]}>{saving ? 'Saving…' : 'Save'}</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
+
+// Web: the drawer stays put while the page scrolls behind it.
+const FIXED = (Platform.OS === 'web' ? { position: 'fixed', overflowY: 'auto', overflowX: 'hidden' } : { position: 'absolute' }) as unknown as ViewStyle;
+const STICKY = (Platform.OS === 'web' ? { position: 'sticky', top: space.lg } : {}) as unknown as ViewStyle;
 
 /* ─── Business transparency, as slides ─────────────────── */
 
@@ -536,7 +603,7 @@ function TransparencySlides({ profile, verified }: { profile: PublicBusinessProf
   return (
     <View style={styles.card}>
       <View style={styles.portfolioHeader}>
-        <SectionLabel>{`Business transparency · ${slides[index].title}`}</SectionLabel>
+        <SectionLabel tone="primary" shape="diamond">{`Business transparency · ${slides[index].title}`}</SectionLabel>
         <Text style={styles.slideCount}>{index + 1} / {slides.length}</Text>
       </View>
       <View style={styles.slideBody}>{slides[index].body}</View>
@@ -561,7 +628,7 @@ function TransparencySlides({ profile, verified }: { profile: PublicBusinessProf
 }
 
 export default function BusinessProfile({
-  profile,
+  profile: saved,
   onBack,
   onReport,
   portfolio,
@@ -581,14 +648,28 @@ export default function BusinessProfile({
   onCompleteVerification,
 }: BusinessProfileProps) {
   const [reporting, setReporting] = useState(false);
-  const [editing, setEditing] = useState(false);
+  // Edit profile: the draft values, rendered live on the page behind the drawer.
+  const [draft, setDraft] = useState<ProfileDetailsIn | null>(null);
+  const [viewAsOthers, setViewAsOthers] = useState(false);
   const [uploading, setUploading] = useState<ProfileImageKind | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
   const isWide = width >= breakpoint.desktop;
+  const isOwn = !!onSaveDetails;
+  const editing = isOwn && draft !== null;
+  // Owner controls show only on your own profile, outside both previews.
+  const owner = isOwn && !viewAsOthers && !editing;
+  const profile: PublicBusinessProfile = draft
+    ? {
+        ...saved,
+        headline: draft.headline.trim() || null,
+        description: draft.about.trim() || null,
+        websiteUrl: draft.website_url.trim() || null,
+        facebookUrl: draft.facebook_url.trim() || null,
+      }
+    : saved;
   const verified = profile.credibility.status === 'VERIFIED';
   const c = profile.credibility;
-  const isOwn = !!onSaveDetails;
   const isSeller = profile.role === 'seller';
   const avatarSize = isWide ? 112 : 88;
 
@@ -614,20 +695,175 @@ export default function BusinessProfile({
     setUploading(null);
     if (err) setImageError(err);
   };
+  const startEditing = () => { setViewAsOthers(false); setDraft(draftFrom(saved)); };
 
   const parts: CompletenessPart[] = [
     { key: 'avatar', label: 'Add a profile picture', done: profile.hasAvatar, action: () => pickImage('avatar'), actionLabel: 'Add photo' },
     { key: 'cover', label: 'Add a cover photo', done: profile.hasCover, action: () => pickImage('cover'), actionLabel: 'Add cover' },
-    { key: 'headline', label: 'Write a one-line headline', done: !!profile.headline, action: () => setEditing(true), actionLabel: 'Add headline' },
-    { key: 'about', label: 'Tell businesses about you', done: !!profile.description, action: () => setEditing(true), actionLabel: 'Write About' },
+    { key: 'headline', label: 'Write a one-line headline', done: !!profile.headline, action: startEditing, actionLabel: 'Add headline' },
+    { key: 'about', label: 'Tell businesses about you', done: !!profile.description, action: startEditing, actionLabel: 'Write About' },
     { key: 'capabilities', label: 'List your capabilities', done: profile.capabilities.length > 0, action: onUpdateCapabilities, actionLabel: 'Update' },
-    ...(isSeller ? [{ key: 'portfolio', label: 'Add a photo of past work (below)', done: (portfolio?.length ?? 0) > 0 }] : []),
+    ...(isSeller ? [{ key: 'portfolio', label: 'Add a photo of past work', done: (portfolio?.length ?? 0) > 0 }] : []),
     { key: 'verified', label: 'Get verified', done: verified, action: onCompleteVerification, actionLabel: 'Verify' },
   ];
 
+  const hero = (
+    <View style={[styles.card, styles.heroCard]}>
+      <View style={[styles.cover, { height: isWide ? 220 : 130 }, coverUri ? null : COVER_GRADIENT]}>
+        {coverUri && <Image source={{ uri: coverUri }} style={styles.coverImage} resizeMode="cover" />}
+        {owner && onUploadImage && (
+          <Pressable onPress={() => pickImage('cover')} style={styles.coverButton} disabled={uploading !== null}>
+            <Text style={styles.coverButtonLabel}>{uploading === 'cover' ? 'Uploading…' : coverUri ? 'Change cover' : 'Add cover photo'}</Text>
+          </Pressable>
+        )}
+      </View>
+      <View style={styles.heroBody}>
+        <View style={[styles.avatarRing, { marginTop: -(avatarSize / 2) - 4 }]}>
+          <AvatarChip label={initials(profile.registeredName)} size={avatarSize} imageUri={avatarUri} round />
+        </View>
+        {owner && onUploadImage && (
+          <Pressable onPress={() => pickImage('avatar')} hitSlop={6} disabled={uploading !== null} style={{ alignSelf: 'flex-start' }}>
+            <Text style={styles.linkSmall}>{uploading === 'avatar' ? 'Uploading…' : avatarUri ? 'Change photo' : 'Add profile picture'}</Text>
+          </Pressable>
+        )}
+        {owner && imageError && <Text style={styles.reportError}>{imageError}</Text>}
+
+        <Text style={styles.heroName}>{profile.registeredName}</Text>
+        {!!profile.headline && <Text style={styles.headline}>{profile.headline}</Text>}
+        <Text style={styles.mutedSmall}>
+          {[profile.category, [profile.city, profile.province].filter(Boolean).join(', '), profile.role === 'buyer' ? 'Buyer' : profile.role === 'seller' ? 'Seller' : null]
+            .filter(Boolean).join(' · ')}
+        </Text>
+        <View style={styles.heroBadgeRow}>
+          <StatusBadge label={verified ? '✓ Verified' : 'Not yet verified'} tone={verified ? 'primary' : 'neutral'} />
+          {verified && c.tier && <StatusBadge label={`Tier ${c.tier}`} tone="neutral" />}
+          {profile.yearsInBusiness && YEARS_LABEL[profile.yearsInBusiness] && (
+            <StatusBadge label={YEARS_LABEL[profile.yearsInBusiness]} tone="neutral" />
+          )}
+        </View>
+
+        <View style={styles.heroActions}>
+          {onRequestQuote && (
+            <Pressable onPress={onRequestQuote} style={[styles.actionButton, styles.primaryButton]}>
+              <Text style={[styles.actionButtonLabel, { color: color.onPrimary }]}>Request a quote</Text>
+            </Pressable>
+          )}
+          {owner && (
+            <>
+              <Pressable onPress={startEditing} style={[styles.actionButton, styles.primaryButton]}>
+                <Text style={[styles.actionButtonLabel, { color: color.onPrimary }]}>Edit profile</Text>
+              </Pressable>
+              <Pressable onPress={() => setViewAsOthers(true)} style={styles.actionButton}>
+                <Text style={styles.actionButtonLabel}>👁 View as others</Text>
+              </Pressable>
+            </>
+          )}
+          {onReport && (
+            <Pressable onPress={() => setReporting(true)} style={[styles.actionButton, styles.dangerButton]}>
+              <Text style={[styles.actionButtonLabel, { color: color.danger }]}>Report</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+
+  const highlights = (
+    <View style={styles.highlightRow}>
+      <Highlight value={String(profile.transactionsCompleted)} label="Completed" tone="success" shape="dot" />
+      <Highlight value={rate} label="Completion rate" tone="accent" shape="ring" />
+      <Highlight value={String(awarded)} label="Awarded" tone="primary" shape="diamond" />
+      <Highlight value={formatMonthYear(profile.memberSince)} label="Member since" tone="warning" shape="square" />
+    </View>
+  );
+
+  const about = (
+    <View style={styles.card}>
+      <SectionLabel tone="accent" shape="dot">About</SectionLabel>
+      {profile.description ? (
+        <Text style={styles.heroBio}>{profile.description}</Text>
+      ) : (
+        <Text style={[styles.mutedSmall, { marginTop: space.sm }]}>
+          {owner ? 'Tell other businesses what you do — tap Edit profile.' : 'No description yet.'}
+        </Text>
+      )}
+      <View style={{ gap: space.sm, marginTop: space.md }}>
+        <FactRow label="Business type" value={businessTypeLabel(profile.businessType)} />
+        <FactRow label="Verified since" value={verified ? (c.verifiedAt ? formatMonthYear(c.verifiedAt) : 'Date not recorded') : 'Not yet verified'} />
+      </View>
+    </View>
+  );
+
+  const pastWork = portfolio && (
+    <PortfolioSection
+      profile={profile}
+      items={portfolio}
+      load={loadPortfolioImage}
+      onOpen={onOpenPortfolioImage}
+      onAdd={owner ? onAddPortfolioItem : undefined}
+      onRemove={owner ? onRemovePortfolioItem : undefined}
+      completedWork={completedWork}
+      completedSuggestions={owner ? completedSuggestions : undefined}
+      onShowcase={owner ? onShowcase : undefined}
+    />
+  );
+
+  const activity = (
+    <View style={styles.card}>
+      <SectionLabel tone="primary" shape="bars">Activity</SectionLabel>
+      <View style={styles.statsGrid}>
+        {statRows.map((r) => (
+          <View key={r.label} style={styles.statCell}>
+            <Text style={styles.statValue}>{r.value}</Text>
+            <Text style={styles.mutedSmall}>{r.label}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={[styles.mutedSmall, { marginTop: space.md }]}>
+        {profile.includesSealedActivity
+          ? 'Supplier counts include your private sealed activity.'
+          : 'Supplier counts exclude sealed activity and submissions or withdrawals before the closing deadline.'}
+      </Text>
+      <InfoHint text="Completed = the supplier marked it completed and the buyer confirmed (or did not respond within 14 days). Completion rate = completed ÷ awarded. Unconfirmed orders had no updates and count as neither." />
+    </View>
+  );
+
+  const capabilities = (
+    <View style={styles.card}>
+      <SectionLabel tone="success" shape="square">Capabilities and service areas</SectionLabel>
+      <View style={{ marginTop: space.sm, gap: space.md }}>
+        <TagList items={profile.capabilities} emptyLabel="No capabilities listed." />
+        <TagList items={profile.serviceAreas} emptyLabel="No service areas listed." />
+      </View>
+    </View>
+  );
+
+  const hasLinks = !!(profile.websiteUrl || profile.facebookUrl);
+  const links = (hasLinks || owner) && (
+    <View style={styles.card}>
+      <SectionLabel tone="accent" shape="ring">Links</SectionLabel>
+      <View style={{ gap: space.sm, marginTop: space.sm }}>
+        {profile.websiteUrl && (
+          <Pressable onPress={() => openLink(profile.websiteUrl!)} hitSlop={4}>
+            <Text style={styles.linkSmall} numberOfLines={1}>🌐 {linkLabel(profile.websiteUrl)}</Text>
+          </Pressable>
+        )}
+        {profile.facebookUrl && (
+          <Pressable onPress={() => openLink(profile.facebookUrl!)} hitSlop={4}>
+            <Text style={styles.linkSmall} numberOfLines={1}>Facebook · {linkLabel(profile.facebookUrl)}</Text>
+          </Pressable>
+        )}
+        {!hasLinks && <Text style={styles.mutedSmall}>No links yet — add your website or Facebook page in Edit profile.</Text>}
+      </View>
+    </View>
+  );
+
+  const strength = owner && <CompletenessMeter parts={parts} />;
+  const transparency = <TransparencySlides profile={profile} verified={verified} />;
+
   return (
     <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
-      <View style={isWide ? styles.pageWide : styles.page}>
+      <View style={[isWide ? styles.pageWide : styles.page, editing && isWide ? { paddingRight: DRAWER_WIDTH + space.xl } : null, editing && !isWide ? { paddingBottom: 420 } : null]}>
         <View style={styles.breadcrumbRow}>
           <Pressable onPress={onBack} hitSlop={6}>
             <Text style={styles.breadcrumbLink}>Home</Text>
@@ -636,140 +872,47 @@ export default function BusinessProfile({
           <Text style={styles.breadcrumbCurrent}>Business Profile</Text>
         </View>
 
-        {/* Cover + avatar + identity, one card — Facebook/LinkedIn style. */}
-        <View style={[styles.card, styles.heroCard]}>
-          <View style={[styles.cover, { height: isWide ? 200 : 130 }, coverUri ? null : COVER_GRADIENT]}>
-            {coverUri && <Image source={{ uri: coverUri }} style={styles.coverImage} resizeMode="cover" />}
-            {isOwn && onUploadImage && (
-              <Pressable onPress={() => pickImage('cover')} style={styles.coverButton} disabled={uploading !== null}>
-                <Text style={styles.coverButtonLabel}>{uploading === 'cover' ? 'Uploading…' : coverUri ? 'Change cover' : 'Add cover photo'}</Text>
+        {isOwn && (viewAsOthers || editing) && (
+          <View style={styles.previewBanner}>
+            <Text style={styles.previewText}>
+              {editing ? 'Live preview — this is how others will see your profile once you save.' : '👁 This is how others see your profile.'}
+            </Text>
+            {viewAsOthers && (
+              <Pressable onPress={() => setViewAsOthers(false)} hitSlop={6}>
+                <Text style={styles.previewExit}>Exit preview</Text>
               </Pressable>
             )}
           </View>
-          <View style={styles.heroBody}>
-            <View style={[styles.avatarRing, { marginTop: -(avatarSize / 2) - 4 }]}>
-              <AvatarChip label={initials(profile.registeredName)} size={avatarSize} imageUri={avatarUri} round />
-            </View>
-            {isOwn && onUploadImage && (
-              <Pressable onPress={() => pickImage('avatar')} hitSlop={6} disabled={uploading !== null} style={{ alignSelf: 'flex-start' }}>
-                <Text style={styles.linkSmall}>{uploading === 'avatar' ? 'Uploading…' : avatarUri ? 'Change photo' : 'Add profile picture'}</Text>
-              </Pressable>
-            )}
-            {imageError && <Text style={styles.reportError}>{imageError}</Text>}
-
-            <Text style={styles.heroName}>{profile.registeredName}</Text>
-            {!!profile.headline && <Text style={styles.headline}>{profile.headline}</Text>}
-            <Text style={styles.mutedSmall}>
-              {[profile.category, [profile.city, profile.province].filter(Boolean).join(', '), profile.role === 'buyer' ? 'Buyer' : profile.role === 'seller' ? 'Seller' : null]
-                .filter(Boolean).join(' · ')}
-            </Text>
-            <View style={styles.heroBadgeRow}>
-              <StatusBadge label={verified ? '✓ Verified' : 'Not yet verified'} tone={verified ? 'primary' : 'neutral'} />
-              {verified && c.tier && <StatusBadge label={`Tier ${c.tier}`} tone="neutral" />}
-              {profile.yearsInBusiness && YEARS_LABEL[profile.yearsInBusiness] && (
-                <StatusBadge label={YEARS_LABEL[profile.yearsInBusiness]} tone="neutral" />
-              )}
-            </View>
-            {(profile.websiteUrl || profile.facebookUrl) && (
-              <View style={styles.linkRow}>
-                {profile.websiteUrl && (
-                  <Pressable onPress={() => openLink(profile.websiteUrl!)} hitSlop={4}>
-                    <Text style={styles.linkSmall} numberOfLines={1}>🌐 {linkLabel(profile.websiteUrl)}</Text>
-                  </Pressable>
-                )}
-                {profile.facebookUrl && (
-                  <Pressable onPress={() => openLink(profile.facebookUrl!)} hitSlop={4}>
-                    <Text style={styles.linkSmall} numberOfLines={1}>Facebook</Text>
-                  </Pressable>
-                )}
-              </View>
-            )}
-
-            <View style={styles.heroActions}>
-              {onRequestQuote && (
-                <Pressable onPress={onRequestQuote} style={[styles.actionButton, styles.primaryButton]}>
-                  <Text style={[styles.actionButtonLabel, { color: color.onPrimary }]}>Request a quote</Text>
-                </Pressable>
-              )}
-              {isOwn && (
-                <Pressable onPress={() => setEditing(true)} style={styles.actionButton}>
-                  <Text style={styles.actionButtonLabel}>Edit profile</Text>
-                </Pressable>
-              )}
-              {onReport && (
-                <Pressable onPress={() => setReporting(true)} style={[styles.actionButton, styles.dangerButton]}>
-                  <Text style={[styles.actionButtonLabel, { color: color.danger }]}>Report</Text>
-                </Pressable>
-              )}
-            </View>
-
-            <View style={styles.highlightRow}>
-              <Highlight value={String(profile.transactionsCompleted)} label="Completed" />
-              <Highlight value={rate} label="Completion rate" />
-              <Highlight value={String(awarded)} label="Awarded" />
-              <Highlight value={formatMonthYear(profile.memberSince)} label="Member since" />
-            </View>
-          </View>
-        </View>
-
-        {isOwn && <CompletenessMeter parts={parts} />}
-
-        <View style={styles.card}>
-          <SectionLabel>About</SectionLabel>
-          {profile.description ? (
-            <Text style={styles.heroBio}>{profile.description}</Text>
-          ) : (
-            <Text style={[styles.mutedSmall, { marginTop: space.sm }]}>
-              {isOwn ? 'Tell other businesses what you do — tap Edit profile.' : 'No description yet.'}
-            </Text>
-          )}
-          <View style={{ gap: space.sm, marginTop: space.md }}>
-            <FactRow label="Business type" value={businessTypeLabel(profile.businessType)} />
-            <FactRow label="Verified since" value={verified ? (c.verifiedAt ? formatMonthYear(c.verifiedAt) : 'Date not recorded') : 'Not yet verified'} />
-          </View>
-        </View>
-
-        {portfolio && (
-          <PortfolioSection
-            profile={profile}
-            items={portfolio}
-            load={loadPortfolioImage}
-            onOpen={onOpenPortfolioImage}
-            onAdd={onAddPortfolioItem}
-            onRemove={onRemovePortfolioItem}
-            completedWork={completedWork}
-            completedSuggestions={completedSuggestions}
-            onShowcase={onShowcase}
-          />
         )}
 
-        <View style={styles.card}>
-          <SectionLabel>Capabilities and service areas</SectionLabel>
-          <View style={{ marginTop: space.sm, gap: space.md }}>
-            <TagList items={profile.capabilities} emptyLabel="No capabilities listed." />
-            <TagList items={profile.serviceAreas} emptyLabel="No service areas listed." />
-          </View>
-        </View>
+        {hero}
+        {highlights}
 
-        <View style={styles.card}>
-          <SectionLabel>Activity</SectionLabel>
-          <View style={styles.statsGrid}>
-            {statRows.map((r) => (
-              <View key={r.label} style={styles.statCell}>
-                <Text style={styles.statValue}>{r.value}</Text>
-                <Text style={styles.mutedSmall}>{r.label}</Text>
-              </View>
-            ))}
+        {isWide ? (
+          <View style={styles.columns}>
+            <View style={styles.mainColumn}>
+              {about}
+              {pastWork}
+              {activity}
+            </View>
+            <View style={[styles.sideColumn, STICKY]}>
+              {strength}
+              {transparency}
+              {capabilities}
+              {links}
+            </View>
           </View>
-          <Text style={[styles.mutedSmall, { marginTop: space.md }]}>
-            {profile.includesSealedActivity
-              ? 'Supplier counts include your private sealed activity.'
-              : 'Supplier counts exclude sealed activity and submissions or withdrawals before the closing deadline.'}
-          </Text>
-          <InfoHint text="Completed = the supplier marked it completed and the buyer confirmed (or did not respond within 14 days). Completion rate = completed ÷ awarded. Unconfirmed orders had no updates and count as neither." />
-        </View>
-
-        <TransparencySlides profile={profile} verified={verified} />
+        ) : (
+          <>
+            {strength}
+            {about}
+            {pastWork}
+            {capabilities}
+            {activity}
+            {transparency}
+            {links}
+          </>
+        )}
 
         <View style={styles.footerRow}>
           <Pressable
@@ -782,20 +925,37 @@ export default function BusinessProfile({
         {reporting && onReport && (
           <ReportBusinessModal businessName={profile.registeredName} onClose={() => setReporting(false)} onSubmit={onReport} />
         )}
-        {editing && onSaveDetails && (
-          <EditProfileModal profile={profile} onSave={onSaveDetails} onClose={() => setEditing(false)} />
-        )}
       </View>
+      {editing && onSaveDetails && draft && (
+        <EditProfileDrawer draft={draft} setDraft={setDraft} onSave={onSaveDetails} onClose={() => setDraft(null)} isWide={isWide} />
+      )}
     </ScreenScroll>
   );
 }
+
+const DRAWER_WIDTH = 400;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.canvas },
   scrollContent: { alignItems: 'center', paddingVertical: space.lg, paddingBottom: space.xxl },
 
   page: { width: '100%', maxWidth: layout.maxWidth, paddingHorizontal: layout.screenPadding, gap: space.lg },
-  pageWide: { width: '100%', maxWidth: 720, paddingHorizontal: layout.screenPadding, gap: space.lg },
+  pageWide: { width: '100%', maxWidth: layout.maxWidthWide, paddingHorizontal: layout.screenPadding, gap: space.lg },
+  columns: { flexDirection: 'row', alignItems: 'flex-start', gap: space.lg },
+  mainColumn: { flex: 1.7, minWidth: 0, gap: space.lg },
+  sideColumn: { flex: 1, minWidth: 280, maxWidth: 400, gap: space.lg },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexShrink: 1, minWidth: 0 },
+  iconChip: { width: 24, height: 24, borderRadius: radius.sm, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  previewBanner: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.md, borderWidth: 1, borderColor: color.accentBorder, backgroundColor: color.accentFaint, borderRadius: radius.lg, paddingHorizontal: space.lg, paddingVertical: space.md },
+  previewText: { flex: 1, minWidth: 200, fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.accent },
+  previewExit: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary, textDecorationLine: 'underline' },
+  drawer: { zIndex: 50, backgroundColor: color.surface, padding: space.xl, gap: space.md, ...elevation.cardRaised },
+  drawerWide: { top: 0, right: 0, bottom: 0, width: 400, borderLeftWidth: 1, borderLeftColor: color.border },
+  drawerSheet: { left: 0, right: 0, bottom: 0, maxHeight: '70%', borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderTopWidth: 1, borderTopColor: color.border },
+  drawerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
+  liveBadge: { flexDirection: 'row', alignItems: 'center', gap: space.xs, borderRadius: radius.pill, backgroundColor: color.successFaint, borderWidth: 1, borderColor: color.successBorder, paddingHorizontal: space.sm, paddingVertical: 2 },
+  liveDot: { width: 7, height: 7, borderRadius: radius.pill, backgroundColor: color.success },
+  liveLabel: { fontFamily: font.mono, fontSize: 10, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.success },
 
   breadcrumbRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
   breadcrumbLink: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkFaint },
@@ -815,6 +975,7 @@ const styles = StyleSheet.create({
 
   card: { ...elevation.cardRaised, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.lg },
   sectionLabel: {
+    flexShrink: 1,
     fontFamily: font.mono,
     fontSize: fontSize.micro,
     letterSpacing: letterSpacing.label,
@@ -858,7 +1019,7 @@ const styles = StyleSheet.create({
   reportInput: { minHeight: 96, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink, textAlignVertical: 'top' },
   reportError: { fontFamily: font.body, fontSize: fontSize.sm, color: color.danger },
 
-  portfolioHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  portfolioHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
   tileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, marginTop: space.md },
   tile: { width: 200, flexGrow: 1, maxWidth: 260, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: color.surface },
   tileImageBox: { width: '100%', aspectRatio: 4 / 3, backgroundColor: color.surfaceSunken, alignItems: 'center', justifyContent: 'center' },
@@ -882,13 +1043,14 @@ const styles = StyleSheet.create({
   linkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.lg },
   linkSmall: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
   heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.xs },
-  highlightRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: space.sm, borderTopWidth: 1, borderTopColor: color.borderFaint, paddingTop: space.md, rowGap: space.md },
-  highlight: { flexGrow: 1, flexBasis: 120, gap: 2 },
-  highlightValue: { fontFamily: font.display, fontSize: fontSize.lg, color: color.ink },
+  highlightRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
+  highlight: { flexGrow: 1, flexBasis: 140, gap: space.xs, borderWidth: 1, borderRadius: radius.lg, padding: space.md },
+  highlightTop: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  highlightValue: { fontFamily: font.display, fontSize: fontSize.xl, color: color.ink },
   highlightLabel: { fontFamily: font.mono, fontSize: 10, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkFaint },
-  meterPct: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
+  meterPct: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.success },
   meterTrack: { height: 8, borderRadius: radius.pill, backgroundColor: color.surfaceSunken, overflow: 'hidden', marginTop: space.sm },
-  meterFill: { height: '100%', borderRadius: radius.pill, backgroundColor: color.primary },
+  meterFill: { height: '100%', borderRadius: radius.pill, backgroundColor: color.success },
   slideBody: { minHeight: 150, justifyContent: 'center', paddingVertical: space.lg },
   slideCenter: { alignItems: 'center', gap: space.xs },
   slideHero: { fontFamily: font.display, fontSize: fontSize.xl, color: color.ink, textAlign: 'center' },
@@ -898,7 +1060,7 @@ const styles = StyleSheet.create({
   slideStatClean: { borderColor: color.primaryBorder, backgroundColor: color.primaryFaint },
   slideStatValue: { fontFamily: font.display, fontSize: fontSize.xl, color: color.ink },
   slideStatLabel: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted, textAlign: 'center' },
-  slideCount: { fontFamily: font.mono, fontSize: fontSize.micro, color: color.inkFaint },
+  slideCount: { flexShrink: 0, fontFamily: font.mono, fontSize: fontSize.micro, color: color.inkFaint },
   slideNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   slideArrow: { width: 36, height: 36, borderRadius: radius.pill, borderWidth: 1, borderColor: color.border, alignItems: 'center', justifyContent: 'center' },
   slideArrowLabel: { fontFamily: font.bodySemi, fontSize: fontSize.lg, color: color.ink, lineHeight: fontSize.lg + 2 },

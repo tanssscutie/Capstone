@@ -162,6 +162,12 @@ npx expo start --web
   - May bagong linya tungkol dito sa Privacy Notice (section 5). Hindi binago ang bersyon, kaya hindi hihingan ulit ng consent ang lahat. Ipa-apruba sa adviser.
   - Code: `portfolio_service.completed_work` at `set_showcase`, bagong column `requirement.supplier_showcase` (auto-migrate), `GET /business/{id}/completed-work`, `GET /business/portfolio/suggestions`, at `POST /business/portfolio/showcase/{requirement_id}`. Tests: `backend/tests/test_completed_work.py`.
 - **Business transparency bilang slides:** 3 slide (Verification → Track record → Contact) na may ‹ ›, mga tuldok, at "1 / 3". Malalaking numero sa Track record, at naka-highlight ang 0. Nasa "ⓘ More info" na ang mahabang paliwanag. Component: `TransparencySlides` sa `BusinessProfile.tsx`.
+- **Dynamic na layout (round 3):**
+  - **Desktop:** dalawang column. Sa main column: About, Past work, Activity. Sa sticky na sidebar: Profile strength (sarili lang), Transparency slides, Capabilities, Links. **Phone:** iisang column.
+  - **Highlight tiles:** may kulay ang Completed, Completion rate, Awarded at Member since. May maliit na icon chip (gawa sa hugis) ang bawat section.
+  - **Bagong accent tokens** sa `tokens.ts`: `success`, `warning` at `accent`, bawat isa ay may `*Faint` at `*Border`. Ipaalam sa grupo dahil may rule na "no new colours without a PR seen by all four".
+- **"👁 View as others":** tinatago ang lahat ng owner control (Change cover/photo, Edit profile, Profile strength, Add photo, Suggested completed orders), at may banner na "This is how others see your profile · Exit preview".
+- **Edit profile = drawer na may live preview:** drawer sa kanan sa desktop, at bottom sheet sa phone. Habang nagta-type, makikita agad ang headline, About at links sa page sa likod, as others will see it. May Save at Cancel. Wala nang Modal.
 - **Activity:** nasa "ⓘ More info" na rin ang paliwanag ng Completed, Completion rate at Unconfirmed. Ang linya tungkol sa sealed activity lang ang laging nakikita.
 - **Daan papunta rito:** sa account menu, ang **"My Profile"** ay bumubukas na sa bagong profile (`/business-profile?id=<sarili>`). Ang dating page (business name, contact, capabilities, "Update in onboarding") ay nasa **"Business details"** na (`/account`).
 - **"Request a quote":** buyer na tumitingin sa seller.
