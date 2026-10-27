@@ -1057,7 +1057,19 @@ class RequirementService:
             title="Quotations released",
             detail=f"{req.ref_code} · {req.title} — {len(actives)} quotation{'s' if len(actives) != 1 else ''} released and ready to review.",
             urgent=True,
+            related_requirement_id=req.id,
         )
+        # Every respondent learns the posting closed — not whether they won.
+        for q in actives:
+            notif_repo.create_if_allowed(
+                session,
+                user_id=q.business_id,
+                type_="REQUIREMENT_RELEASED",
+                category="activity",
+                title="Quotations opened",
+                detail=f"{req.ref_code} · {req.title} — closed and opened. The buyer is reviewing quotations.",
+                related_requirement_id=req.id,
+            )
 
     # ---------- post-release view ----------
 

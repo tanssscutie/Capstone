@@ -62,7 +62,13 @@ npx expo start --web
 
 ---
 
-# Latest update (branch `trustlink-updates`, hindi pa naka-commit — base: `e3b21e5`)
+# Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
+
+**Alert sa lahat pagka-release ng quotations**
+- Dati, ang buyer lang ang may alert. Ngayon, may `REQUIREMENT_RELEASED` alert din ("Quotations opened") ang **bawat respondent** pagka-release. Hindi nito sinasabi kung nanalo sila. May email din ito, at nabubuksan ang requirement mula sa alert.
+- Code: `requirement_service._release_one`. Tests: `backend/tests/test_release_alerts.py`.
+
+# Latest update (branch `trustlink-updates`, base: `e3b21e5`)
 
 **Feedback batch bago ang final defense**
 - **Security:**
