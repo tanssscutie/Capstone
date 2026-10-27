@@ -1241,6 +1241,74 @@ function SellerVerifyBanner({ onCompleteVerification }: { onCompleteVerification
 }
 
 /** The banner at the top of the centre column — buyer or seller flavour. */
+/* ─── Getting started (first-time guide) ──────────────
+ * A new account sees three steps, each ticked off from its own data, each with
+ * one button. It disappears once all are done, or when hidden (remembered per
+ * account in this browser — a convenience, so storage failing is harmless). */
+
+function guideHiddenKey(viewerId: string) {
+  return `trustlink.guideHidden.${viewerId}`;
+}
+
+function GettingStartedCard(props: HomeFeedProps) {
+  const { viewer } = props;
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return typeof window !== 'undefined' && window.localStorage.getItem(guideHiddenKey(viewer.id)) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const c = viewer.credibility;
+  const verified = c.status === 'VERIFIED';
+  const steps: { label: string; done: boolean; action?: { label: string; onPress?: () => void } }[] =
+    viewer.role === 'buyer'
+      ? [
+          { label: 'Get your business verified', done: verified, action: { label: 'Complete verification', onPress: props.onCompleteVerification } },
+          { label: 'Post your first requirement', done: c.requirementsPosted > 0, action: verified ? { label: 'Post a requirement', onPress: props.onPostRequirement } : undefined },
+          { label: 'Review the quotations and award one', done: c.requirementsAwarded > 0, action: c.requirementsPosted > 0 ? { label: 'My requirements', onPress: props.onManageRequirements } : undefined },
+        ]
+      : [
+          { label: 'Get your business verified', done: verified, action: { label: 'Complete verification', onPress: props.onCompleteVerification } },
+          { label: 'Add your capabilities so the right requirements find you', done: viewer.capabilities.length > 0, action: { label: 'Update your capabilities', onPress: props.onUpdateCapabilities } },
+          { label: 'Submit your first quotation from the feed below', done: c.quotationsSubmitted > 0 },
+        ];
+  const doneCount = steps.filter((st) => st.done).length;
+  if (hidden || doneCount === steps.length) return null;
+  const next = steps.find((st) => !st.done);
+
+  const hide = () => {
+    setHidden(true);
+    try {
+      window.localStorage.setItem(guideHiddenKey(viewer.id), '1');
+    } catch {
+      // Private mode or blocked storage — it just reappears next visit.
+    }
+  };
+
+  return (
+    <View style={styles.guideCard}>
+      <View style={styles.guideHeader}>
+        <Text style={styles.guideTitle}>Getting started · {doneCount} of {steps.length}</Text>
+        <Pressable onPress={hide} hitSlop={8} accessibilityRole="button">
+          <Text style={styles.guideHide}>Hide</Text>
+        </Pressable>
+      </View>
+      {steps.map((st, i) => (
+        <View key={st.label} style={styles.guideRow}>
+          <View style={[styles.guideCheck, st.done ? styles.guideCheckDone : null]}>
+            <Text style={[styles.guideCheckLabel, st.done ? { color: color.onPrimary } : null]}>{st.done ? '✓' : i + 1}</Text>
+          </View>
+          <Text style={[styles.guideStep, st.done ? styles.guideStepDone : null]}>{st.label}</Text>
+          {st === next && st.action?.onPress && (
+            <FeedButton label={st.action.label} variant="primary" onPress={st.action.onPress} />
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function RoleBanner(props: HomeFeedProps) {
   const { viewer, myRequirements, recentlyClosed } = props;
   const verified = viewer.credibility.status === 'VERIFIED';
@@ -1620,6 +1688,7 @@ function PhoneHomeFeed(props: HomeFeedProps) {
         {isSeller && <CategoryPills categories={st.categories} active={st.categoryFilter} onSelect={st.setCategoryFilter} />}
         <ProfileCard viewer={viewer} onAddMayorsPermit={props.onAddMayorsPermit} />
         <ActivityStatsCard viewer={viewer} />
+        <GettingStartedCard {...props} />
         <RoleBanner {...props} />
 
         {isSeller && <>
@@ -1771,6 +1840,7 @@ function WideHomeFeed(props: HomeFeedProps) {
           </View>
 
           <View style={styles.mainColumnWide}>
+            <GettingStartedCard {...props} />
             <RoleBanner {...props} />
 
             {isSeller && <>
@@ -2032,6 +2102,16 @@ const styles = StyleSheet.create({
 
   /* activity stats */
   statsCard: { ...elevation.card, borderRadius: radius.xl, backgroundColor: color.surface, padding: space.xl },
+  guideCard: { gap: space.sm, borderRadius: radius.xl, borderWidth: 1, borderColor: color.primaryBorder, backgroundColor: color.primaryFaint, padding: space.lg, marginBottom: space.md },
+  guideHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  guideTitle: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
+  guideHide: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted, textDecorationLine: 'underline' },
+  guideRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap', minHeight: 36 },
+  guideCheck: { width: 24, height: 24, borderRadius: radius.pill, borderWidth: 1.5, borderColor: color.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface },
+  guideCheckDone: { backgroundColor: color.primary },
+  guideCheckLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
+  guideStep: { flex: 1, minWidth: 160, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.ink },
+  guideStepDone: { color: color.inkMuted, textDecorationLine: 'line-through' },
   statRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.borderFaint },
   statLabel: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
   statValue: { fontFamily: font.display, fontSize: fontSize.md, color: color.ink },

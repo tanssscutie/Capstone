@@ -91,9 +91,12 @@ const SECTIONS: Section[] = [
   },
   {
     title: '8. How long we keep it',
-    paragraphs: [
-      'We keep your account information for as long as your account is active. Procurement records — requirements, quotations, awards and ledger entries — are kept after a transaction ends, ' +
-        'because the integrity of the ledger depends on them and other businesses rely on them. When they are no longer needed, they are deleted or anonymized.',
+    bullets: [
+      'Account and profile information: while your account is active. If you ask us to close your account, it is deleted or anonymized within 30 days, except for the records below.',
+      'Verification documents: while your account is active, and up to 1 year after it is closed, in case a verification decision is disputed.',
+      'Procurement records — requirements, quotations, awards, transaction close-outs and ledger entries: 5 years after the transaction ends, because the integrity of the ledger and other businesses depend on them. After that they are deleted or anonymized.',
+      'Messages and files exchanged after an award: 5 years after the transaction ends, together with the procurement record they belong to.',
+      'Backups: overwritten within 90 days.',
     ],
   },
   {

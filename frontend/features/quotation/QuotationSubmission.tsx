@@ -21,6 +21,7 @@ import {
   Linking,
   useWindowDimensions,
 } from 'react-native';
+import { CaptionOrHint, InfoHint } from '../../components/ui/InfoHint';
 import type { TextInputProps, ViewStyle } from 'react-native';
 import ScreenScroll from '../../components/ui/ScreenScroll';
 import {
@@ -853,10 +854,8 @@ function SpecificationsSection({ requirement, st }: { requirement: Requirement; 
           </Text>
         </View>
       </View>
-      <Text style={styles.fieldCaption}>
-        Confirm each one, or say what you're quoting instead. Sealed with your price — the buyer sees every
-        quotation's answers side by side after closing.
-      </Text>
+      <Text style={styles.fieldCaption}>Confirm each one, or say what you're quoting instead.</Text>
+      <InfoHint text="Your answers are sealed with your price. After closing, the buyer sees every quotation's answers side by side." />
       <View style={{ gap: space.sm, marginTop: space.sm }}>
         {rows.map((row) => {
           const brand = row.attributeId === PREFERRED_BRAND_ID;
@@ -909,10 +908,8 @@ function RequiredDocumentsSection({ requirement, st }: { requirement: Requiremen
           </Text>
         </View>
       </View>
-      <Text style={styles.fieldCaption}>
-        The buyer asked for these to be attached to your quotation. Not a hard block on submitting — but a
-        missing one may put you at a disadvantage once quotations are compared.
-      </Text>
+      <Text style={styles.fieldCaption}>The buyer asked for these documents.</Text>
+      <InfoHint text="Not a hard block on submitting — but a missing one may put you at a disadvantage once quotations are compared." />
       <View style={{ gap: space.sm, marginTop: space.sm }}>
         {requirement.requiredDocuments.map((label) => {
           const file = st.files.find((f) => f.documentLabel === label);
@@ -942,9 +939,7 @@ function NotesAttachmentsSection({ st, isWide }: { st: FormState; isWide: boolea
   const notes = (
     <>
       <Text style={styles.fieldLabel}>Notes to the buyer</Text>
-      <Text style={styles.fieldCaption}>
-        Inclusions, exclusions, assumptions, or anything that explains your price. Read only after closing.
-      </Text>
+      <Text style={styles.fieldCaption}>Anything that explains your price. Read only after closing.</Text>
       <FormInput
         value={st.note}
         onChangeText={st.setNote}
@@ -962,9 +957,7 @@ function NotesAttachmentsSection({ st, isWide }: { st: FormState; isWide: boolea
   const attachments = (
     <>
       <Text style={styles.fieldLabel}>Attachments</Text>
-      <Text style={styles.fieldCaption}>
-        Method statements, bills of quantities, certificates, past work. Sealed with the rest of your quotation.
-      </Text>
+      <Text style={styles.fieldCaption}>Certificates, samples, past work. Sealed with your quotation.</Text>
       <View style={styles.filesRow}>
         {/* Only general attachments — a file attached to a required document
             already shows in that section's row. */}
@@ -1233,7 +1226,7 @@ function WhySafeCard() {
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.safeTitle}>{p.title}</Text>
-              <Text style={styles.safeBody}>{p.body}</Text>
+              <InfoHint text={p.body} label="How" />
             </View>
           </View>
         ))}
@@ -1297,7 +1290,7 @@ function TimelineCard({ requirement, quotation }: { requirement: Requirement; qu
                   <Text style={[styles.timelineTitle, s.done ? styles.timelineTitleDone : null]}>{s.title}</Text>
                   <Text style={styles.timelineWhen}>{s.when}</Text>
                 </View>
-                <Text style={styles.timelineBody}>{s.body}</Text>
+                <CaptionOrHint text={s.body} style={styles.timelineBody} />
               </View>
             </View>
           );

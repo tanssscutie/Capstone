@@ -64,6 +64,49 @@ npx expo start --web
 
 # Latest update (branch `trustlink-updates`, hindi pa naka-commit — base: `e3b21e5`)
 
+**Feedback batch bago ang final defense**
+- **Security:**
+  - May sariling random na `SECRET_KEY` na sa `backend/.env` (dati ang default sa code ang gamit). Kailangang mag-login ulit ng lahat.
+  - Hinaharangan na ang banned, deactivated, at suspended na account **sa bawat request** at sa lahat ng paraan ng pag-login, kahit may dati nang token (`app/core/account_access.py`).
+  - Tinanggal ang GitHub token sa URL ng `deploy` remote. **Kailangan pa rin itong i-revoke sa GitHub.**
+- **Minimum na quotations:**
+  - Kapag kulang sa `MIN_QUOTATIONS_TO_RELEASE` (default 4) pagsapit ng closing, i-e-extend ito nang `AUTO_EXTEND_DAYS` (3) isang beses, sealed pa rin, at may alert sa buyer, sa mga respondent, at sa mga tugmang seller.
+  - Kapag kulang pa rin, magiging `insufficient_quotations` (Archived) ang status at mavo-void ang lahat ng quotation nang hindi nabubuksan.
+  - Hindi rin makaka-award kapag kulang.
+  - Makikita ang "2 of 4 quotations needed" sa Requirement Detail, at may paalala sa Closing step. Galing ang mga numero sa `GET /meta/rules`.
+  - **Para sa demo:** ibaba ang `MIN_QUOTATIONS_TO_RELEASE` sa `.env` kung kulang ang seller accounts.
+- **My Quotations:** may step tracker (Submitted → Released → Notice of Award → Awarded → Completed) at isang linya ng "next step" na may aksyon: Accept/Decline award, Open chat, o confirm completion.
+- **Reports at moderation:**
+  - Bagong `/reports` page (sa Account menu): maghanap ng business para i-report, at sundan ang status ng mga report mo.
+  - May "Report" link din sa quotation card, sa "Posted by," at sa chat header.
+  - Admin: Dismiss, Warn, Suspend 7 o 30 days, o Ban, na kailangan ng dahilan. Sa ban, kinakansela ang mga bukas na requirement at winiwithdraw ang mga sealed quotation ng user.
+  - Lift restriction sa Businesses page. May audit trail (`ModerationAction`) at alert sa user at sa nag-report.
+  - Bagong mga dahilan: Spam o pekeng requirement/quotation, at Bid manipulation o collusion.
+- **Home:**
+  - Nakatago na ang "Closing within 24 hours" kapag walang laman.
+  - Button na ang "Update your capabilities."
+  - Bagong "Getting started" guide (3 hakbang, kusang nache-check, may Hide).
+- **Pagpapasimple:** ang mahahabang paliwanag sa Post a Requirement, sa Quote form, at sa Requirement Detail ay nasa likod na ng "ⓘ More info" (`components/ui/InfoHint.tsx`). Walang binurang impormasyon, at nakikita pa rin ang mga error.
+- **Backup:** `backend/scripts/backup.py` (mysqldump + zip ng `uploads/` papunta sa `backend/backups/<petsa>/`, git-ignored).
+- **Privacy Notice:** may konkretong retention periods na. **Mungkahi pa lang ang mga ito,** kaya ipa-apruba sa adviser. Wala pang pangalan ang DPO.
+- Tests: `test_account_access`, `test_min_quotations`, `test_my_quotations_status`, at `test_moderation`.
+
+**Deployment checklist (hindi kaya sa code)**
+- **Hosting:** server para sa FastAPI at MySQL, at static hosting para sa `npx expo export --platform web`.
+- **HTTPS certificate:** hal. Let's Encrypt, o sa hosting provider.
+- **`backend/.env` sa server:**
+  - bagong `SECRET_KEY` at `FILE_ENCRYPTION_KEY`, na itatabi nang ligtas at hiwalay sa backups
+  - `DATABASE_URL`
+  - `CORS_ORIGINS` = totoong domain ng frontend
+  - `FRONTEND_URL` = totoong domain, para tama ang link sa email
+  - SMTP (Gmail app password o transactional email provider)
+  - `GOOGLE_*` kung gagamitin ang Google Sign-In, at i-update ang redirect URI
+  - `MIN_QUOTATIONS_TO_RELEASE` pabalik sa 4
+- **Frontend:** `EXPO_PUBLIC_API_URL` = totoong API URL bago mag-build.
+- **Backup:** iskedyul ang `scripts/backup.py` (hal. araw-araw sa Task Scheduler o cron) at kopyahin palabas ng server.
+- **Gemini:** bayad na tier o mas mataas na quota kapag maraming user (20 kada araw sa libre).
+- **RA 10173:** pangalanan ang DPO, aprubahan ang retention, at isaalang-alang ang pag-register sa NPC kung kailangan.
+
 **🔒 Security fix: sealed bidding (presyo ng kalaban)**
 - Dati, kahit sinong naka-login ay nakakabasa ng `GET /requirements/{id}/quotations` pagkatapos ng release, kasama ang presyo, notes, at attachments ng lahat ng supplier.
 - Ngayon, ang buyer na may-ari at ang admin lang ang makakabasa. 403 sa iba, pati sa mga kalabang supplier, sealed man o released. Nakikita pa rin ng supplier ang sarili niyang quotation sa "My Quotations."

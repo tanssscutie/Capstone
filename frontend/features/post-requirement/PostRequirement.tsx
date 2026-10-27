@@ -54,6 +54,7 @@ import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 import { VALIDATION_ERROR_MARK, scrollToFirstError } from '../../lib/scrollToFirstError';
 import { barangayLabel, foldName, useNcrAddresses } from '../../lib/data/ncrAddresses';
 import { useMarketRules } from '../../lib/data/marketRules';
+import { CaptionOrHint, InfoHint } from '../../components/ui/InfoHint';
 
 /* ─── Draft shapes ───────────────────────────────────────
  * One draft per step, assembled into a real `Requirement` by the route only once REVIEW
@@ -467,7 +468,7 @@ function SectionCard({
           </View>
         )}
       </View>
-      {!!caption && <Text style={styles.sectionCardCaption}>{caption}</Text>}
+      {!!caption && <CaptionOrHint text={caption} style={styles.sectionCardCaption} />}
       <View style={styles.sectionCardBody}>{children}</View>
     </View>
   );
@@ -828,7 +829,7 @@ function ScreenTitle({ step, title, subtitle }: { step: PostRequirementState; ti
         Step {index + 1} of {STEP_ORDER.length} · {STEP_LABELS[step]}
       </Text>
       <Text style={styles.pageTitle}>{title}</Text>
-      <Text style={styles.pageSubtitle}>{subtitle}</Text>
+      <CaptionOrHint text={subtitle} style={styles.pageSubtitle} />
     </View>
   );
 }
@@ -1865,11 +1866,11 @@ function SealedExplanationCard({ closingAt }: { closingAt: ISODateTime }) {
   return (
     <View style={styles.sealedCard}>
       <SectionLabel tone={color.primary}>Sealed until closing</SectionLabel>
-      <Text style={styles.sealedHeading}>Quotations stay sealed until closing</Text>
-      <Text style={styles.sealedBody}>
-        Every quotation submitted before {formatDateTime(closingAt)} stays hidden — from you, and from every other business quoting.
-        At closing, every sealed quotation opens at once, so no business ever prices against one it was never allowed to see.
-      </Text>
+      <Text style={styles.sealedHeading}>Quotations stay sealed until {formatDateTime(closingAt)}</Text>
+      <InfoHint
+        label="Why sealed?"
+        text="Every quotation stays hidden — from you, and from every other business quoting. At closing, every sealed quotation opens at once, so no business ever prices against one it was never allowed to see."
+      />
     </View>
   );
 }

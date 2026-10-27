@@ -40,6 +40,7 @@ import type {
 import { PREFERRED_BRAND_ID, specDisplayValue } from '../../lib/data/categories';
 import { useMarketRules } from '../../lib/data/marketRules';
 import { ReportLink } from '../../components/ui/ReportBusinessModal';
+import { CaptionOrHint, InfoHint } from '../../components/ui/InfoHint';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 
 /* ─── Props ─────────────────────────────────────────── */
@@ -1018,12 +1019,11 @@ function RespondentPanel(props: RespondentNotSubmitted | RespondentSubmitted) {
 function SealedExplanation() {
   return (
     <View style={styles.block}>
-      <SectionLabel>Why nothing more is visible</SectionLabel>
-      <Text style={styles.bodyText}>
-        Quotations stay sealed until the countdown reaches zero. This stops respondents from seeing
-        each other&apos;s pricing and undercutting one another, so the comparison is fair the moment
-        it releases. Until then only the count above is shown — no names, figures, or previews.
-      </Text>
+      <Text style={styles.bodyText}>Quotations open at closing — until then you see only the count.</Text>
+      <InfoHint
+        label="Why?"
+        text="Quotations stay sealed until the countdown reaches zero. This stops respondents from seeing each other's pricing and undercutting one another, so the comparison is fair the moment it releases. Until then only the count is shown — no names, figures, or previews."
+      />
     </View>
   );
 }
@@ -1032,13 +1032,11 @@ function EditabilityList() {
   return (
     <View style={styles.block}>
       <SectionLabel>Before closing</SectionLabel>
-      <View style={{ gap: space.sm }}>
-        <Text style={styles.bodyText}>Can still edit: delivery window, delivery site, attachments.</Text>
-        <Text style={styles.bodyText}>
-          Locked: scope, specifications, quantity, indicative budget, closing date — respondents
-          have already priced against these.
-        </Text>
-      </View>
+      <Text style={styles.bodyText}>You can still edit the delivery window, site and attachments.</Text>
+      <InfoHint
+        label="What's locked?"
+        text="Scope, specifications, quantity, indicative budget and the closing date are locked — respondents have already priced against these."
+      />
     </View>
   );
 }
@@ -1892,7 +1890,7 @@ function WideInfoBand({
       </View>
 
       <View style={styles.wideDividedSectionTop}>
-        <Text style={styles.mutedSmall}>{sealLine}</Text>
+        <CaptionOrHint text={sealLine} style={styles.mutedSmall} />
       </View>
     </View>
   );
@@ -1906,9 +1904,7 @@ function WideSealedHero({ requirement, onViewLedger }: { requirement: Requiremen
     <View style={styles.wideHeroCard}>
       <View style={styles.wideHeroIcon} />
       <Text style={styles.wideHeroTitle}>{requirement.quotationCount} quotations are sealed</Text>
-      <Text style={styles.wideHeroBody}>
-        All submissions remain hidden until {formatDateTime(requirement.closingAt)}. At closing, all quotations open simultaneously.
-      </Text>
+      <Text style={styles.wideHeroBody}>Hidden until {formatDateTime(requirement.closingAt)}, then all open at once.</Text>
 
       <View style={styles.sealBarsRow}>
         {bars.map((_, i) => (

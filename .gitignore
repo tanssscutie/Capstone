@@ -21,6 +21,8 @@ backend/__pycache__/
 backend/uploads/*
 !backend/uploads/.gitkeep
 backend/qdrant_data/
+# Database dumps and upload archives from scripts/backup.py — personal data
+backend/backups/
 
 # Claude Code session/process metadata — not project source
 /.claude/scheduled_tasks.lock
