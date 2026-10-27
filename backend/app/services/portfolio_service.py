@@ -18,8 +18,11 @@ from app.core import file_crypto
 from app.core.categories import find_item, item_name
 from app.core.database import engine
 from app.models.portfolio_item import PortfolioItem
+from app.models.quotation import Quotation
+from app.models.requirement import Requirement
+from app.models.transaction_closeout import TransactionCloseout
 from app.models.user import User
-from app.schemas.business import PortfolioItemOut
+from app.schemas.business import CompletedWorkOut, PortfolioItemOut
 
 UPLOAD_ROOT = os.path.join("uploads", "portfolio")
 MAX_ITEMS = 8
@@ -126,6 +129,51 @@ class PortfolioService:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
             with open(item.file_path, "rb") as f:
                 return file_crypto.decrypt_bytes(f.read())
+
+
+    # ---------- completed TrustLink orders ("Completed on TrustLink") ----------
+
+    @staticmethod
+    def _completed_rows(session: Session, business_id: int):
+        """(requirement, closeout) for every order this business delivered as the
+        awarded supplier and the buyer confirmed (or that auto-confirmed)."""
+        return session.exec(
+            select(Requirement, TransactionCloseout)
+            .join(Quotation, Quotation.id == Requirement.awarded_quotation_id)
+            .join(TransactionCloseout, TransactionCloseout.requirement_id == Requirement.id)
+            .where(
+                Requirement.status == "awarded", Quotation.business_id == business_id,
+                TransactionCloseout.status == "confirmed", TransactionCloseout.outcome == "completed",
+            )
+            .order_by(TransactionCloseout.responded_at.desc())
+        ).all()
+
+    def completed_work(self, business_id: int, *, showcased: bool) -> List[CompletedWorkOut]:
+        """showcased=True: what the profile shows. False: the owner's suggestions."""
+        with Session(engine) as session:
+            out = []
+            for req, closeout in self._completed_rows(session, business_id):
+                if bool(req.supplier_showcase) != showcased:
+                    continue
+                buyer = session.get(User, req.owner_id)
+                out.append(CompletedWorkOut(
+                    requirement_id=req.id, ref_code=req.ref_code, title=req.title, category=req.category,
+                    item_name=item_name(req.category, req.item_code) if req.item_code else None,
+                    quantity=req.quantity or "", city=req.city or "",
+                    buyer_name=(buyer.display_name or buyer.registered_name or buyer.business_name) if buyer else "A buyer",
+                    completed_at=closeout.responded_at or closeout.created_at, showcased=bool(req.supplier_showcase),
+                ))
+            return out
+
+    def set_showcase(self, user_id: int, requirement_id: int, show: bool) -> None:
+        with Session(engine) as session:
+            if not any(req.id == requirement_id for req, _ in self._completed_rows(session, user_id)):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                    detail="Only a completed order you delivered can be shown on your profile")
+            req = session.get(Requirement, requirement_id)
+            req.supplier_showcase = show
+            session.add(req)
+            session.commit()
 
 
 portfolio_service = PortfolioService()

@@ -130,6 +130,12 @@ npx expo start --web
   - JPG, PNG o WebP, hanggang 5 MB.
 - **Links:** http/https lang. Kapag walang scheme, idinadagdag ang `https://`. Tinatanggihan ang `javascript:` at iba pang scheme.
 - **Header:** ang larawan na rin ang nasa account chip, kung mayroon.
+- **Past work: "Completed on TrustLink"** (seller):
+  - Ang mga completed na order mo (Confirm received o auto-confirmed) ay lalabas bilang **"Suggested from your completed orders"** sa sarili mong profile, at ikaw lang ang nakakakita.
+  - **"Show on profile"** para ipakita, at **"Hide"** para itago ulit.
+  - Ang card: "✓ Verified transaction", title, item · quantity · city, at "For {buyer} · Completed {buwan}". **Walang presyo kailanman.**
+  - May bagong linya tungkol dito sa Privacy Notice (section 5). Hindi binago ang bersyon, kaya hindi hihingan ulit ng consent ang lahat. Ipa-apruba sa adviser.
+  - Code: `portfolio_service.completed_work` at `set_showcase`, bagong column `requirement.supplier_showcase` (auto-migrate), `GET /business/{id}/completed-work`, `GET /business/portfolio/suggestions`, at `POST /business/portfolio/showcase/{requirement_id}`. Tests: `backend/tests/test_completed_work.py`.
 - **Business transparency bilang slides:** 3 slide (Verification → Track record → Contact) na may ‹ ›, mga tuldok, at "1 / 3". Malalaking numero sa Track record, at naka-highlight ang 0. Nasa "ⓘ More info" na ang mahabang paliwanag. Component: `TransparencySlides` sa `BusinessProfile.tsx`.
 - **Daan papunta rito:** sa account menu, ang **"My Profile"** ay bumubukas na sa bagong profile (`/business-profile?id=<sarili>`). Ang dating page (business name, contact, capabilities, "Update in onboarding") ay nasa **"Business details"** na (`/account`).
 - **"Request a quote":** buyer na tumitingin sa seller.

@@ -218,6 +218,25 @@ class RegistrationsByDay(BaseModel):
     count: int
 
 
+class CompletedWorkOut(BaseModel):
+    """A completed TrustLink order the supplier can show in Past work.
+    Never carries the price — only what was delivered, where, and for whom."""
+    requirement_id: int
+    ref_code: str
+    title: str
+    category: str
+    item_name: Optional[str]
+    quantity: str
+    city: str
+    buyer_name: str
+    completed_at: Optional[datetime]
+    showcased: bool
+
+
+class ShowcaseIn(BaseModel):
+    show: bool
+
+
 class PortfolioItemOut(BaseModel):
     """One portfolio photo; the image itself is GET /business/{id}/portfolio/{item}/image."""
     id: int

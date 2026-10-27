@@ -15,6 +15,10 @@ import {
   profileImagePath,
   uploadProfileImage,
   updateProfileDetails,
+  listCompletedWork,
+  listCompletedWorkSuggestions,
+  setShowcase,
+  type CompletedWorkOut,
   type PortfolioItemOut,
 } from '../lib/api/business';
 import { useAuthedImage } from '../lib/useAuthedImage';
@@ -35,6 +39,8 @@ export default function BusinessProfileRoute() {
   // Bumped after an upload so the photo reloads.
   const [imageVersion, setImageVersion] = useState(0);
   const [portfolio, setPortfolio] = useState<PortfolioItemOut[] | undefined>(undefined);
+  const [completedWork, setCompletedWork] = useState<CompletedWorkOut[]>([]);
+  const [completedSuggestions, setCompletedSuggestions] = useState<CompletedWorkOut[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +59,10 @@ export default function BusinessProfileRoute() {
       setViewerRole(user?.role ?? null);
       // Sellers only; a failed list just hides the section.
       setPortfolio(raw.role === 'seller' ? await listPortfolio(targetId).catch(() => []) : undefined);
+      if (raw.role === 'seller') {
+        setCompletedWork(await listCompletedWork(targetId).catch(() => []));
+        setCompletedSuggestions(user?.id === targetId ? await listCompletedWorkSuggestions().catch(() => []) : []);
+      }
     } catch (e: any) {
       setError(errorMessage(e, 'Could not load this business profile.'));
     } finally {
@@ -96,6 +106,19 @@ export default function BusinessProfileRoute() {
     <BusinessProfile
       profile={profile}
       onBack={() => router.back()}
+      completedWork={completedWork}
+      completedSuggestions={isOwn ? completedSuggestions : undefined}
+      onShowcase={isOwn ? async (requirementId, show) => {
+        try {
+          await setShowcase(requirementId, show);
+          const [shown, suggested] = await Promise.all([listCompletedWork(businessId), listCompletedWorkSuggestions()]);
+          setCompletedWork(shown);
+          setCompletedSuggestions(suggested);
+          return null;
+        } catch (e: any) {
+          return errorMessage(e, 'Could not update your profile.');
+        }
+      } : undefined}
       avatarUri={avatarUri}
       coverUri={coverUri}
       onUploadImage={isOwn ? async (kind, file) => {

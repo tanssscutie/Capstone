@@ -70,6 +70,9 @@ class Requirement(SQLModel, table=True):
     # out_for_delivery -> delivered -> completed, or not_pushed_through / unconfirmed.
     fulfillment_status: str = Field(default="awarded", max_length=30)
     fulfillment_updated_at: Optional[datetime] = None  # last step; reminders count from here
+    # The awarded supplier chose to show this completed order on their
+    # profile's Past work (portfolio_service.set_showcase). Off by default.
+    supplier_showcase: bool = False
     fulfillment_reminders: int = 0  # 0 none, 1 = 3-day sent, 2 = 7-day sent; reset on each step
 
     match_note: Optional[str] = None

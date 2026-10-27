@@ -65,6 +65,7 @@ const SECTIONS: Section[] = [
     bullets: [
       'Your public business profile (name, category, location, capabilities, verification status and activity counts) is visible to signed-in TrustLink users.',
       'Your contact person and contact number are shown only to verified businesses.',
+      "A supplier may choose to list a completed TrustLink order on its profile's Past work, showing what was delivered, the city, and the buyer's business name — never the price.",
       'Your verification documents and their registration numbers are seen only by TrustLink administrators who review them. They are never shown on your profile.',
       "A quotation stays sealed until the requirement closes — no one, not even the buyer, can read it before then. After closing, only the requirement's buyer (and administrators) can read it. Other suppliers never see your price.",
       'Messages and files after an award are visible only to the buyer and the awarded supplier.',

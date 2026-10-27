@@ -12,6 +12,8 @@ from app.models.user import User
 from app.schemas.business import (
     BusinessSearchOut,
     ProfileDetailsIn,
+    CompletedWorkOut,
+    ShowcaseIn,
     ReportSuggestionOut,
     LiftRestriction,
     MyReportOut,
@@ -124,6 +126,23 @@ def profile_avatar(business_id: int, current_user: User = Depends(get_current_us
 def profile_cover(business_id: int, current_user: User = Depends(get_current_user)):
     return Response(content=profile_media_service.image(business_id, "cover"), media_type="image/jpeg",
                     headers={"Cache-Control": "private, no-cache"})
+
+
+@router.get("/portfolio/suggestions", response_model=List[CompletedWorkOut])
+def completed_work_suggestions(current_user: User = Depends(get_current_user)):
+    """Your completed orders not yet shown on your profile."""
+    return portfolio_service.completed_work(current_user.id, showcased=False)
+
+
+@router.post("/portfolio/showcase/{requirement_id}", status_code=status.HTTP_204_NO_CONTENT)
+def set_showcase(requirement_id: int, payload: ShowcaseIn, current_user: User = Depends(get_current_user)):
+    portfolio_service.set_showcase(current_user.id, requirement_id, payload.show)
+
+
+@router.get("/{business_id}/completed-work", response_model=List[CompletedWorkOut])
+def completed_work(business_id: int, current_user: User = Depends(get_current_user)):
+    """Completed orders this supplier chose to show in Past work. No prices."""
+    return portfolio_service.completed_work(business_id, showcased=True)
 
 
 @router.get("/{business_id}/portfolio", response_model=List[PortfolioItemOut])

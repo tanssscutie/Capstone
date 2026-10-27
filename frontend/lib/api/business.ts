@@ -254,6 +254,35 @@ export async function updateProfileDetails(details: ProfileDetailsIn): Promise<v
   await api.put<void>('/business/profile/details', details);
 }
 
+/** A completed TrustLink order a supplier can show in Past work — never a price. */
+export interface CompletedWorkOut {
+  requirement_id: number;
+  ref_code: string;
+  title: string;
+  category: string;
+  item_name: string | null;
+  quantity: string;
+  city: string;
+  buyer_name: string;
+  completed_at: string | null;
+  showcased: boolean;
+}
+
+/** GET /business/{id}/completed-work — the ones the supplier chose to show. */
+export async function listCompletedWork(businessId: number): Promise<CompletedWorkOut[]> {
+  return api.get<CompletedWorkOut[]>(`/business/${businessId}/completed-work`);
+}
+
+/** GET /business/portfolio/suggestions — your completed orders not shown yet. */
+export async function listCompletedWorkSuggestions(): Promise<CompletedWorkOut[]> {
+  return api.get<CompletedWorkOut[]>('/business/portfolio/suggestions');
+}
+
+/** POST /business/portfolio/showcase/{requirementId} */
+export async function setShowcase(requirementId: number, show: boolean): Promise<void> {
+  await api.post<void>(`/business/portfolio/showcase/${requirementId}`, { show });
+}
+
 /** DELETE /business/portfolio/{id} */
 export async function removePortfolioItem(itemId: number): Promise<void> {
   await api.delete<void>(`/business/portfolio/${itemId}`);

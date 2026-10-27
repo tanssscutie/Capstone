@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { View, Text, Pressable, Modal, TextInput, Image, Linking, StyleSheet, useWindowDimensions } from 'react-native';
 import type { ViewStyle } from 'react-native';
-import { PORTFOLIO_MAX_ITEMS, type ReportReason, type PortfolioItemOut, type ProfileDetailsIn, type ProfileImageKind } from '../../lib/api/business';
+import { PORTFOLIO_MAX_ITEMS, type ReportReason, type PortfolioItemOut, type ProfileDetailsIn, type ProfileImageKind, type CompletedWorkOut } from '../../lib/api/business';
 import { ReportBusinessModal } from '../../components/ui/ReportBusinessModal';
 import { InfoHint } from '../../components/ui/InfoHint';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
@@ -46,6 +46,12 @@ export interface BusinessProfileProps {
   /** Own profile only. Each resolves to an error message, or null on success. */
   onAddPortfolioItem?: (file: File, caption: string, itemCode: string | null) => Promise<string | null>;
   onRemovePortfolioItem?: (itemId: number) => Promise<string | null>;
+  /** Completed TrustLink orders the seller chose to show (no prices). */
+  completedWork?: CompletedWorkOut[];
+  /** Own profile: completed orders not shown yet. */
+  completedSuggestions?: CompletedWorkOut[];
+  /** Own profile: show/hide one on the profile. Resolves to an error message, or null. */
+  onShowcase?: (requirementId: number, show: boolean) => Promise<string | null>;
   /** Blob URLs of the profile picture / cover photo, null = show the default. */
   avatarUri?: string | null;
   coverUri?: string | null;
@@ -180,9 +186,49 @@ function AddPortfolioForm({ category, onAdd, onCancel }: {
   );
 }
 
-function PortfolioSection({ profile, items, load, onOpen, onAdd, onRemove }: {
+function CompletedWorkCard({ work, actionLabel, onAction }: {
+  work: CompletedWorkOut;
+  actionLabel?: string;
+  onAction?: () => Promise<string | null>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async () => {
+    if (!onAction) return;
+    setBusy(true);
+    setError(null);
+    const err = await onAction().catch(() => 'Something went wrong.');
+    setBusy(false);
+    if (err) setError(err);
+  };
+  return (
+    <View style={styles.workCard}>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text style={styles.workBadge}>✓ Verified transaction</Text>
+        <Text style={styles.tileCaption} numberOfLines={2}>{work.title}</Text>
+        <Text style={styles.mutedSmall} numberOfLines={1}>
+          {[work.item_name ?? work.category, work.quantity, work.city].filter(Boolean).join(' · ')}
+        </Text>
+        <Text style={styles.mutedSmall} numberOfLines={1}>
+          For {work.buyer_name}{work.completed_at ? ` · Completed ${formatMonthYear(work.completed_at)}` : ''}
+        </Text>
+        {error && <Text style={styles.reportError}>{error}</Text>}
+      </View>
+      {onAction && actionLabel && (
+        <Pressable onPress={run} disabled={busy} hitSlop={6}>
+          <Text style={styles.linkSmall}>{busy ? '…' : actionLabel}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+function PortfolioSection({ profile, items, load, onOpen, onAdd, onRemove, completedWork = [], completedSuggestions = [], onShowcase }: {
   profile: PublicBusinessProfile;
   items: PortfolioItemOut[];
+  completedWork?: CompletedWorkOut[];
+  completedSuggestions?: CompletedWorkOut[];
+  onShowcase?: (requirementId: number, show: boolean) => Promise<string | null>;
   load?: (itemId: number) => Promise<string>;
   onOpen?: (itemId: number) => void;
   onAdd?: (file: File, caption: string, itemCode: string | null) => Promise<string | null>;
@@ -190,7 +236,7 @@ function PortfolioSection({ profile, items, load, onOpen, onAdd, onRemove }: {
 }) {
   const [adding, setAdding] = useState(false);
   const isOwner = !!onAdd;
-  if (!isOwner && items.length === 0) return null;
+  if (!isOwner && items.length === 0 && completedWork.length === 0) return null;
   const full = items.length >= PORTFOLIO_MAX_ITEMS;
 
   return (
@@ -203,6 +249,25 @@ function PortfolioSection({ profile, items, load, onOpen, onAdd, onRemove }: {
         <Text style={[styles.mutedSmall, { marginTop: space.xs }]}>
           Photos of orders you've delivered help buyers judge your work. Only signed-in TrustLink businesses can see them.
         </Text>
+      )}
+      {completedWork.length > 0 && (
+        <View style={{ gap: space.sm, marginTop: space.md }}>
+          <Text style={styles.workHeading}>Completed on TrustLink</Text>
+          {completedWork.map((w) => (
+            <CompletedWorkCard key={w.requirement_id} work={w} actionLabel={onShowcase ? 'Hide' : undefined}
+              onAction={onShowcase && (() => onShowcase(w.requirement_id, false))} />
+          ))}
+        </View>
+      )}
+      {isOwner && completedSuggestions.length > 0 && (
+        <View style={[styles.suggestBox, { marginTop: space.md }]}>
+          <Text style={styles.workHeading}>Suggested from your completed orders</Text>
+          <Text style={styles.mutedSmall}>Only you see these until you choose to show them. Prices are never shown.</Text>
+          {completedSuggestions.map((w) => (
+            <CompletedWorkCard key={w.requirement_id} work={w} actionLabel="Show on profile"
+              onAction={onShowcase && (() => onShowcase(w.requirement_id, true))} />
+          ))}
+        </View>
       )}
       {items.length === 0 ? (
         <Text style={[styles.mutedSmall, { marginTop: space.md }]}>No photos yet.</Text>
@@ -504,6 +569,9 @@ export default function BusinessProfile({
   onOpenPortfolioImage,
   onAddPortfolioItem,
   onRemovePortfolioItem,
+  completedWork,
+  completedSuggestions,
+  onShowcase,
   avatarUri,
   coverUri,
   onUploadImage,
@@ -669,6 +737,9 @@ export default function BusinessProfile({
             onOpen={onOpenPortfolioImage}
             onAdd={onAddPortfolioItem}
             onRemove={onRemovePortfolioItem}
+            completedWork={completedWork}
+            completedSuggestions={completedSuggestions}
+            onShowcase={onShowcase}
           />
         )}
 
@@ -834,5 +905,9 @@ const styles = StyleSheet.create({
   slideDots: { flexDirection: 'row', gap: space.sm },
   slideDot: { width: 8, height: 8, borderRadius: radius.pill, backgroundColor: color.border },
   slideDotActive: { width: 22, backgroundColor: color.primary },
+  workCard: { flexDirection: 'row', alignItems: 'center', gap: space.md, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, padding: space.md, backgroundColor: color.surface },
+  workBadge: { fontFamily: font.mono, fontSize: 10, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.primary },
+  workHeading: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
+  suggestBox: { gap: space.sm, borderWidth: 1, borderStyle: 'dashed', borderColor: color.primaryBorder, backgroundColor: color.primaryFaint, borderRadius: radius.lg, padding: space.md },
   editInput: { minHeight: layout.minTouchTarget, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, paddingHorizontal: space.md, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
 });
