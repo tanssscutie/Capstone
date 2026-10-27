@@ -18,6 +18,10 @@ export interface BackendUser {
   /** Hasn't agreed to the current Privacy Notice — send to /complete-profile. */
   needs_privacy_consent: boolean;
   privacy_consent_at: string | null;
+  /** Credential change cooldown — null = can change now. */
+  password_change_available_at?: string | null;
+  email_change_available_at?: string | null;
+  mobile_change_available_at?: string | null;
 }
 
 export interface RegisterInput {
@@ -152,6 +156,16 @@ export function logout() {
  *  and answers 429 with a "wait N seconds" message when asked too soon. */
 export async function requestPasswordChangeOtp(): Promise<void> {
   await api.post<{ detail: string }>('/auth/password/request-otp', {});
+}
+
+/** POST /auth/email/request-otp — emails a code to the NEW address. */
+export async function requestEmailChangeOtp(newEmail: string, currentPassword: string): Promise<void> {
+  await api.post<{ detail: string }>('/auth/email/request-otp', { new_email: newEmail.trim(), current_password: currentPassword });
+}
+
+/** PUT /auth/email — the code from requestEmailChangeOtp. */
+export async function confirmEmailChange(code: string): Promise<BackendUser> {
+  return api.put<BackendUser>('/auth/email', { code });
 }
 
 /** PUT /auth/password */

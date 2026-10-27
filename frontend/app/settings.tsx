@@ -5,7 +5,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import AccountSettings from '../features/settings/AccountSettings';
-import { me, changeMobileNumber, changePassword, requestPasswordChangeOtp, updateNotificationPreferences, type BackendUser } from '../lib/api/auth';
+import {
+  me, changeMobileNumber, changePassword, requestPasswordChangeOtp, updateNotificationPreferences,
+  requestEmailChangeOtp, confirmEmailChange, type BackendUser,
+} from '../lib/api/auth';
 import { color, font, fontSize, space } from '../components/ui/tokens';
 import { errorMessage } from '../lib/api/client';
 
@@ -56,6 +59,13 @@ export default function SettingsRoute() {
       notifyMessages={user.notify_messages}
       notifyActivity={user.notify_activity}
       notifyEmail={user.notify_email ?? true}
+      passwordChangeAvailableAt={user.password_change_available_at ?? null}
+      emailChangeAvailableAt={user.email_change_available_at ?? null}
+      mobileChangeAvailableAt={user.mobile_change_available_at ?? null}
+      onRequestEmailOtp={requestEmailChangeOtp}
+      onConfirmEmailChange={async (code) => {
+        setUser(await confirmEmailChange(code));
+      }}
       onBack={() => router.push('/home')}
       onChangeMobileNumber={async (newNumber, currentPassword) => {
         const updated = await changeMobileNumber(newNumber, currentPassword);
@@ -64,6 +74,8 @@ export default function SettingsRoute() {
       onRequestPasswordOtp={requestPasswordChangeOtp}
       onChangePassword={async (currentPassword, newPassword, code) => {
         await changePassword(currentPassword, newPassword, code);
+        // Picks up the new cooldown date.
+        setUser(await me());
       }}
       onChangeNotificationPreferences={async (notifyMessages, notifyActivity, notifyEmail) => {
         const updated = await updateNotificationPreferences(notifyMessages, notifyActivity, notifyEmail);

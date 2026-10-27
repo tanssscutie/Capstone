@@ -36,6 +36,9 @@ def create_db_and_tables():
     _add_column_if_missing("user", "headline", "VARCHAR(100) NULL")
     _add_column_if_missing("user", "website_url", "VARCHAR(300) NULL")
     _add_column_if_missing("user", "facebook_url", "VARCHAR(300) NULL")
+    _add_column_if_missing("user", "password_changed_at", "DATETIME NULL")
+    _add_column_if_missing("user", "email_changed_at", "DATETIME NULL")
+    _add_column_if_missing("user", "mobile_changed_at", "DATETIME NULL")
 
 
 def _migrate_user_role():

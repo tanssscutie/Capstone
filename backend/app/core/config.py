@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     OTP_EXPIRE_MINUTES: int = 10
     OTP_MAX_ATTEMPTS: int = 5
     OTP_RESEND_COOLDOWN_SECONDS: int = 60
+    # Password, email and mobile number can each change once per this many
+    # days (auth_service._check_cooldown). Forgot-password is never blocked.
+    CREDENTIAL_CHANGE_COOLDOWN_DAYS: int = 15
 
     # Symmetric key (Fernet) uploaded business documents are encrypted with
     # before they touch disk — see business_service._save_file. Set in

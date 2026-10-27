@@ -18,12 +18,18 @@ from app.repositories.user_repository import get_user_by_mobile, get_user_by_ema
 from app.models.user import User
 from app.models.email_verification import EmailVerification
 from app.models.password_change_otp import PasswordChangeOtp
-from app.schemas.auth import UserCreate, Token, PasswordChange, MobileNumberChange, NotificationPreferences
+from app.models.email_change_otp import EmailChangeOtp
+from app.schemas.auth import (
+    UserCreate, Token, PasswordChange, MobileNumberChange, NotificationPreferences,
+    EmailChangeRequest, EmailChangeConfirm,
+)
 from app.services.email_service import (
     EmailSendError,
     send_otp_email,
     send_password_change_otp_email,
     send_password_reset_otp_email,
+    send_email_change_otp_email,
+    send_email_changed_notice,
 )
 
 logger = logging.getLogger("trustlink.auth")
@@ -34,6 +40,18 @@ PASSWORD_OTP_PURPOSE = "password-change:"
 # not verify in the other (e.g. a code sent while logged in for a change
 # should not double as a reset code usable by anyone who intercepts it).
 PASSWORD_RESET_OTP_PURPOSE = "password-reset:"
+EMAIL_CHANGE_OTP_PURPOSE = "email-change:"
+
+
+def _check_cooldown(available_at, what: str) -> None:
+    """429 while a credential is inside its change cooldown (User.*_change_available_at)."""
+    if available_at:
+        when = available_at.strftime("%b %d, %Y").replace(" 0", " ")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"You can change your {what} again on {when} "
+                   f"(once every {settings.CREDENTIAL_CHANGE_COOLDOWN_DAYS} days).",
+        )
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -341,6 +359,7 @@ class AuthService:
             user = get_user(session, user_id)
             if not user:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            _check_cooldown(user.password_change_available_at, "password")
             if not user.email:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -377,6 +396,7 @@ class AuthService:
             user = get_user(session, user_id)
             if not user or not verify_password(data.current_password, user.hashed_password):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
+            _check_cooldown(user.password_change_available_at, "password")
             pending = session.get(PasswordChangeOtp, user.id)
             if not pending:
                 raise HTTPException(
@@ -400,6 +420,7 @@ class AuthService:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect code")
 
             user.hashed_password = get_password_hash(data.new_password)
+            user.password_changed_at = now_ph()
             session.add(user)
             session.delete(pending)
             session.commit()
@@ -471,6 +492,9 @@ class AuthService:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect code")
 
             user.hashed_password = get_password_hash(new_password)
+            # Never blocked by the cooldown (that would lock people out), but it
+            # does start a new one.
+            user.password_changed_at = now_ph()
             session.add(user)
             session.delete(pending)
             session.commit()
@@ -480,14 +504,97 @@ class AuthService:
             user = get_user(session, user_id)
             if not user or not verify_password(data.current_password, user.hashed_password):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
+            _check_cooldown(user.mobile_change_available_at, "mobile number")
             existing = get_user_by_mobile(session, data.new_mobile_number)
             if existing and existing.id != user_id:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this mobile number already exists")
+            if user.mobile_number != data.new_mobile_number:
+                user.mobile_changed_at = now_ph()
             user.mobile_number = data.new_mobile_number
             session.add(user)
             session.commit()
             session.refresh(user)
             return user
+
+    # ---------- change email (code sent to the NEW address) ----------
+
+    def request_email_change_otp(self, user_id: int, data: EmailChangeRequest) -> None:
+        new_email = data.new_email.strip().lower()
+        with Session(engine) as session:
+            user = get_user(session, user_id)
+            if not user or not user.hashed_password or not verify_password(data.current_password, user.hashed_password):
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
+            if user.google_id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Your sign-in is linked to Google, so your email follows your Google account.",
+                )
+            _check_cooldown(user.email_change_available_at, "email")
+            if new_email == (user.email or "").lower():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That's already your email.")
+            existing = get_user_by_email(session, new_email)
+            if existing and existing.id != user.id:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
+            now = now_ph()
+            pending = session.get(EmailChangeOtp, user.id)
+            if pending:
+                wait = (pending.last_sent_at + timedelta(seconds=settings.OTP_RESEND_COOLDOWN_SECONDS) - now).total_seconds()
+                if wait > 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail=f"Please wait {int(wait) + 1} seconds before requesting another code.",
+                    )
+            else:
+                pending = EmailChangeOtp(user_id=user.id, new_email=new_email, otp_hash="", expires_at=now)
+            code = f"{secrets.randbelow(10**6):06d}"
+            pending.new_email = new_email
+            pending.otp_hash = self._hash_otp(user.id, code, EMAIL_CHANGE_OTP_PURPOSE)
+            pending.expires_at = now + timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
+            pending.attempts = 0
+            pending.last_sent_at = now
+            session.add(pending)
+            session.commit()
+            try:
+                send_email_change_otp_email(new_email, code)
+            except EmailSendError:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="We couldn't send the email right now. Please try again shortly.",
+                )
+
+    def confirm_email_change(self, user_id: int, data: EmailChangeConfirm) -> User:
+        with Session(engine) as session:
+            user = get_user(session, user_id)
+            pending = session.get(EmailChangeOtp, user_id)
+            if not user or not pending:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request a code first.")
+            if pending.attempts >= settings.OTP_MAX_ATTEMPTS:
+                raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                                    detail="Too many incorrect attempts. Request a new code.")
+            if pending.expires_at <= now_ph():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This code has expired. Request a new one.")
+            if not hmac.compare_digest(pending.otp_hash, self._hash_otp(user.id, data.code, EMAIL_CHANGE_OTP_PURPOSE)):
+                pending.attempts += 1
+                session.add(pending)
+                session.commit()
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect code")
+            _check_cooldown(user.email_change_available_at, "email")
+            existing = get_user_by_email(session, pending.new_email)
+            if existing and existing.id != user.id:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
+            old_email, new_email = user.email, pending.new_email
+            user.email = new_email
+            user.email_changed_at = now_ph()
+            session.add(user)
+            session.delete(pending)
+            session.commit()
+            session.refresh(user)
+        if old_email:
+            try:
+                send_email_changed_notice(old_email, new_email)
+            except EmailSendError:
+                logger.warning("Could not send the email-changed notice for user %s", user_id)
+        return user
 
     def update_notification_preferences(self, user_id: int, data: NotificationPreferences) -> User:
         with Session(engine) as session:

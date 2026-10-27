@@ -32,6 +32,12 @@ export interface AccountSettingsProps {
   onRequestPasswordOtp: () => Promise<void>;
   onChangePassword: (currentPassword: string, newPassword: string, code: string) => Promise<void>;
   onChangeNotificationPreferences: (notifyMessages: boolean, notifyActivity: boolean, notifyEmail: boolean) => Promise<void>;
+  onRequestEmailOtp: (newEmail: string, currentPassword: string) => Promise<void>;
+  onConfirmEmailChange: (code: string) => Promise<void>;
+  /** Cooldown ends (ISO) — null = can change now. */
+  passwordChangeAvailableAt?: string | null;
+  emailChangeAvailableAt?: string | null;
+  mobileChangeAvailableAt?: string | null;
 }
 
 function SectionLabel({ children }: { children: string }) {
@@ -90,7 +96,14 @@ function toMessage(e: any, fallback: string): string {
   return errorMessage(e, fallback);
 }
 
-function MobileNumberCard({ mobileNumber, onChangeMobileNumber }: Pick<AccountSettingsProps, 'mobileNumber' | 'onChangeMobileNumber'>) {
+/** "You can change this again on …" while a credential is in its 15-day cooldown. */
+function CooldownNote({ availableAt }: { availableAt: string | null }) {
+  if (!availableAt) return null;
+  const when = new Date(availableAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return <Text style={styles.mutedSmall}>🔒 You can change this again on {when} (once every 15 days).</Text>;
+}
+
+function MobileNumberCard({ mobileNumber, onChangeMobileNumber, availableAt }: Pick<AccountSettingsProps, 'mobileNumber' | 'onChangeMobileNumber'> & { availableAt: string | null }) {
   const [editing, setEditing] = useState(false);
   const [newNumber, setNewNumber] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -137,7 +150,7 @@ function MobileNumberCard({ mobileNumber, onChangeMobileNumber }: Pick<AccountSe
     <View style={styles.card}>
       <View style={styles.cardHeaderRow}>
         <SectionLabel>Login mobile number</SectionLabel>
-        {!editing && <Pressable onPress={openEdit} hitSlop={6}><Text style={styles.editLink}>Change</Text></Pressable>}
+        {!editing && !availableAt && <Pressable onPress={openEdit} hitSlop={6}><Text style={styles.editLink}>Change</Text></Pressable>}
       </View>
 
       {!editing ? (
@@ -145,6 +158,7 @@ function MobileNumberCard({ mobileNumber, onChangeMobileNumber }: Pick<AccountSe
           <Text style={styles.valueText}>{mobileNumber}</Text>
           <Text style={styles.mutedSmall}>Used to log in — not shown publicly.</Text>
           {saved && <Text style={styles.savedText}>Updated.</Text>}
+          <CooldownNote availableAt={availableAt} />
         </View>
       ) : (
         <View style={{ marginTop: space.sm, gap: space.md }}>
@@ -181,20 +195,109 @@ function MobileNumberCard({ mobileNumber, onChangeMobileNumber }: Pick<AccountSe
   );
 }
 
-function EmailCard({ email }: Pick<AccountSettingsProps, 'email'>) {
-  // Read-only: no changeEmail endpoint exists yet (unlike mobile number and
-  // password, both of which have a real change flow below). Set at
-  // registration or by Google sign-in — see auth_service.create_user /
-  // handle_google_callback.
+function EmailCard({ email, availableAt, onRequestEmailOtp, onConfirmEmailChange }: Pick<AccountSettingsProps, 'email' | 'onRequestEmailOtp' | 'onConfirmEmailChange'> & { availableAt: string | null }) {
+  const [editing, setEditing] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const openEdit = () => {
+    setNewEmail('');
+    setCurrentPassword('');
+    setCode('');
+    setCodeSent(false);
+    setError(null);
+    setSaved(false);
+    setEditing(true);
+  };
+
+  const sendCode = async () => {
+    setError(null);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail.trim())) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    if (!currentPassword) {
+      setError('Enter your current password to confirm this change.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await onRequestEmailOtp(newEmail, currentPassword);
+      setCodeSent(true);
+    } catch (e: any) {
+      setError(toMessage(e, 'Could not send the code.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirm = async () => {
+    setError(null);
+    if (!/^\d{6}$/.test(code)) {
+      setError('Enter the 6-digit code we emailed to your new address.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await onConfirmEmailChange(code);
+      setEditing(false);
+      setSaved(true);
+    } catch (e: any) {
+      setError(toMessage(e, 'Could not change your email.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <View style={styles.card}>
       <View style={styles.cardHeaderRow}>
         <SectionLabel>Email</SectionLabel>
+        {!editing && !availableAt && <Pressable onPress={openEdit} hitSlop={6}><Text style={styles.editLink}>Change</Text></Pressable>}
       </View>
-      <View style={{ marginTop: space.sm, gap: space.xs }}>
-        <Text style={styles.valueText}>{email || 'Not set'}</Text>
-        <Text style={styles.mutedSmall}>Used to log in (in addition to your mobile number) and to link a Google sign-in to this account.</Text>
-      </View>
+      {!editing ? (
+        <View style={{ marginTop: space.sm, gap: space.xs }}>
+          <Text style={styles.valueText}>{email || 'Not set'}</Text>
+          <Text style={styles.mutedSmall}>Used to log in (in addition to your mobile number), for codes, and for alerts.</Text>
+          {saved && <Text style={styles.savedText}>Updated. We let your old address know.</Text>}
+          <CooldownNote availableAt={availableAt} />
+        </View>
+      ) : (
+        <View style={{ marginTop: space.sm, gap: space.md }}>
+          <View>
+            <Text style={styles.fieldLabel}>New email</Text>
+            <TextInput value={newEmail} onChangeText={setNewEmail} editable={!codeSent} autoCapitalize="none" keyboardType="email-address"
+              placeholder="you@business.ph" placeholderTextColor={color.inkFaint} style={styles.input} />
+          </View>
+          {!codeSent ? (
+            <View>
+              <Text style={styles.fieldLabel}>Current password</Text>
+              <TextInput value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry
+                placeholder="Confirm it's you" placeholderTextColor={color.inkFaint} style={styles.input} />
+            </View>
+          ) : (
+            <View>
+              <Text style={styles.fieldLabel}>Code</Text>
+              <Text style={styles.mutedSmall}>We sent a 6-digit code to {newEmail.trim()}. It expires in 10 minutes.</Text>
+              <TextInput value={code} onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad"
+                placeholder="123456" placeholderTextColor={color.inkFaint} style={styles.input} />
+            </View>
+          )}
+          <FieldError>{error}</FieldError>
+          <View style={styles.rowButtons}>
+            {codeSent
+              ? <ActionButton label={busy ? 'Saving…' : 'Confirm'} variant="primary" onPress={confirm} disabled={busy} />
+              : <ActionButton label={busy ? 'Sending…' : 'Send code'} variant="primary" onPress={sendCode} disabled={busy} />}
+            <ActionButton label="Cancel" variant="outline" onPress={() => setEditing(false)} disabled={busy} />
+          </View>
+          <Text style={styles.mutedSmall}>You can change your email once every 15 days.</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -203,7 +306,8 @@ function PasswordCard({
   email,
   onRequestPasswordOtp,
   onChangePassword,
-}: Pick<AccountSettingsProps, 'email' | 'onRequestPasswordOtp' | 'onChangePassword'>) {
+  availableAt,
+}: Pick<AccountSettingsProps, 'email' | 'onRequestPasswordOtp' | 'onChangePassword'> & { availableAt: string | null }) {
   const [editing, setEditing] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -274,13 +378,14 @@ function PasswordCard({
     <View style={styles.card}>
       <View style={styles.cardHeaderRow}>
         <SectionLabel>Password</SectionLabel>
-        {!editing && <Pressable onPress={openEdit} hitSlop={6}><Text style={styles.editLink}>Change</Text></Pressable>}
+        {!editing && !availableAt && <Pressable onPress={openEdit} hitSlop={6}><Text style={styles.editLink}>Change</Text></Pressable>}
       </View>
 
       {!editing ? (
         <View style={{ marginTop: space.sm, gap: space.xs }}>
           <Text style={styles.valueText}>••••••••••</Text>
           {saved && <Text style={styles.savedText}>Updated.</Text>}
+          <CooldownNote availableAt={availableAt} />
         </View>
       ) : (
         <View style={{ marginTop: space.sm, gap: space.md }}>
@@ -428,6 +533,11 @@ export default function AccountSettings({
   onRequestPasswordOtp,
   onChangePassword,
   onChangeNotificationPreferences,
+  onRequestEmailOtp,
+  onConfirmEmailChange,
+  passwordChangeAvailableAt,
+  emailChangeAvailableAt,
+  mobileChangeAvailableAt,
 }: AccountSettingsProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= breakpoint.desktop;
@@ -448,9 +558,9 @@ export default function AccountSettings({
           <Text style={styles.mutedSmall}>Your login number, password, and what you get notified about.</Text>
         </View>
 
-        <MobileNumberCard mobileNumber={mobileNumber} onChangeMobileNumber={onChangeMobileNumber} />
-        <EmailCard email={email} />
-        <PasswordCard email={email} onRequestPasswordOtp={onRequestPasswordOtp} onChangePassword={onChangePassword} />
+        <MobileNumberCard mobileNumber={mobileNumber} onChangeMobileNumber={onChangeMobileNumber} availableAt={mobileChangeAvailableAt ?? null} />
+        <EmailCard email={email} availableAt={emailChangeAvailableAt ?? null} onRequestEmailOtp={onRequestEmailOtp} onConfirmEmailChange={onConfirmEmailChange} />
+        <PasswordCard email={email} onRequestPasswordOtp={onRequestPasswordOtp} onChangePassword={onChangePassword} availableAt={passwordChangeAvailableAt ?? null} />
         <NotificationsCard
           notifyMessages={notifyMessages}
           notifyActivity={notifyActivity}

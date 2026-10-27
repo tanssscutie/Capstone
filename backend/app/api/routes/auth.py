@@ -20,6 +20,8 @@ from app.schemas.auth import (
     ResendOtp,
     ForgotPassword,
     ResetPassword,
+    EmailChangeRequest,
+    EmailChangeConfirm,
 )
 from app.core.security import get_current_user
 
@@ -113,6 +115,18 @@ def reset_password(data: ResetPassword):
     new password directly, no current password needed."""
     auth_service.reset_password(data.email, data.code, data.new_password)
     return {"detail": "Password updated. You can now log in."}
+
+
+@router.post("/email/request-otp")
+def request_email_change_otp(data: EmailChangeRequest, current_user=Depends(get_current_user)):
+    """Step 1 of an email change: emails a code to the NEW address."""
+    auth_service.request_email_change_otp(current_user.id, data)
+    return {"detail": "We sent a code to your new email."}
+
+
+@router.put("/email", response_model=UserRead)
+def confirm_email_change(data: EmailChangeConfirm, current_user=Depends(get_current_user)):
+    return auth_service.confirm_email_change(current_user.id, data)
 
 
 @router.put("/mobile-number", response_model=UserRead)

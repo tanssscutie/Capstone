@@ -98,6 +98,11 @@ class User(SQLModel, table=True):
     # see app/core/account_access.py.
     suspended_until: Optional[datetime] = None
     banned_at: Optional[datetime] = None
+    # Last change of each login credential — a new change waits
+    # CREDENTIAL_CHANGE_COOLDOWN_DAYS (auth_service._check_cooldown).
+    password_changed_at: Optional[datetime] = None
+    email_changed_at: Optional[datetime] = None
+    mobile_changed_at: Optional[datetime] = None
 
     # Verification (derived from BusinessDocument cross-validation + admin review)
     verification_status: str = "unverified"  # unverified | pending | submitted | under_review | verified | rejected
@@ -108,6 +113,29 @@ class User(SQLModel, table=True):
     tier: int = 1               # trust tier 1-3, computed from verified docs + awards
 
     created_at: datetime = Field(default_factory=now_ph)
+    @staticmethod
+    def _change_available_at(last: Optional[datetime]) -> Optional[datetime]:
+        """When this credential may change again; None = now."""
+        from datetime import timedelta
+        from app.core.config import settings
+
+        if not last:
+            return None
+        at = last + timedelta(days=settings.CREDENTIAL_CHANGE_COOLDOWN_DAYS)
+        return at if at > now_ph() else None
+
+    @property
+    def password_change_available_at(self) -> Optional[datetime]:
+        return self._change_available_at(self.password_changed_at)
+
+    @property
+    def email_change_available_at(self) -> Optional[datetime]:
+        return self._change_available_at(self.email_changed_at)
+
+    @property
+    def mobile_change_available_at(self) -> Optional[datetime]:
+        return self._change_available_at(self.mobile_changed_at)
+
     @property
     def needs_privacy_consent(self) -> bool:
         """Read by UserRead (GET /auth/me) so the frontend can send the

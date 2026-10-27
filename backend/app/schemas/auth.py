@@ -63,6 +63,10 @@ class UserRead(BaseModel):
     # The frontend sends an account here (complete-profile) while it's true.
     needs_privacy_consent: bool = False
     privacy_consent_at: Optional[datetime] = None
+    # Cooldown on credential changes — null = can change now.
+    password_change_available_at: Optional[datetime] = None
+    email_change_available_at: Optional[datetime] = None
+    mobile_change_available_at: Optional[datetime] = None
 
 
 class Token(BaseModel):
@@ -84,6 +88,15 @@ class PasswordChange(BaseModel):
 class MobileNumberChange(BaseModel):
     new_mobile_number: str = Field(min_length=7, max_length=20)
     current_password: str = Field(min_length=8, max_length=72)
+
+
+class EmailChangeRequest(BaseModel):
+    new_email: str = Field(min_length=5, max_length=255, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    current_password: str = Field(min_length=8, max_length=72)
+
+
+class EmailChangeConfirm(BaseModel):
+    code: str = Field(pattern=r"^\d{6}$")
 
 
 class NotificationPreferences(BaseModel):

@@ -101,6 +101,16 @@ npx expo start --web
   - frontend: `components/ui/OrderStatusPanel.tsx` (`OrderStatusPanel` at `OrderStatusLine`)
 - Tests: `backend/tests/test_fulfillment.py`.
 
+**Cooldown sa pagpalit ng password, email at mobile number (15 araw)**
+- Isang beses lang kada 15 araw mapapalitan ang bawat isa. Habang naka-cooldown, nakatago ang "Change" at may "🔒 You can change this again on {date}". Sa backend, 429 kung susubukan pa rin.
+- **Hindi hinaharangan ang Forgot password**, para hindi ma-lock out ang user, pero nagsisimula ito ng bagong cooldown.
+- Para sa demo: `CREDENTIAL_CHANGE_COOLDOWN_DAYS=0` sa `backend/.env`.
+- **Bagong "Change email"** sa Account Settings:
+  - bagong email + current password → code na ipinapadala sa **bagong** email → Confirm
+  - may notice sa **lumang** email na napalitan ito
+  - bawal kung ginagamit na ang email ng iba, at bawal sa Google-linked na account (nakatali sa Google ang email)
+- Code: `auth_service._check_cooldown`, `request_email_change_otp` at `confirm_email_change`, `models/email_change_otp.py`, `POST /auth/email/request-otp`, `PUT /auth/email`, bagong columns `user.password_changed_at / email_changed_at / mobile_changed_at` (auto-migrate), at `*_change_available_at` sa `/auth/me`. Tests: `backend/tests/test_credential_cooldown.py`.
+
 **Profile na parang Facebook + LinkedIn (`BusinessProfile.tsx`)**
 - **Layout:**
   - **Cover photo:** gradient kapag wala

@@ -74,6 +74,25 @@ def send_password_reset_otp_email(to: str, code: str) -> None:
     )
 
 
+def send_email_change_otp_email(to: str, code: str) -> None:
+    send_email(
+        to,
+        f"Confirm your new {settings.PROJECT_NAME} email",
+        f"Your {settings.PROJECT_NAME} email change code is: {code}\n\n"
+        f"It expires in {settings.OTP_EXPIRE_MINUTES} minutes. "
+        "If you didn't ask to use this address, you can ignore this email.",
+    )
+
+
+def send_email_changed_notice(to: str, new_email: str) -> None:
+    send_email(
+        to,
+        f"Your {settings.PROJECT_NAME} email was changed",
+        f"The email on your {settings.PROJECT_NAME} account was changed to {new_email}.\n\n"
+        "If this wasn't you, reset your password right away and contact support.",
+    )
+
+
 # Alert emails go out on a small worker pool: an SMTP round-trip can take
 # several seconds (see send_email's timeout), and the action that raised the
 # alert — an award, a new posting — must not wait on it, let alone fail.
