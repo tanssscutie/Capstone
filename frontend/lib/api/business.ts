@@ -243,6 +243,18 @@ export interface BusinessSearchOut {
 }
 
 /** GET /business/search?q= — businesses to report, by name (verified accounts). */
+export interface ReportSuggestionOut extends BusinessSearchOut {
+  /** 'supplier' = quoted on your requirement; 'buyer' = you quoted on theirs. */
+  relation: 'supplier' | 'buyer';
+  context: string;
+  dealt_at: string | null;
+}
+
+/** GET /business/reports/suggestions — businesses you've transacted with, newest first (max 8). */
+export async function listReportSuggestions(): Promise<ReportSuggestionOut[]> {
+  return api.get<ReportSuggestionOut[]>('/business/reports/suggestions');
+}
+
 export async function searchBusinesses(q: string): Promise<BusinessSearchOut[]> {
   return api.get<BusinessSearchOut[]>(`/business/search?q=${encodeURIComponent(q)}`);
 }

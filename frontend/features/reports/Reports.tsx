@@ -8,10 +8,12 @@ import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, useWin
 import ScreenScroll from '../../components/ui/ScreenScroll';
 import { color, font, fontSize, lineHeight, letterSpacing, space, radius, elevation, layout, breakpoint } from '../../components/ui/tokens';
 import { ReportBusinessModal } from '../../components/ui/ReportBusinessModal';
-import type { BusinessSearchOut, MyReportOut } from '../../lib/api/business';
+import type { BusinessSearchOut, MyReportOut, ReportSuggestionOut } from '../../lib/api/business';
 
 export interface ReportsProps {
   reports: MyReportOut[];
+  /** Businesses you've transacted with — shown first so you don't have to search. */
+  suggestions?: ReportSuggestionOut[];
   /** Resolves to the matches, or throws (e.g. 403 for an unverified account). */
   onSearch: (q: string) => Promise<BusinessSearchOut[]>;
   /** A report was sent — reload the list. */
@@ -29,7 +31,7 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export default function Reports({ reports, onSearch, onReported, onBack }: ReportsProps) {
+export default function Reports({ reports, suggestions = [], onSearch, onReported, onBack }: ReportsProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= breakpoint.desktop;
   const [query, setQuery] = useState('');
@@ -78,6 +80,23 @@ export default function Reports({ reports, onSearch, onReported, onBack }: Repor
             violations lead to a suspension or a ban. The business is never told who reported them.
           </Text>
         </View>
+
+        {suggestions.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>Businesses you've dealt with</Text>
+            {suggestions.map((b) => (
+              <Pressable key={b.id} onPress={() => setTarget(b)} style={({ pressed }) => [styles.resultRow, pressed ? styles.pressed : null]}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.resultName} numberOfLines={1}>{b.name}</Text>
+                  <Text style={styles.muted} numberOfLines={1}>
+                    {b.relation === 'supplier' ? 'Quoted on' : 'You quoted on'} {b.context}
+                  </Text>
+                </View>
+                <Text style={styles.reportLink}>Report</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         <View style={styles.card}>
           <Text style={styles.sectionLabel}>Report a business</Text>

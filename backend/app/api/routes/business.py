@@ -11,6 +11,7 @@ from app.core.security import require_verified, get_current_user, require_admin
 from app.models.user import User
 from app.schemas.business import (
     BusinessSearchOut,
+    ReportSuggestionOut,
     LiftRestriction,
     MyReportOut,
     PortfolioItemOut,
@@ -131,6 +132,12 @@ def report_business(business_id: int, payload: ReportCreate, current_user: User 
 @router.get("/reports/mine", response_model=List[MyReportOut])
 def my_reports(current_user: User = Depends(get_current_user)):
     return report_service.list_mine(current_user.id)
+
+
+@router.get("/reports/suggestions", response_model=List[ReportSuggestionOut])
+def report_suggestions(current_user: User = Depends(get_current_user)):
+    """Businesses you've dealt with — suggestions at the top of the Reports page."""
+    return report_service.suggestions(current_user.id)
 
 
 @router.get("/search", response_model=List[BusinessSearchOut])

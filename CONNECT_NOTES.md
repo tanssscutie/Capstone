@@ -68,6 +68,13 @@ npx expo start --web
 - Dati, ang buyer lang ang may alert. Ngayon, may `REQUIREMENT_RELEASED` alert din ("Quotations opened") ang **bawat respondent** pagka-release. Hindi nito sinasabi kung nanalo sila. May email din ito, at nabubuksan ang requirement mula sa alert.
 - Code: `requirement_service._release_one`. Tests: `backend/tests/test_release_alerts.py`.
 
+**Reports: "Businesses you've dealt with"**
+- Sa itaas ng `/reports`, nakalista na ang mga business na naka-transact mo, kaya hindi na kailangang hanapin. Pinakabago ang nauuna, hanggang 8.
+  - **bilang buyer:** mga supplier na na-release ang quotation sa requirement mo ("Quoted on REQ-… · title")
+  - **bilang seller:** mga may-ari ng requirement kung saan na-release ang quotation mo ("You quoted on …")
+- Hindi kasama ang sarili mo, ang admin, ang inactive na account, ang sealed pa na quotation, at ang mga kalabang supplier sa ibang posting.
+- Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
+
 # Latest update (branch `trustlink-updates`, base: `e3b21e5`)
 
 **Feedback batch bago ang final defense**

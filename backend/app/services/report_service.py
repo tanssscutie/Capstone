@@ -23,7 +23,10 @@ from app.models.business_report import BusinessReport
 from app.models.requirement import Requirement
 from app.models.user import User
 from app.repositories import notification_repository as notif_repo
-from app.schemas.business import AdminReportOut, BusinessSearchOut, MyReportOut, ReportCreate, ReportReview
+from app.models.quotation import Quotation
+from app.schemas.business import (
+    AdminReportOut, BusinessSearchOut, MyReportOut, ReportCreate, ReportReview, ReportSuggestionOut,
+)
 from app.services import moderation_service as moderation_module
 from app.services.moderation_service import moderation_service
 
@@ -153,6 +156,42 @@ class ReportService:
             ).limit(10)).all()
             return [BusinessSearchOut(id=u.id, name=_name(u), role=u.role, category=u.industry_category, city=u.city)
                     for u in users]
+
+    def suggestions(self, viewer_id: int, limit: int = 8) -> List[ReportSuggestionOut]:
+        """Businesses the viewer has actually transacted with, newest first:
+        suppliers whose quotations released on the viewer's requirements, and
+        owners of requirements where the viewer's quotation released."""
+        with Session(engine) as session:
+            as_buyer = session.exec(
+                select(Quotation, Requirement).join(Requirement, Requirement.id == Quotation.requirement_id)
+                .where(Requirement.owner_id == viewer_id, Quotation.released_at != None)  # noqa: E711
+            ).all()
+            as_seller = session.exec(
+                select(Quotation, Requirement).join(Requirement, Requirement.id == Quotation.requirement_id)
+                .where(Quotation.business_id == viewer_id, Quotation.released_at != None)  # noqa: E711
+            ).all()
+            seen: dict = {}
+            for q, r, other_id, relation in (
+                [(q, r, q.business_id, "supplier") for q, r in as_buyer]
+                + [(q, r, r.owner_id, "buyer") for q, r in as_seller]
+            ):
+                if other_id == viewer_id:
+                    continue
+                prev = seen.get(other_id)
+                if prev is None or (q.released_at) > prev[0]:
+                    seen[other_id] = (q.released_at, r, relation)
+            out = []
+            for other_id, (dealt_at, r, relation) in sorted(seen.items(), key=lambda kv: kv[1][0], reverse=True):
+                u = session.get(User, other_id)
+                if not u or u.is_admin or not u.is_active:
+                    continue
+                out.append(ReportSuggestionOut(
+                    id=u.id, name=_name(u), role=u.role, category=u.industry_category, city=u.city,
+                    relation=relation, context=f"{r.ref_code} · {r.title}", dealt_at=dealt_at,
+                ))
+                if len(out) >= limit:
+                    break
+            return out
 
     def review(self, report_id: int, admin_id: int, data: ReportReview) -> None:
         with Session(engine) as session:

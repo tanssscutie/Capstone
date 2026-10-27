@@ -264,6 +264,12 @@ class BusinessSearchOut(BaseModel):
     city: Optional[str]
 
 
+class ReportSuggestionOut(BusinessSearchOut):
+    relation: str            # "supplier" (quoted on your requirement) | "buyer" (you quoted on theirs)
+    context: str             # "REQ-1 · Tarpaulin"
+    dealt_at: Optional[datetime]
+
+
 class AdminReportOut(BaseModel):
     id: int
     reason: str
