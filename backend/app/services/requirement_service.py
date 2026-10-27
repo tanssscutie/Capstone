@@ -14,6 +14,7 @@ from app.core.database import engine
 from app.core.clock import now_ph, to_ph_naive
 from app.models.requirement import Requirement
 from app.models.requirement_attachment import RequirementAttachment
+from app.models.saved_requirement import SavedRequirement
 from app.models.quotation import Quotation
 from app.models.quotation_attachment import QuotationAttachment
 from app.models.ledger_entry import LedgerEntry
@@ -1630,14 +1631,18 @@ class RequirementService:
         """Called by the scheduler. Alerts an open requirement's owner once — the
         first tick that finds it inside the closing window creates the notification;
         every later tick skips it via notif_repo.exists_for_requirement, so the owner
-        never gets the same "closing soon" alert twice for one requirement."""
+        never gets the same "closing soon" alert twice for one requirement.
+
+        Everyone who saved it gets one too (_notify_savers), so a bookmark doesn't
+        quietly close on them."""
         notified = 0
         with Session(engine) as session:
             soon = repo.list_open_requirements_closing_within(session, self.CLOSING_SOON_WINDOW_HOURS)
             for req in soon:
+                hours_left = max(1, round((req.closes_at - now_ph()).total_seconds() / 3600))
+                notified += self._notify_savers(session, req, hours_left)
                 if notif_repo.exists_for_requirement(session, req.owner_id, "REQUIREMENT_CLOSING", req.id):
                     continue
-                hours_left = max(1, round((req.closes_at - now_ph()).total_seconds() / 3600))
                 notif_repo.create_if_allowed(
                     session,
                     user_id=req.owner_id,
@@ -1650,6 +1655,28 @@ class RequirementService:
                 )
                 notified += 1
         return notified
+
+    def _notify_savers(self, session: Session, req: Requirement, hours_left: int) -> int:
+        """One alert per saver: not the owner, and not anyone who already quoted."""
+        savers = session.exec(select(SavedRequirement.user_id).where(SavedRequirement.requirement_id == req.id)).all()
+        sent = 0
+        for user_id in set(savers):
+            if user_id == req.owner_id or repo.get_active_quotation(session, req.id, user_id):
+                continue
+            if notif_repo.exists_for_requirement(session, user_id, "REQUIREMENT_CLOSING", req.id):
+                continue
+            notif_repo.create_if_allowed(
+                session,
+                user_id=user_id,
+                type_="REQUIREMENT_CLOSING",
+                category="activity",
+                title="A requirement you saved closes soon",
+                detail=f"{req.ref_code} · {req.title} · {hours_left} hour{'s' if hours_left != 1 else ''} remaining",
+                urgent=hours_left <= 6,
+                related_requirement_id=req.id,
+            )
+            sent += 1
+        return sent
 
 
 requirement_service = RequirementService()

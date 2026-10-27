@@ -5,6 +5,8 @@
 // for "My quotations". Same page shell (breadcrumb, display title, list), same
 // row shape as MyRequirements' RequirementRow, plus the buyer identity a saved
 // requirement needs (it isn't the viewer's own, unlike MyRequirements' rows).
+// Split in two: "Still open" (you can still quote) and "Closed" (Remove, or
+// "Clear closed" for all of them at once).
 
 import { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
@@ -79,6 +81,11 @@ function hoursUntil(closingAt: ISODateTime, now: number): number {
   return (new Date(closingAt).getTime() - now) / 3_600_000;
 }
 
+/** Can the viewer still quote on it? */
+function isStillOpen(requirement: Requirement, now: number): boolean {
+  return requirement.status === 'OPEN' && hoursUntil(requirement.closingAt, now) > 0;
+}
+
 /* ─── Small building blocks ─────────────────────────── */
 
 function MicroLabel({ children }: { children: string }) {
@@ -132,16 +139,17 @@ function SavedRow({
       ? `Closing in ${Math.max(1, Math.ceil(hoursLeft))}h`
       : requirementStatusLabel(requirement.status);
   const buyerName = buyer ? buyer.displayName ?? buyer.registeredName : 'Unknown business';
+  const closed = !isStillOpen(requirement, now);
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, closed ? styles.rowClosed : null]}>
       <View style={{ flex: 1, minWidth: 200, gap: space.xs }}>
         <View style={styles.rowStatusRow}>
           <View style={[styles.dot, { backgroundColor: statusColor }]} />
           <Text style={[styles.rowStatusLabel, { color: statusColor }]}>{statusLabel}</Text>
           <Text style={styles.rowRef}>{requirement.ref}</Text>
         </View>
-        <Text style={styles.rowTitle} numberOfLines={2}>{requirement.title}</Text>
+        <Text style={[styles.rowTitle, closed ? { color: color.inkMuted } : null]} numberOfLines={2}>{requirement.title}</Text>
         <View style={styles.rowBuyerRow}>
           <AvatarChip label={initials(buyerName)} size={22} />
           <Text style={styles.rowBuyerName}>{buyerName}</Text>
@@ -149,13 +157,14 @@ function SavedRow({
         <Text style={styles.mutedSmall}>
           {requirement.category} · {requirement.deliverySite.address} · {formatBudget(requirement.budgetMin, requirement.budgetMax)}
         </Text>
+        {closed && <Text style={styles.closedNote}>Closed — you can no longer quote</Text>}
       </View>
       <View style={styles.rowRight}>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.rowCount}>{requirement.quotationCount}</Text>
           <MicroLabel>{pluralUnit(requirement.quotationCount, 'quotation')}</MicroLabel>
         </View>
-        <ActionButton label="Open requirement" onPress={() => onOpenRequirement?.(requirement.id)} />
+        <ActionButton label={closed ? 'View' : 'Open requirement'} onPress={() => onOpenRequirement?.(requirement.id)} />
         <Pressable onPress={() => onUnsave?.(requirement.id)} hitSlop={8}>
           <Text style={styles.unsaveLink}>Remove</Text>
         </Pressable>
@@ -176,6 +185,18 @@ export default function Saved(props: SavedProps) {
 
   const { width } = useWindowDimensions();
   const isWide = width >= breakpoint.desktop;
+  const open = requirements.filter((r) => isStillOpen(r, now));
+  const closed = requirements.filter((r) => !isStillOpen(r, now));
+  const row = (r: Requirement) => (
+    <SavedRow
+      key={r.id}
+      requirement={r}
+      buyer={buyers[r.buyerId]}
+      now={now}
+      onOpenRequirement={onOpenRequirement}
+      onUnsave={onUnsave}
+    />
+  );
 
   return (
     <ScreenScroll style={styles.root} contentContainerStyle={styles.scrollContent}>
@@ -200,18 +221,25 @@ export default function Saved(props: SavedProps) {
             <Text style={styles.mutedSmall}>Nothing saved yet — bookmark a requirement from the feed to find it here.</Text>
           </View>
         ) : (
-          <View style={{ gap: space.md, marginTop: space.lg }}>
-            {requirements.map((r) => (
-              <SavedRow
-                key={r.id}
-                requirement={r}
-                buyer={buyers[r.buyerId]}
-                now={now}
-                onOpenRequirement={onOpenRequirement}
-                onUnsave={onUnsave}
-              />
-            ))}
-          </View>
+          <>
+            {open.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Still open ({open.length})</Text>
+                {open.map(row)}
+              </View>
+            )}
+            {closed.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Closed ({closed.length})</Text>
+                  <Pressable onPress={() => closed.forEach((r) => onUnsave?.(r.id))} hitSlop={8}>
+                    <Text style={styles.unsaveLink}>Clear closed</Text>
+                  </Pressable>
+                </View>
+                {closed.map(row)}
+              </View>
+            )}
+          </>
         )}
       </View>
     </ScreenScroll>
@@ -240,6 +268,11 @@ const styles = StyleSheet.create({
 
   emptyCard: { marginTop: space.lg, borderWidth: 1, borderColor: color.borderFaint, borderRadius: radius.xl, padding: space.xl, alignItems: 'center' },
 
+  section: { gap: space.md, marginTop: space.xl },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
+  sectionTitle: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkMuted },
+  rowClosed: { backgroundColor: color.surfaceSunken, borderColor: color.borderFaint },
+  closedNote: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
   row: { borderWidth: 1, borderColor: color.border, borderRadius: radius.xl, padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.lg, flexWrap: 'wrap', backgroundColor: color.surface },
   rowStatusRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   rowStatusLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase' },

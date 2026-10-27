@@ -76,6 +76,11 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Saved: "Still open" at "Closed"**
+- Dalawa na ang section ng `/saved`. Ang **Still open** ay ang mga puwede pang i-quote-an. Ang **Closed** naman ay may "Closed — you can no longer quote", "View" at **Remove** sa bawat row, at may **"Clear closed"** sa header (inuulit lang ang dating unsave, kaya walang bagong endpoint).
+- **Alert 24 oras bago magsara:** bawat nag-save ng open requirement ay may "A requirement you saved closes soon" (`REQUIREMENT_CLOSING`), tig-iisa lang. Hindi kasama ang may-ari, at ang mga may sealed quotation na.
+- Code: `features/saved/Saved.tsx`, at `requirement_service._notify_savers` (tinatawag ng `notify_closing_soon`, scheduler). Tests: `backend/tests/test_saved_alerts.py`.
+
 **Buong Messages page (`/messages`)**
 - May bagong "expand" na button (maliit na kahon) sa header ng chat dock, sa thread list at sa bawat conversation. Bubukas ito sa `/messages`. Kapag galing sa conversation, `?thread=<id>` at bukas na agad ang usapang iyon.
 - **Desktop:** thread list sa kaliwa at conversation sa kanan. **Phone:** isang pane lang, may "←" pabalik sa listahan.
