@@ -1,7 +1,8 @@
 // app/complete-profile.tsx
 // A Google sign-up lands here once (auth-callback / _layout route here only
 // when the backend says the mobile number or the buyer/seller account type is
-// still missing). The rest of the app — contact display, which nav and actions
+// still missing, or the account hasn't agreed to the current Privacy Notice —
+// which also brings older accounts here once). The rest of the app — contact display, which nav and actions
 // to show, admin roster, etc. — assumes every business has both, so this is
 // required before Home, not a skippable step. Only the missing fields show.
 import { useEffect, useState } from 'react';
@@ -9,6 +10,7 @@ import { View, Text, TextInput, Pressable, Image, StyleSheet, ActivityIndicator 
 import { useRouter } from 'expo-router';
 import { color, font, fontSize, space, radius } from '../components/ui/tokens';
 import { RolePicker } from '../components/ui/RolePicker';
+import { PrivacyConsent } from '../components/ui/PrivacyConsent';
 import { completeProfile, me, type BackendUser } from '../lib/api/auth';
 import { errorMessage } from '../lib/api/client';
 import type { AccountRole } from '../lib/types';
@@ -18,6 +20,7 @@ export default function CompleteProfileRoute() {
   const [user, setUser] = useState<BackendUser | null>(null);
   const [mobileNumber, setMobileNumber] = useState('');
   const [role, setRole] = useState<AccountRole | null>(null);
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +32,7 @@ export default function CompleteProfileRoute() {
 
   const needsMobile = !!user && !user.mobile_number;
   const needsRole = !!user && !user.role && !user.is_admin;
+  const needsConsent = !!user && user.needs_privacy_consent;
 
   async function handleSubmit() {
     setError(null);
@@ -37,6 +41,7 @@ export default function CompleteProfileRoute() {
       await completeProfile({
         mobileNumber: needsMobile ? mobileNumber.trim() : undefined,
         role: needsRole ? role ?? undefined : undefined,
+        acceptPrivacy: needsConsent ? agreePrivacy : undefined,
       });
       router.replace('/home');
     } catch (e: any) {
@@ -46,7 +51,8 @@ export default function CompleteProfileRoute() {
     }
   }
 
-  const canSubmit = (!needsMobile || mobileNumber.trim().length >= 7) && (!needsRole || role !== null);
+  const canSubmit =
+    (!needsMobile || mobileNumber.trim().length >= 7) && (!needsRole || role !== null) && (!needsConsent || agreePrivacy);
 
   if (!user) {
     return (
@@ -67,7 +73,9 @@ export default function CompleteProfileRoute() {
         <Text style={styles.helper}>
           {needsMobile
             ? 'We use your mobile number for contact and account recovery. You can add it once here.'
-            : 'Tell us how you will use TrustLink.'}
+            : needsRole
+              ? 'Tell us how you will use TrustLink.'
+              : 'Please review our Privacy Notice and agree to it to keep using TrustLink.'}
         </Text>
 
         {needsRole && <RolePicker value={role} onChange={setRole} />}
@@ -86,6 +94,8 @@ export default function CompleteProfileRoute() {
             />
           </View>
         )}
+
+        {needsConsent && <PrivacyConsent checked={agreePrivacy} onChange={setAgreePrivacy} />}
 
         {error && <Text style={styles.error}>{error}</Text>}
 

@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, Field, model_validator
 from typing import Literal, Optional
 
@@ -24,6 +25,15 @@ class UserCreate(BaseModel):
     # so onboarding starts with it already filled in.
     industry_category: str
     years_in_business: Optional[YearsInBusiness] = None
+    # RA 10173: the box under the form. Must be true — there's no account
+    # without agreeing to the Privacy Notice.
+    accept_privacy: bool = False
+
+    @model_validator(mode="after")
+    def _check_privacy(self):
+        if not self.accept_privacy:
+            raise ValueError("You need to agree to the Privacy Notice to create an account")
+        return self
 
     @model_validator(mode="after")
     def _check_role_fields(self):
@@ -49,6 +59,10 @@ class UserRead(BaseModel):
     role: Optional[str] = None
     notify_messages: bool = True
     notify_activity: bool = True
+    notify_email: bool = True
+    # The frontend sends an account here (complete-profile) while it's true.
+    needs_privacy_consent: bool = False
+    privacy_consent_at: Optional[datetime] = None
 
 
 class Token(BaseModel):
@@ -75,6 +89,8 @@ class MobileNumberChange(BaseModel):
 class NotificationPreferences(BaseModel):
     notify_messages: bool
     notify_activity: bool
+    # Defaulted so a client that predates the email toggle doesn't switch it off.
+    notify_email: bool = True
 
 
 class VerifyEmail(BaseModel):
@@ -105,3 +121,5 @@ class CompleteProfile(BaseModel):
     has a number but predates buyer/seller accounts)."""
     mobile_number: Optional[str] = Field(default=None, min_length=7, max_length=20)
     role: Optional[AccountRole] = None
+    # Required (true) while the account hasn't agreed to the current Privacy Notice.
+    accept_privacy: Optional[bool] = None

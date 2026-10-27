@@ -78,6 +78,9 @@ export type RequirementStatus =
   | 'AWARD_PENDING'
   | 'AWARDED'
   | 'CLOSED_NO_AWARD'
+  /** Short of the minimum quotations even after the one extension —
+   *  archived with every quotation voided unopened. */
+  | 'INSUFFICIENT_QUOTATIONS'
   | 'CANCELLED';      // proposed, pending decision 04
 
 export interface SpecRow {
@@ -141,6 +144,8 @@ export interface Requirement {
   releasedAt: ISODateTime | null;
   publishedAt: ISODateTime | null;
   quotationCount: number;     // count only while sealed — never contents
+  /** Set once closing was extended for too few quotations. */
+  autoExtendedAt?: ISODateTime | null;
   lastQuotationAt: ISODateTime | null; // timing only, never contents — recency signal for feed cards
   awardedQuotationId: string | null;
   /** Set only while status === 'AWARD_PENDING' — when the proposed winner's
@@ -206,6 +211,13 @@ export interface Quotation {
   integrity: IntegrityResult | null;  // null until RELEASED
   withdrawnAt: ISODateTime | null;
   replacedByQuotationId: string | null;
+  /** My Quotations only — what happens next for the seller's own quotation. */
+  progress?: {
+    awardDeadline: ISODateTime | null;
+    threadId: string | null;
+    closeoutState: 'OPEN' | 'PENDING' | 'COMPLETED' | 'NOT_PUSHED_THROUGH' | null;
+    closeoutAwaitingMe: boolean;
+  };
 }
 
 /** A buyer asking a shortlisted respondent for one more supporting document
@@ -265,6 +277,8 @@ export type LedgerEntryType =
   | 'CLOSED_NO_AWARD_RECORDED'
   | 'DOCUMENT_REQUESTED'
   | 'DOCUMENT_SUBMITTED'
+  | 'AUTO_EXTENDED'
+  | 'ARCHIVED_INSUFFICIENT'
   | 'CLOSEOUT_PROPOSED'
   | 'CLOSEOUT_CONFIRMED'
   | 'CLOSEOUT_REJECTED'

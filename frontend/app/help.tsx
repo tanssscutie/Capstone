@@ -6,5 +6,5 @@ import HelpSupport from '../features/help/HelpSupport';
 
 export default function HelpRoute() {
   const router = useRouter();
-  return <HelpSupport onBack={() => router.push('/home')} />;
+  return <HelpSupport onBack={() => router.push('/home')} onOpenPrivacy={() => router.push('/privacy')} />;
 }

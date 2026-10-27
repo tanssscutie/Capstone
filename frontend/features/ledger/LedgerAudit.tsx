@@ -46,6 +46,8 @@ const EVENT_LABEL: Record<LedgerEntryType, string> = {
   AWARD_DECLINED: 'Award declined',
   AWARD_RECORDED: 'Awarded',
   CLOSED_NO_AWARD_RECORDED: 'Closed without award',
+  AUTO_EXTENDED: 'Closing extended — not enough quotations',
+  ARCHIVED_INSUFFICIENT: 'Archived — not enough quotations',
   DOCUMENT_REQUESTED: 'Document requested',
   DOCUMENT_SUBMITTED: 'Requested document submitted',
   CLOSEOUT_PROPOSED: 'Transaction close-out proposed',

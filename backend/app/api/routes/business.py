@@ -7,9 +7,16 @@ from fastapi.responses import Response
 from sqlmodel import Session
 
 from app.core.database import get_session
-from app.core.security import get_current_user, require_admin
+from app.core.security import require_verified, get_current_user, require_admin
 from app.models.user import User
 from app.schemas.business import (
+    BusinessSearchOut,
+    LiftRestriction,
+    MyReportOut,
+    PortfolioItemOut,
+    AdminReportOut,
+    ReportCreate,
+    ReportReview,
     OnboardingSubmit,
     DocumentUploadOut,
     DocumentExtractionOut,
@@ -22,6 +29,9 @@ from app.schemas.business import (
     PublicBusinessProfileOut,
 )
 from app.services.business_service import business_service
+from app.services.report_service import report_service
+from app.services.moderation_service import moderation_service
+from app.services.portfolio_service import portfolio_service
 
 router = APIRouter()
 
@@ -82,6 +92,67 @@ def get_public_profile(business_id: int, current_user: User = Depends(get_curren
 
 
 # ---------- admin ----------
+
+@router.get("/{business_id}/portfolio", response_model=List[PortfolioItemOut])
+def list_portfolio(business_id: int, current_user: User = Depends(get_current_user)):
+    return portfolio_service.list(business_id)
+
+
+@router.get("/{business_id}/portfolio/{item_id}/image")
+def portfolio_image(business_id: int, item_id: int, current_user: User = Depends(get_current_user)):
+    # Re-encoded as JPEG on upload (portfolio_service._shrink). Cacheable per
+    # session only — it's behind the login.
+    return Response(content=portfolio_service.image(business_id, item_id), media_type="image/jpeg",
+                    headers={"Cache-Control": "private, max-age=3600"})
+
+
+@router.post("/portfolio", response_model=PortfolioItemOut, status_code=status.HTTP_201_CREATED)
+async def add_portfolio_item(
+    file: UploadFile = File(...),
+    caption: str = Form(...),
+    item_code: Optional[str] = Form(default=None),
+    current_user: User = Depends(get_current_user),
+):
+    return await portfolio_service.add(current_user.id, file, caption, item_code)
+
+
+@router.delete("/portfolio/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_portfolio_item(item_id: int, current_user: User = Depends(get_current_user)):
+    portfolio_service.remove(current_user.id, item_id)
+
+
+@router.post("/{business_id}/report", status_code=status.HTTP_201_CREATED)
+def report_business(business_id: int, payload: ReportCreate, current_user: User = Depends(require_verified)):
+    """Report a business for an admin to review. Confidential — see report_service."""
+    report_service.create(current_user.id, business_id, payload)
+    return {"detail": "Thanks — our team will review this report."}
+
+
+@router.get("/reports/mine", response_model=List[MyReportOut])
+def my_reports(current_user: User = Depends(get_current_user)):
+    return report_service.list_mine(current_user.id)
+
+
+@router.get("/search", response_model=List[BusinessSearchOut])
+def search_businesses(q: str = "", current_user: User = Depends(require_verified)):
+    """Find a business to report by name (the Reports page)."""
+    return report_service.search(current_user.id, q)
+
+
+@router.post("/admin/users/{user_id}/lift", status_code=status.HTTP_204_NO_CONTENT)
+def lift_restriction(user_id: int, payload: LiftRestriction, admin: User = Depends(require_admin)):
+    moderation_service.lift(admin.id, user_id, payload.notes or "")
+
+
+@router.get("/admin/reports", response_model=List[AdminReportOut])
+def list_reports(_admin: User = Depends(require_admin)):
+    return report_service.list_for_admin()
+
+
+@router.post("/admin/reports/{report_id}/review", status_code=status.HTTP_204_NO_CONTENT)
+def review_report(report_id: int, payload: ReportReview, admin: User = Depends(require_admin)):
+    report_service.review(report_id, admin.id, payload)
+
 
 @router.get("/admin/whoami", status_code=status.HTTP_204_NO_CONTENT)
 def admin_whoami(_admin: User = Depends(require_admin)):

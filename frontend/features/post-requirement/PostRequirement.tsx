@@ -53,6 +53,7 @@ import { NCR_CITIES } from '../../lib/data/philippines';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 import { VALIDATION_ERROR_MARK, scrollToFirstError } from '../../lib/scrollToFirstError';
 import { barangayLabel, foldName, useNcrAddresses } from '../../lib/data/ncrAddresses';
+import { useMarketRules } from '../../lib/data/marketRules';
 
 /* ─── Draft shapes ───────────────────────────────────────
  * One draft per step, assembled into a real `Requirement` by the route only once REVIEW
@@ -1719,6 +1720,16 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
  * Closing date, closing time, quick duration presets — the highest-weight field on the
  * whole flow, called out once, plainly, as unchangeable after publish. */
 
+/** One line at the closing step — the rule is the server's (GET /meta/rules). */
+function ClosingMinimumNote() {
+  const { minQuotations, autoExtendDays } = useMarketRules();
+  return (
+    <Text style={styles.fieldCaption}>
+      Needs at least {minQuotations} quotations to award. If fewer arrive, closing extends {autoExtendDays} days once, then the requirement is archived unopened.
+    </Text>
+  );
+}
+
 function ClosingScreen({ initial, onContinue, reportContinue }: ClosingProps & { reportContinue: (fn: () => void) => void }) {
   const [closeDate, setCloseDate] = useState(initial?.closeDate ?? '');
   const [closeTime, setCloseTime] = useState(initial?.closeTime ?? '17:00');
@@ -1783,6 +1794,7 @@ function ClosingScreen({ initial, onContinue, reportContinue }: ClosingProps & {
             ))}
           </View>
         </View>
+        <ClosingMinimumNote />
 
         <View style={styles.twoColRow}>
           <View style={styles.twoCol}>

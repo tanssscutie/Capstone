@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 
+from app.core.config import settings
 from app.core.security import get_current_user, require_admin, require_buyer, require_seller, require_verified
 from app.models.user import User
 from app.services import requirement_service as req_service_module
@@ -37,6 +38,14 @@ from app.schemas.requirement import (
 )
 
 router = APIRouter()
+
+
+def _file_response(content: bytes, filename: str) -> Response:
+    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    # Headers are latin-1 only — a respondent's "Sertipiko ñ.pdf" would 500 otherwise.
+    safe_name = filename.encode("ascii", "ignore").decode().replace('"', "") or "document"
+    return Response(content=content, media_type=media_type,
+                    headers={"Content-Disposition": f'inline; filename="{safe_name}"'})
 
 
 def require_seller_role(current_user: User = Depends(get_current_user)) -> User:
@@ -90,6 +99,11 @@ def _handle_service_errors(exc: Exception):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Closing time can only be extended while no quotation has been submitted",
+        )
+    if isinstance(exc, E.NotEnoughQuotations):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"At least {settings.MIN_QUOTATIONS_TO_RELEASE} quotations are needed before awarding",
         )
     if isinstance(exc, E.QuestionNotFound):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
@@ -169,6 +183,29 @@ async def upload_attachment(requirement_id: int, file: UploadFile = File(...), c
         _handle_service_errors(exc)
 
 
+@router.get("/{requirement_id}/attachments/{attachment_id}/file")
+def get_requirement_attachment_file(requirement_id: int, attachment_id: int, current_user=Depends(get_current_user)):
+    try:
+        content, filename = requirement_service.requirement_attachment_file(requirement_id, attachment_id)
+    except Exception as exc:
+        _handle_service_errors(exc)
+    return _file_response(content, filename)
+
+
+@router.get("/{requirement_id}/quotations/{quotation_id}/attachments/{attachment_id}/file")
+def get_quotation_attachment_file(
+    requirement_id: int, quotation_id: int, attachment_id: int, current_user=Depends(get_current_user),
+):
+    """Sealed with its quotation — see requirement_service.quotation_attachment_file."""
+    try:
+        content, filename = requirement_service.quotation_attachment_file(
+            requirement_id, quotation_id, attachment_id, current_user.id,
+        )
+    except Exception as exc:
+        _handle_service_errors(exc)
+    return _file_response(content, filename)
+
+
 @router.patch("/{requirement_id}/extend", response_model=RequirementOut)
 def extend_closing(requirement_id: int, payload: ExtendClosingRequest, current_user=Depends(require_verified)):
     try:
@@ -230,7 +267,7 @@ def withdraw_quotation(requirement_id: int, current_user=Depends(require_verifie
 @router.get("/{requirement_id}/quotations", response_model=RequirementQuotationsView)
 def list_quotations(requirement_id: int, current_user=Depends(get_current_user)):
     try:
-        return requirement_service.list_quotations_view(requirement_id)
+        return requirement_service.list_quotations_view(requirement_id, current_user.id)
     except Exception as exc:
         _handle_service_errors(exc)
 
@@ -338,14 +375,7 @@ def get_requested_document_file(requirement_id: int, request_id: int, current_us
         content, filename = document_request_service.get_file(requirement_id, request_id, current_user.id)
     except Exception as exc:
         _handle_service_errors(exc)
-    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-    # Headers are latin-1 only — a respondent's "Sertipiko ñ.pdf" would 500 otherwise.
-    safe_name = filename.encode("ascii", "ignore").decode().replace('"', "") or "document"
-    return Response(
-        content=content,
-        media_type=media_type,
-        headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
-    )
+    return _file_response(content, filename)
 
 
 @router.get("/{requirement_id}/closeout", response_model=CloseoutOut)

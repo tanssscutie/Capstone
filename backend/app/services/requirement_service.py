@@ -6,9 +6,10 @@ from typing import List
 from fastapi import HTTPException, UploadFile
 from sqlmodel import Session, select
 
-from app.core import addresses
+from app.core import addresses, file_crypto
 from app.core.categories import ATTRIBUTES, OTHER_ITEM_CODE, get_item_specs, item_name, validate_item_specs
 from app.core.units import normalize as normalize_units
+from app.core.config import settings
 from app.core.database import engine
 from app.core.clock import now_ph, to_ph_naive
 from app.models.requirement import Requirement
@@ -17,6 +18,7 @@ from app.models.quotation import Quotation
 from app.models.quotation_attachment import QuotationAttachment
 from app.models.ledger_entry import LedgerEntry
 from app.models.user import User
+from app.models.transaction_closeout import TransactionCloseout
 from app.repositories import requirement_repository as repo
 from app.repositories import ledger_repository as ledger_repo
 from app.repositories import notification_repository as notif_repo
@@ -113,6 +115,10 @@ class QuestionNotFound(Exception):
     pass
 
 
+class NotEnoughQuotations(Exception):
+    """Raised on award when fewer than MIN_QUOTATIONS_TO_RELEASE quotations released."""
+
+
 def _log(session: Session, event_type: str, requirement_id: int, quotation_id, actor_id, payload: dict) -> LedgerEntry:
     prev_hash = ledger_repo.get_last_hash(session)
     entry_hash = ledger_service.compute_hash(prev_hash, payload)
@@ -185,6 +191,7 @@ class RequirementService:
             site_address=req.site_address,
             barangay=req.barangay,
             zip_code=req.zip_code,
+            auto_extended_at=req.auto_extended_at,
             location=req.location,
             site_access_hours=req.site_access_hours,
             site_access_notes=req.site_access_notes,
@@ -401,11 +408,13 @@ class RequirementService:
             if (u.industry_category or "").strip().lower() == category and self._seller_offers_item(u, req.item_code)
         ]
 
-    def _alert_matching_sellers(self, session: Session, req: Requirement) -> int:
+    def _alert_matching_sellers(self, session: Session, req: Requirement, exclude_ids: frozenset = frozenset()) -> int:
         """One "new requirement that matches you" alert per matching seller,
-        the moment a requirement is published. Never fails the post itself."""
+        the moment a requirement is published (and again if its closing is
+        extended for too few quotations, skipping exclude_ids — those who
+        already quoted). Never fails the post itself."""
         try:
-            sellers = self.matching_sellers(session, req)
+            sellers = [s for s in self.matching_sellers(session, req) if s.id not in exclude_ids]
             item = item_name(req.category, req.item_code) if req.item_code and req.item_code != OTHER_ITEM_CODE else None
             closes = req.closes_at.strftime("%b %d, %I:%M %p").replace(" 0", " ")
             detail = f"{req.ref_code} · {req.title} — {req.city or req.location} · closes {closes}"
@@ -445,8 +454,10 @@ class RequirementService:
             full_path = os.path.join(upload_dir, saved_name)
 
             contents = await file.read()
+            # Encrypted at rest, same as business documents (file_crypto);
+            # read back only through the access-checked *_file methods below.
             with open(full_path, "wb") as f:
-                f.write(contents)
+                f.write(file_crypto.encrypt_bytes(contents))
 
             attachment = RequirementAttachment(
                 requirement_id=requirement_id,
@@ -755,8 +766,10 @@ class RequirementService:
             full_path = os.path.join(upload_dir, saved_name)
 
             contents = await file.read()
+            # Encrypted at rest, same as business documents (file_crypto);
+            # read back only through the access-checked *_file methods below.
             with open(full_path, "wb") as f:
-                f.write(contents)
+                f.write(file_crypto.encrypt_bytes(contents))
 
             attachment = QuotationAttachment(
                 quotation_id=quotation_id,
@@ -771,6 +784,48 @@ class RequirementService:
                 document_label=created.document_label,
                 uploaded_at=created.uploaded_at,
             )
+
+    # ---------- attachment downloads ----------
+
+    @staticmethod
+    def _read_attachment(path: str, filename: str) -> tuple[bytes, str]:
+        import os
+
+        if not path or not os.path.exists(path):
+            raise RequirementNotFound()
+        with open(path, "rb") as f:
+            # Lenient: files uploaded before encryption was added are plain.
+            return file_crypto.decrypt_bytes_lenient(f.read()), filename or os.path.basename(path)
+
+    def requirement_attachment_file(self, requirement_id: int, attachment_id: int) -> tuple[bytes, str]:
+        """A requirement's own attachments (drawings, reference photos) are part
+        of the posting, so any signed-in business that can open the
+        requirement can open them."""
+        with Session(engine) as session:
+            attachment = session.get(RequirementAttachment, attachment_id)
+            if not attachment or attachment.requirement_id != requirement_id:
+                raise RequirementNotFound()
+            return self._read_attachment(attachment.file_path, attachment.original_filename)
+
+    def quotation_attachment_file(self, requirement_id: int, quotation_id: int, attachment_id: int, viewer_id: int) -> tuple[bytes, str]:
+        """Sealed like the quotation it belongs to: the respondent can always
+        open their own; the buyer (and admins) only once it has released.
+        Nobody else, ever — same rule as list_quotations_view."""
+        with Session(engine) as session:
+            req = repo.get_requirement(session, requirement_id)
+            quotation = repo.get_quotation(session, quotation_id)
+            attachment = session.get(QuotationAttachment, attachment_id)
+            if (not req or not quotation or not attachment or quotation.requirement_id != requirement_id
+                    or attachment.quotation_id != quotation_id):
+                raise RequirementNotFound()
+            if quotation.business_id != viewer_id:
+                viewer = session.get(User, viewer_id)
+                is_buyer_side = req.owner_id == viewer_id or bool(viewer and viewer.is_admin)
+                if not is_buyer_side:
+                    raise NotOwner()
+                if quotation.status != "released":
+                    raise RequirementNotReleased()
+            return self._read_attachment(attachment.file_path, attachment.original_filename)
 
     # ---------- withdraw ----------
 
@@ -887,9 +942,71 @@ class RequirementService:
         with Session(engine) as session:
             due = repo.list_open_requirements_past_closing(session)
             for req in due:
-                self._release_one(session, req)
-                released_count += 1
+                # Feedback: an award must come from a real comparison. Short
+                # of the minimum, quotations are never opened — the closing
+                # is extended once, then the requirement is archived.
+                active = repo.list_active_quotations(session, req.id)
+                if len(active) >= settings.MIN_QUOTATIONS_TO_RELEASE:
+                    self._release_one(session, req)
+                    released_count += 1
+                elif req.auto_extended_at is None:
+                    self._auto_extend(session, req, active)
+                else:
+                    self._archive_insufficient(session, req, active)
         return released_count
+
+    def _auto_extend(self, session: Session, req: Requirement, active: list) -> None:
+        minimum = settings.MIN_QUOTATIONS_TO_RELEASE
+        req.closes_at = max(req.closes_at, now_ph()) + timedelta(days=settings.AUTO_EXTEND_DAYS)
+        req.auto_extended_at = now_ph()
+        repo.update_requirement(session, req)
+        _log(session, "AUTO_EXTENDED", req.id, None, None, {
+            "requirement_id": req.id, "quotations": len(active), "minimum": minimum,
+            "new_closes_at": req.closes_at.isoformat(),
+        })
+        closes = req.closes_at.strftime("%b %d, %I:%M %p").replace(" 0", " ")
+        notif_repo.create_if_allowed(
+            session, user_id=req.owner_id, type_="DECISION", category="activity",
+            title="Closing extended — not enough quotations yet",
+            detail=(f"{req.ref_code} · {req.title} got {len(active)} of the {minimum} quotations needed, "
+                    f"so it stays open until {closes}. Quotations stay sealed."),
+            urgent=True, related_requirement_id=req.id,
+        )
+        for q in active:
+            notif_repo.create_if_allowed(
+                session, user_id=q.business_id, type_="DECISION", category="activity",
+                title="Closing extended",
+                detail=f"{req.ref_code} · {req.title} now closes {closes}. Your quotation stays sealed.",
+                related_requirement_id=req.id,
+            )
+        self._alert_matching_sellers(session, req, exclude_ids=frozenset(q.business_id for q in active))
+
+    def _archive_insufficient(self, session: Session, req: Requirement, active: list) -> None:
+        """Still short after the extension: archived, every quotation voided
+        unopened — no price is ever revealed."""
+        minimum = settings.MIN_QUOTATIONS_TO_RELEASE
+        for q in active:
+            q.status = "voided"
+            repo.update_quotation(session, q)
+        req.status = "insufficient_quotations"
+        repo.update_requirement(session, req)
+        _log(session, "ARCHIVED_INSUFFICIENT", req.id, None, None, {
+            "requirement_id": req.id, "quotations": len(active), "minimum": minimum,
+        })
+        notif_repo.create_if_allowed(
+            session, user_id=req.owner_id, type_="CLOSED_NO_AWARD", category="activity",
+            title="Archived — not enough quotations",
+            detail=(f"{req.ref_code} · {req.title} closed with {len(active)} of the {minimum} quotations needed, "
+                    "so none were opened. Use \"Use Previous Requirement\" to post it again."),
+            urgent=True, related_requirement_id=req.id,
+        )
+        for q in active:
+            notif_repo.create_if_allowed(
+                session, user_id=q.business_id, type_="CLOSED_NO_AWARD", category="activity",
+                title="Requirement archived",
+                detail=f"{req.ref_code} · {req.title} didn't get enough quotations. Yours was voided unopened.",
+                related_requirement_id=req.id,
+            )
 
     def _release_one(self, session: Session, req: Requirement) -> None:
         actives = repo.list_active_quotations(session, req.id)
@@ -944,11 +1061,20 @@ class RequirementService:
 
     # ---------- post-release view ----------
 
-    def list_quotations_view(self, requirement_id: int) -> RequirementQuotationsView:
+    def list_quotations_view(self, requirement_id: int, viewer_id: int) -> RequirementQuotationsView:
+        """Every respondent's price, notes and attachments — so only the
+        requirement's owner (and admins) may ever see it, sealed or released.
+        Any other business, a respondent included, gets NotOwner: competitors
+        reading each other's released prices would undo sealed bidding.
+        A respondent sees their own quotation via list_my_quotations."""
         with Session(engine) as session:
             req = repo.get_requirement(session, requirement_id)
             if not req:
                 raise RequirementNotFound()
+            if req.owner_id != viewer_id:
+                viewer = session.get(User, viewer_id)
+                if not (viewer and viewer.is_admin):
+                    raise NotOwner()
 
             if req.status == "open":
                 count = repo.count_active_quotations(session, requirement_id)
@@ -1086,6 +1212,24 @@ class RequirementService:
             return "awarded" if req.awarded_quotation_id == q.id else "not_awarded"
         return "released"
 
+    @staticmethod
+    def _seller_progress(session: Session, req: Requirement, q: Quotation) -> dict:
+        """The next-step facts My Quotations shows for this seller's quotation."""
+        out = {"award_response_deadline": None, "thread_id": None, "closeout_state": None, "closeout_awaiting_me": False}
+        if req.awarded_quotation_id != q.id:
+            return out
+        if req.status == "award_pending":
+            out["award_response_deadline"] = req.award_response_deadline
+        if req.status == "awarded":
+            thread = msg_repo.get_thread_for_business(session, req.id, q.business_id)
+            out["thread_id"] = thread.id if thread else None
+            rows = session.exec(select(TransactionCloseout).where(TransactionCloseout.requirement_id == req.id)).all()
+            final = next((r for r in rows if r.status == "confirmed"), None)
+            pending = next((r for r in rows if r.status == "pending"), None)
+            out["closeout_state"] = final.outcome if final else "pending" if pending else "open"
+            out["closeout_awaiting_me"] = bool(pending and pending.proposed_by_role == "buyer")
+        return out
+
     def list_my_quotations(self, business_id: int) -> List[MyQuotationOut]:
         with Session(engine) as session:
             quotations = repo.list_quotations_by_business(session, business_id)
@@ -1102,6 +1246,7 @@ class RequirementService:
                     quotation_ref=f"QT-{q.id:06d}",
                     status=q.status,
                     outcome=self._outcome_for(req, q),
+                    **self._seller_progress(session, req, q),
                     total_price=q.total_price,
                     line_items=[LineItem(**li) for li in json.loads(q.line_items)] if q.line_items else [],
                     delivery_lead_time=q.delivery_lead_time,
@@ -1158,6 +1303,9 @@ class RequirementService:
             quotation = repo.get_quotation(session, quotation_id)
             if not quotation or quotation.requirement_id != requirement_id or quotation.status != "released":
                 raise InvalidQuotation()
+            released = [q for q in repo.list_all_quotations_for_requirement(session, requirement_id) if q.status == "released"]
+            if len(released) < settings.MIN_QUOTATIONS_TO_RELEASE:
+                raise NotEnoughQuotations()
 
             req.status = "award_pending"
             req.awarded_quotation_id = quotation_id

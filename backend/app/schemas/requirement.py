@@ -144,6 +144,7 @@ class RequirementOut(BaseModel):
     site_address: Optional[str]
     barangay: Optional[str] = None
     zip_code: Optional[str] = None
+    auto_extended_at: Optional[datetime] = None
     location: str
     site_access_hours: str = ""
     site_access_notes: str = ""
@@ -420,6 +421,12 @@ class MyQuotationOut(BaseModel):
     quotation_ref: str
     status: str  # sealed | released | withdrawn | voided
     outcome: str  # sealed | released | award_pending | awarded | not_awarded | withdrawn | voided
+    # "What happens next" on My Quotations:
+    award_response_deadline: Optional[datetime] = None  # while this quotation's award is pending
+    thread_id: Optional[int] = None  # the award conversation, once awarded
+    # Close-out once awarded: open | pending | completed | not_pushed_through
+    closeout_state: Optional[str] = None
+    closeout_awaiting_me: bool = False  # the buyer proposed it; this seller has to confirm
     total_price: Optional[float]
     line_items: List[LineItem] = []
     delivery_lead_time: Optional[str]

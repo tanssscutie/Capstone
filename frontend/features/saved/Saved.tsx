@@ -64,6 +64,7 @@ function requirementStatusLabel(status: RequirementStatus): string {
     case 'AWARD_PENDING': return 'Award pending';
     case 'AWARDED': return 'Awarded';
     case 'CLOSED_NO_AWARD': return 'Closed — No Award';
+    case 'INSUFFICIENT_QUOTATIONS': return 'Archived — not enough quotations';
     case 'CANCELLED': return 'Cancelled';
   }
 }

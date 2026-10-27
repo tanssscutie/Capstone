@@ -26,6 +26,8 @@ export interface AccountProfileProps {
   viewer: Business;
   onBack?: () => void;
   onEditProfile?: () => void;
+  /** Your profile as other businesses see it — where a seller manages their portfolio. */
+  onViewPublicProfile?: () => void;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -108,7 +110,7 @@ function ActionButton({ label, onPress, variant = 'outline' }: { label: string; 
   );
 }
 
-export default function AccountProfile({ viewer, onBack, onEditProfile }: AccountProfileProps) {
+export default function AccountProfile({ viewer, onBack, onEditProfile, onViewPublicProfile }: AccountProfileProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= breakpoint.desktop;
   const name = viewer.displayName ?? viewer.registeredName;
@@ -198,6 +200,13 @@ export default function AccountProfile({ viewer, onBack, onEditProfile }: Accoun
 
         <View style={styles.footerRow}>
           <ActionButton label="Update in onboarding" variant="primary" onPress={onEditProfile} />
+          {onViewPublicProfile && (
+            <ActionButton
+              label={viewer.role === 'seller' ? 'View public profile & past work' : 'View public profile'}
+              variant="outline"
+              onPress={onViewPublicProfile}
+            />
+          )}
           <ActionButton label="Back to home" variant="outline" onPress={onBack} />
         </View>
       </View>

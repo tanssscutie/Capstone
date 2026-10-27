@@ -36,6 +36,7 @@ import {
 } from '../../components/ui/tokens';
 import { AvatarChip, initials } from '../../components/ui/AvatarChip';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
+import { ReportLink } from '../../components/ui/ReportBusinessModal';
 import type {
   Business,
   BusinessId,
@@ -203,6 +204,7 @@ function requirementStatusLabel(status: RequirementStatus): string {
     case 'AWARD_PENDING': return 'Award pending';
     case 'AWARDED': return 'Awarded';
     case 'CLOSED_NO_AWARD': return 'Closed — No Award';
+    case 'INSUFFICIENT_QUOTATIONS': return 'Archived — not enough quotations';
     case 'CANCELLED': return 'Cancelled';
   }
 }
@@ -796,6 +798,7 @@ function ConversationWindow({
           </View>
         </Pressable>
         <View style={{ flex: 1 }} />
+        {open && <ReportLink businessId={thread.counterpartyId} businessName={thread.counterpartyName} />}
         <Pressable onPress={onClose} hitSlop={8}>
           <CloseGlyph />
         </Pressable>
@@ -1513,9 +1516,9 @@ function HowMatchingWorksCard({ onUpdateCapabilities }: { onUpdateCapabilities?:
         Trustlink compares each new requirement against your category, service area, and the capabilities listed on
         your profile. Matched opportunities carry a blue edge and a written reason.
       </Text>
-      <Pressable onPress={onUpdateCapabilities} style={{ marginTop: space.md }}>
-        <Text style={styles.profileNextStepLabel}>Update your capabilities</Text>
-      </Pressable>
+      <View style={{ marginTop: space.md, alignSelf: 'flex-start' }}>
+        <FeedButton label="Update your capabilities" variant="primary" onPress={onUpdateCapabilities} />
+      </View>
     </View>
   );
 }
@@ -1674,8 +1677,9 @@ function PhoneHomeFeed(props: HomeFeedProps) {
         </View>
 
         {isSeller && <>
+        {st.closingSoon.length > 0 && (
         <View style={styles.sectionBlock}>
-          <Text style={styles.microLabel}>Closing within 24 hours</Text>
+          <Text style={styles.microLabel}>Closing within 24 hours · {st.closingSoon.length}</Text>
           <View>
             {st.closingSoon.map(({ requirement }) => (
               <ClosingSoonItem
@@ -1688,6 +1692,7 @@ function PhoneHomeFeed(props: HomeFeedProps) {
             ))}
           </View>
         </View>
+        )}
 
         <HowMatchingWorksCard onUpdateCapabilities={props.onUpdateCapabilities} />
         </>}
@@ -1825,8 +1830,11 @@ function WideHomeFeed(props: HomeFeedProps) {
 
           {isSeller && (
           <View style={[styles.sideColumn, stickyOnWeb, sidebarTop]}>
+            {/* Only when something actually closes soon — an empty card under a
+                bold heading read like a broken widget to a new user. */}
+            {st.closingSoon.length > 0 && (
             <View style={styles.statsCard}>
-              <Text style={styles.microLabel}>Closing within 24 hours</Text>
+              <Text style={styles.microLabel}>Closing within 24 hours · {st.closingSoon.length}</Text>
               <View>
                 {st.closingSoon.map(({ requirement }) => (
                   <ClosingSoonItem
@@ -1839,6 +1847,7 @@ function WideHomeFeed(props: HomeFeedProps) {
                 ))}
               </View>
             </View>
+            )}
             <HowMatchingWorksCard onUpdateCapabilities={props.onUpdateCapabilities} />
           </View>
           )}

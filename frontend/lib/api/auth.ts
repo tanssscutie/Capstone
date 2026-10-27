@@ -14,6 +14,10 @@ export interface BackendUser {
   role: AccountRole | null;
   notify_messages: boolean;
   notify_activity: boolean;
+  notify_email: boolean;
+  /** Hasn't agreed to the current Privacy Notice — send to /complete-profile. */
+  needs_privacy_consent: boolean;
+  privacy_consent_at: string | null;
 }
 
 export interface RegisterInput {
@@ -26,6 +30,8 @@ export interface RegisterInput {
   category: string;
   /** Seller only — ignored (and cleared) by the backend for a buyer. */
   yearsInBusiness?: YearsInBusiness;
+  /** RA 10173 consent — the backend refuses to register without it. */
+  acceptPrivacy: boolean;
 }
 
 /** Codes the backend stores (schemas.auth.YearsInBusiness). */
@@ -55,6 +61,7 @@ export async function register(input: RegisterInput): Promise<BackendUser> {
       role: input.role,
       industry_category: input.category,
       years_in_business: input.role === 'seller' ? input.yearsInBusiness : undefined,
+      accept_privacy: input.acceptPrivacy,
     },
     { auth: false },
   );
@@ -128,10 +135,11 @@ export function googleLoginUrl(): string {
 /** POST /auth/complete-profile — the one-time mobile number and/or account
  *  type a Google sign-up still needs. Pass only what's missing; the backend
  *  rejects setting either one a second time. */
-export async function completeProfile(input: { mobileNumber?: string; role?: AccountRole }): Promise<BackendUser> {
+export async function completeProfile(input: { mobileNumber?: string; role?: AccountRole; acceptPrivacy?: boolean }): Promise<BackendUser> {
   return api.post<BackendUser>('/auth/complete-profile', {
     mobile_number: input.mobileNumber || null,
     role: input.role ?? null,
+    accept_privacy: input.acceptPrivacy ?? null,
   });
 }
 
@@ -183,9 +191,12 @@ export async function changeMobileNumber(newMobileNumber: string, currentPasswor
 }
 
 /** PUT /auth/notification-preferences */
-export async function updateNotificationPreferences(notifyMessages: boolean, notifyActivity: boolean): Promise<BackendUser> {
+export async function updateNotificationPreferences(
+  notifyMessages: boolean, notifyActivity: boolean, notifyEmail: boolean,
+): Promise<BackendUser> {
   return api.put<BackendUser>('/auth/notification-preferences', {
     notify_messages: notifyMessages,
     notify_activity: notifyActivity,
+    notify_email: notifyEmail,
   });
 }

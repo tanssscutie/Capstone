@@ -58,6 +58,7 @@ export default function AccountRoute() {
       viewer={viewer}
       onBack={() => router.push('/home')}
       onEditProfile={() => router.push('/onboarding?mode=edit')}
+      onViewPublicProfile={() => router.push({ pathname: '/business-profile', params: { id: viewer.id } })}
     />
   );
 }

@@ -31,6 +31,7 @@ const STATUS_LABELS: Record<string, string> = {
   award_pending: 'Award pending',
   awarded: 'Awarded',
   closed_no_award: 'Closed · no award',
+  insufficient_quotations: 'Archived · not enough quotations',
 };
 
 function statusTone(status: string): PillTone {
@@ -46,7 +47,7 @@ const STATUS_MATCH: Record<StatusFilter, (r: AdminRequirementOut) => boolean> = 
   all: () => true,
   open: (r) => r.status === 'open',
   awarded: (r) => r.status === 'awarded' || r.status === 'award_pending',
-  closed: (r) => r.status === 'closed' || r.status === 'closed_no_award',
+  closed: (r) => r.status === 'closed' || r.status === 'closed_no_award' || r.status === 'insufficient_quotations',
   cancelled: (r) => r.status === 'cancelled',
 };
 

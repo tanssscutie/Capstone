@@ -22,7 +22,8 @@ def profile_activity_counts(session: Session, business_id: int, *, include_seale
     def count_if(condition):
         return func.coalesce(func.sum(case((condition, 1), else_=0)), 0)
 
-    valid_requirements = ("open", "closed", "cancelled", "award_pending", "awarded", "closed_no_award")
+    valid_requirements = ("open", "closed", "cancelled", "award_pending", "awarded", "closed_no_award",
+                          "insufficient_quotations")
     confirmed_awards = select(Requirement.id).join(
         Quotation, Quotation.id == Requirement.awarded_quotation_id,
     ).where(

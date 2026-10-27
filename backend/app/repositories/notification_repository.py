@@ -5,6 +5,19 @@ from sqlmodel import Session, select, func
 from app.models.notification import Notification
 from app.models.user import User
 
+# The alerts worth an email: decisions and new opportunities someone would
+# act on. Chat messages, Q&A, closing reminders and tier changes stay in-app
+# only, so the inbox isn't flooded.
+EMAIL_ALERT_TYPES = frozenset({
+    "DECISION",                # Notice of Award, award accepted/declined, not selected, document requests, close-out
+    "REQUIREMENT_MATCH",       # new requirement in the seller's category
+    "REQUIREMENT_RELEASED",    # the buyer's quotations are ready to review
+    "REQUIREMENT_CANCELLED",
+    "CLOSED_NO_AWARD",
+    "VERIFICATION",            # approved / rejected
+    "DOCUMENT_FLAGGED",
+})
+
 
 def create_if_allowed(
     session: Session,
@@ -18,14 +31,22 @@ def create_if_allowed(
 ) -> Optional[Notification]:
     """Same as create(), but checks the recipient's notification preferences
     first and silently skips creation if they've turned that category off.
-    category is "messages" (direct messages) or "activity" (everything else)."""
+    category is "messages" (direct messages) or "activity" (everything else).
+
+    An alert in EMAIL_ALERT_TYPES is also emailed — after it's saved, in the
+    background — when the recipient has an email address and email alerts on."""
     user = session.get(User, user_id)
     if user is not None:
         if category == "messages" and not user.notify_messages:
             return None
         if category == "activity" and not user.notify_activity:
             return None
-    return create(session, user_id, type_, title, detail, urgent, related_requirement_id)
+    notification = create(session, user_id, type_, title, detail, urgent, related_requirement_id)
+    if user is not None and user.email and user.notify_email and type_ in EMAIL_ALERT_TYPES:
+        from app.services import email_service  # local: keeps the repository layer import-light
+
+        email_service.send_alert_email(user.email, title, detail, related_requirement_id)
+    return notification
 
 
 def create(

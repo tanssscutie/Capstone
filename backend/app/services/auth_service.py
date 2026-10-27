@@ -40,6 +40,10 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 
+from app.core.privacy import PRIVACY_POLICY_VERSION, needs_privacy_consent
+from app.core.account_access import blocked_reason
+
+
 class GoogleAuthError(Exception):
     """Google's own token/userinfo exchange failed — never our own bug, so
     the route redirects back to login with a message instead of a 500."""
@@ -71,6 +75,8 @@ class AuthService:
                 role=user_in.role,
                 industry_category=user_in.industry_category,
                 years_in_business=user_in.years_in_business,
+                privacy_consent_at=now_ph(),
+                privacy_policy_version=PRIVACY_POLICY_VERSION,
             )
             user = create_user(session, user)
             try:
@@ -137,6 +143,9 @@ class AuthService:
             session.delete(pending)
             session.commit()
             expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            reason = blocked_reason(user)
+            if reason:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
             return Token(access_token=create_access_token({"sub": str(user.id)}, expires_delta=expires))
 
     def resend_otp(self, email: str) -> None:
@@ -175,6 +184,10 @@ class AuthService:
                 return None
             if not verify_password(password, user.hashed_password):
                 return None
+            # Only after the right password, so the message reveals nothing to a guesser.
+            reason = blocked_reason(user)
+            if reason:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
             # Only reached with the right password, so it's safe to tell them
             # which email to verify. The code from sign-up may have expired
             # by now; refresh it so the verify screen isn't a dead end.
@@ -265,6 +278,9 @@ class AuthService:
                 session.commit()
                 session.refresh(user)
 
+            reason = blocked_reason(user)
+            if reason:
+                raise GoogleAuthError(reason)
             access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
             jwt_token = create_access_token({"sub": str(user.id)}, expires_delta=access_token_expires)
             return Token(access_token=jwt_token), self.needs_profile(user)
@@ -273,10 +289,12 @@ class AuthService:
     def needs_profile(user: User) -> bool:
         """Whether a (Google) account still has to visit complete-profile
         before it can use the app: no mobile number yet, or no buyer/seller
-        account type yet. Admins never pick a role."""
-        return user.mobile_number is None or (user.role is None and not user.is_admin)
+        account type yet, or no consent to the current Privacy Notice. Admins
+        never pick a role."""
+        return user.mobile_number is None or (user.role is None and not user.is_admin) or needs_privacy_consent(user)
 
-    def complete_profile(self, user_id: int, mobile_number: Optional[str], role: Optional[str]) -> User:
+    def complete_profile(self, user_id: int, mobile_number: Optional[str], role: Optional[str],
+                         accept_privacy: Optional[bool] = None) -> User:
         """One-time mobile number and account type for a Google sign-up. Each
         can only be set while still missing — changing a number is PUT
         /auth/mobile-number's job instead, which re-verifies the account's
@@ -297,6 +315,12 @@ class AuthService:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mobile number is required.")
             if not (role or user.role or user.is_admin):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose whether this is a buyer or seller account.")
+            if needs_privacy_consent(user):
+                if not accept_privacy:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                        detail="You need to agree to the Privacy Notice to continue.")
+                user.privacy_consent_at = now_ph()
+                user.privacy_policy_version = PRIVACY_POLICY_VERSION
             if mobile_number:
                 existing = get_user_by_mobile(session, mobile_number)
                 if existing and existing.id != user_id:
@@ -472,6 +496,7 @@ class AuthService:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
             user.notify_messages = data.notify_messages
             user.notify_activity = data.notify_activity
+            user.notify_email = data.notify_email
             session.add(user)
             session.commit()
             session.refresh(user)

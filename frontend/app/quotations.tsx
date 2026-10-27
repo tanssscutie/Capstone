@@ -73,6 +73,25 @@ export default function MyQuotationsRoute() {
       onBack={() => router.back()}
       onOpenRequirement={(requirementId) => router.push({ pathname: '/requirement', params: { id: requirementId } })}
       onResubmit={(requirementId) => router.push({ pathname: '/submit-quotation', params: { id: requirementId } })}
+      onAcceptAward={async (requirementId) => {
+        try {
+          await requirementsApi.acceptAward(Number(requirementId));
+          await load();
+          return null;
+        } catch (e: any) {
+          return errorMessage(e, 'Could not accept this award.');
+        }
+      }}
+      onDeclineAward={async (requirementId) => {
+        try {
+          await requirementsApi.declineAward(Number(requirementId));
+          await load();
+          return null;
+        } catch (e: any) {
+          return errorMessage(e, 'Could not decline this award.');
+        }
+      }}
+      onOpenChat={(threadId) => router.push({ pathname: '/home', params: { openThread: threadId } })}
       onWithdraw={async (quotationId) => {
         const quotation = quotations.find((q) => q.id === quotationId);
         if (!quotation) return;

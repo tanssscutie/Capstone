@@ -78,6 +78,19 @@ class User(SQLModel, table=True):
     # award decisions, closing-soon reminders.
     notify_messages: bool = True
     notify_activity: bool = True
+    # Also email the important activity alerts (see notification_repository.
+    # EMAIL_ALERT_TYPES). Only ever on top of notify_activity, never instead.
+    notify_email: bool = True
+    # RA 10173 consent: when this account agreed to the Privacy Notice, and to
+    # which version of it (app/core/privacy.py). Null = never agreed (accounts
+    # from before consent was asked) — they're asked on their next visit.
+    privacy_consent_at: Optional[datetime] = None
+    privacy_policy_version: Optional[str] = Field(default=None, max_length=20)
+    # Moderation (report_service): a suspension lifts itself once the time
+    # passes; a ban also sets is_active=False. Enforced on every request —
+    # see app/core/account_access.py.
+    suspended_until: Optional[datetime] = None
+    banned_at: Optional[datetime] = None
 
     # Verification (derived from BusinessDocument cross-validation + admin review)
     verification_status: str = "unverified"  # unverified | pending | submitted | under_review | verified | rejected
@@ -88,3 +101,10 @@ class User(SQLModel, table=True):
     tier: int = 1               # trust tier 1-3, computed from verified docs + awards
 
     created_at: datetime = Field(default_factory=now_ph)
+    @property
+    def needs_privacy_consent(self) -> bool:
+        """Read by UserRead (GET /auth/me) so the frontend can send the
+        account to complete-profile — see app/core/privacy.py."""
+        from app.core.privacy import needs_privacy_consent
+
+        return needs_privacy_consent(self)

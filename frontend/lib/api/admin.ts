@@ -43,6 +43,8 @@ export interface AdminBusinessOut {
   submitted_at: string | null;
   created_at: string;
   documents: DocumentUploadOut[];
+  suspended_until: string | null;
+  banned_at: string | null;
 }
 
 export interface AdminRequirementOut {
@@ -69,6 +71,7 @@ export interface AdminStatsOut {
   total_sellers: number;
   verified_businesses: number;
   pending_review_count: number;
+  open_reports_count: number;
   total_requirements: number;
   open_requirements: number;
   total_quotations: number;
@@ -139,4 +142,49 @@ export async function openAdminDocumentFile(documentId: number): Promise<void> {
   // Revoked after a delay rather than immediately — the new tab needs the
   // blob to still be alive by the time it actually loads it.
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export interface AdminReportOut {
+  id: number;
+  reason: string;
+  reason_label: string;
+  details: string;
+  status: 'open' | 'resolved' | 'dismissed';
+  admin_notes: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+  reporter_id: number;
+  reporter_name: string;
+  reported_id: number;
+  reported_name: string;
+  reported_role: string | null;
+  reported_verification_status: string | null;
+  /** Open reports against the same business, this one included. */
+  reported_open_reports: number;
+  related_requirement_id: number | null;
+  related_requirement_ref: string | null;
+  reported_suspended_until: string | null;
+  reported_banned: boolean;
+  reported_history: { action: string; reason: string; until: string | null; created_at: string }[];
+}
+
+export type ModerationAction = 'dismiss' | 'warn' | 'suspend_7' | 'suspend_30' | 'ban';
+
+/** POST /business/admin/users/{id}/lift — end a suspension or ban. */
+export async function liftRestriction(userId: number, notes?: string): Promise<void> {
+  await api.post<void>(`/business/admin/users/${userId}/lift`, { notes: notes && notes.trim() ? notes.trim() : null });
+}
+
+/** GET /business/admin/reports — newest first. */
+export async function listReports(): Promise<AdminReportOut[]> {
+  return api.get<AdminReportOut[]>('/business/admin/reports');
+}
+
+/** POST /business/admin/reports/{id}/review */
+/** Anything but "dismiss" also acts on the reported account and needs notes (the reason it's told). */
+export async function reviewReport(reportId: number, action: ModerationAction, notes?: string): Promise<void> {
+  await api.post<void>(`/business/admin/reports/${reportId}/review`, {
+    action,
+    notes: notes && notes.trim() ? notes.trim() : null,
+  });
 }

@@ -53,6 +53,14 @@ export default function AccountDropdown({ onDismiss, anchorTop, anchorRight }: A
       },
     },
     {
+      label: 'Reports',
+      description: 'Report a business, follow your reports',
+      onPress: () => {
+        onDismiss();
+        router.push('/reports');
+      },
+    },
+    {
       label: 'Help & Support',
       description: 'FAQ and how to reach us',
       onPress: () => {

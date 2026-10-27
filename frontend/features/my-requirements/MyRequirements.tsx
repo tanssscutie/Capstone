@@ -72,6 +72,7 @@ function requirementStatusLabel(status: RequirementStatus): string {
     case 'AWARD_PENDING': return 'Award pending';
     case 'AWARDED': return 'Awarded';
     case 'CLOSED_NO_AWARD': return 'Closed — No Award';
+    case 'INSUFFICIENT_QUOTATIONS': return 'Archived — not enough quotations';
     case 'CANCELLED': return 'Cancelled';
   }
 }
@@ -110,7 +111,7 @@ function daysWithoutDecision(r: Requirement, now: number): number | null {
  *  similarly urgent — then the rest of the lifecycle in narrative order.
  *  Missing a status here doesn't just mis-sort it: filter() below drops
  *  anything that matches no group, so it silently vanishes from the list. */
-const GROUP_ORDER: RequirementStatus[] = ['OPEN', 'AWARD_PENDING', 'AWARDED', 'CLOSED_NO_AWARD', 'CLOSED', 'CANCELLED', 'DRAFT'];
+const GROUP_ORDER: RequirementStatus[] = ['OPEN', 'AWARD_PENDING', 'AWARDED', 'CLOSED_NO_AWARD', 'CLOSED', 'INSUFFICIENT_QUOTATIONS', 'CANCELLED', 'DRAFT'];
 
 /* ─── Web-only motion helpers (same as HomeFeed.tsx) ── */
 

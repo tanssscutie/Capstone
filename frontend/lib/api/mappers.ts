@@ -67,6 +67,7 @@ const REQUIREMENT_STATUS_MAP: Record<string, RequirementStatus> = {
   award_pending: 'AWARD_PENDING',
   awarded: 'AWARDED',
   closed_no_award: 'CLOSED_NO_AWARD',
+  insufficient_quotations: 'INSUFFICIENT_QUOTATIONS',
   cancelled: 'CANCELLED',
   draft: 'DRAFT',
 };
@@ -120,6 +121,7 @@ export function mapRequirement(r: RequirementOut): Requirement {
     quantity: r.quantity,
     budgetMin: r.price_min,
     budgetMax: r.price_max,
+    autoExtendedAt: r.auto_extended_at ?? null,
     deliverySite: {
       name: r.city,
       address: r.site_address ?? r.location,
@@ -135,7 +137,7 @@ export function mapRequirement(r: RequirementOut): Requirement {
       filename: a.filename,
       sizeBytes: 0, // BACKEND GAP
       mimeType: '', // BACKEND GAP
-      uri: '', // BACKEND GAP — no download URL in AttachmentOut yet
+      uri: '', // opened through openRequirementAttachment / openQuotationAttachment, not a URL
       documentLabel: a.document_label,
     })),
     requiredDocuments: r.required_documents,
@@ -295,6 +297,8 @@ const LEDGER_EVENT_MAP: Record<string, LedgerEntryType> = {
   AWARD_DECLINED: 'AWARD_DECLINED',
   AWARDED: 'AWARD_RECORDED',
   CLOSED_NO_AWARD: 'CLOSED_NO_AWARD_RECORDED',
+  AUTO_EXTENDED: 'AUTO_EXTENDED',
+  ARCHIVED_INSUFFICIENT: 'ARCHIVED_INSUFFICIENT',
   DOCUMENT_REQUESTED: 'DOCUMENT_REQUESTED',
   DOCUMENT_SUBMITTED: 'DOCUMENT_SUBMITTED',
   CLOSEOUT_PROPOSED: 'CLOSEOUT_PROPOSED',
@@ -331,6 +335,12 @@ function parseLeadingInt(text: string | null | undefined): number {
 
 export function mapMyQuotation(q: MyQuotationOut): Quotation {
   return {
+    progress: {
+      awardDeadline: q.award_response_deadline ?? null,
+      threadId: q.thread_id ? String(q.thread_id) : null,
+      closeoutState: q.closeout_state ? (q.closeout_state.toUpperCase() as 'OPEN' | 'PENDING' | 'COMPLETED' | 'NOT_PUSHED_THROUGH') : null,
+      closeoutAwaitingMe: !!q.closeout_awaiting_me,
+    },
     id: String(q.quotation_id),
     ref: q.quotation_ref,
     requirementId: String(q.requirement_id),
@@ -348,7 +358,7 @@ export function mapMyQuotation(q: MyQuotationOut): Quotation {
       filename: a.filename,
       sizeBytes: 0, // BACKEND GAP
       mimeType: '', // BACKEND GAP
-      uri: '', // BACKEND GAP — no download URL in AttachmentOut yet
+      uri: '', // opened through openRequirementAttachment / openQuotationAttachment, not a URL
       documentLabel: a.document_label,
     })),
     submittedAt: q.submitted_at,
@@ -512,7 +522,7 @@ export function mapQuotationDetail(q: QuotationDetailOut, requirementId: string)
       filename: a.filename,
       sizeBytes: 0, // BACKEND GAP
       mimeType: '', // BACKEND GAP
-      uri: '', // BACKEND GAP — no download URL in AttachmentOut yet
+      uri: '', // opened through openRequirementAttachment / openQuotationAttachment, not a URL
       documentLabel: a.document_label,
     })),
     submittedAt: q.submitted_at,

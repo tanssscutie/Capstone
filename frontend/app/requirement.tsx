@@ -4,7 +4,7 @@ import { View, Text, ActivityIndicator, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import RequirementDetail from '../features/requirement-detail/RequirementDetail';
 import { me } from '../lib/api/auth';
-import { requirementsApi, openRequestedDocumentFile } from '../lib/api/requirements';
+import { requirementsApi, openRequestedDocumentFile, openRequirementAttachment, openQuotationAttachment } from '../lib/api/requirements';
 import { requirementsCache } from '../lib/api/requirementsCache';
 import { messagesApi } from '../lib/api/messages';
 import {
@@ -188,6 +188,16 @@ export default function RequirementRoute() {
     }
   }
 
+  async function onOpenAttachment(attachmentId: string, quotationId: string | null) {
+    try {
+      await (quotationId
+        ? openQuotationAttachment(Number(id), Number(quotationId), Number(attachmentId))
+        : openRequirementAttachment(Number(id), Number(attachmentId)));
+    } catch (e: any) {
+      setActionError(errorMessage(e, 'Could not open that file.'));
+    }
+  }
+
   async function onOpenRequestedDocument(requestId: string) {
     try {
       await openRequestedDocumentFile(Number(id), Number(requestId));
@@ -279,6 +289,7 @@ export default function RequirementRoute() {
             }
           }}
           onViewLedger={() => router.push({ pathname: '/ledger', params: { id } })}
+        onOpenAttachment={onOpenAttachment}
         />
       );
     }
@@ -337,6 +348,7 @@ export default function RequirementRoute() {
           }
         }}
         onViewLedger={() => router.push({ pathname: '/ledger', params: { id } })}
+        onOpenAttachment={onOpenAttachment}
         documentRequests={documentRequests}
         onRequestDocument={async (quotationId, documentLabel, note) => {
           try {
@@ -414,6 +426,7 @@ export default function RequirementRoute() {
         }}
         onViewBuyerProfile={() => router.push({ pathname: '/business-profile', params: { id: buyer.id } })}
         onViewLedger={() => router.push({ pathname: '/ledger', params: { id } })}
+        onOpenAttachment={onOpenAttachment}
         documentRequests={documentRequests[ownQuotationId] ?? []}
         onUploadRequestedDocument={async (requestId, file, responseNote) => {
           try {
@@ -442,6 +455,7 @@ export default function RequirementRoute() {
       onSubmitQuotation={() => router.push({ pathname: '/submit-quotation', params: { id } })}
       onViewBuyerProfile={() => router.push({ pathname: '/business-profile', params: { id: buyer.id } })}
       onViewLedger={() => router.push({ pathname: '/ledger', params: { id } })}
+        onOpenAttachment={onOpenAttachment}
     />
   );
 }

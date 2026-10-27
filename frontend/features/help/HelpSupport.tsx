@@ -23,6 +23,7 @@ import {
 
 export interface HelpSupportProps {
   onBack?: () => void;
+  onOpenPrivacy?: () => void;
 }
 
 const SUPPORT_EMAIL = 'support@trustlink.ph';
@@ -92,7 +93,7 @@ function FaqRow({ entry }: { entry: FaqEntry }) {
   );
 }
 
-export default function HelpSupport({ onBack }: HelpSupportProps) {
+export default function HelpSupport({ onBack, onOpenPrivacy }: HelpSupportProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= breakpoint.desktop;
 
@@ -130,6 +131,11 @@ export default function HelpSupport({ onBack }: HelpSupportProps) {
             <Text style={styles.mutedSmall}>Didn't find your answer above? Email us and we'll get back to you.</Text>
             {/* Plain text, not a mailto: link — selectable so it can be copied. */}
             <Text style={styles.contactEmail} selectable>{SUPPORT_EMAIL}</Text>
+            {onOpenPrivacy && (
+              <Pressable onPress={onOpenPrivacy} hitSlop={6} style={{ alignSelf: 'flex-start' }} accessibilityRole="link">
+                <Text style={styles.privacyLink}>Privacy Notice (Data Privacy Act of 2012)</Text>
+              </Pressable>
+            )}
           </View>
         </View>
 
@@ -186,6 +192,7 @@ const styles = StyleSheet.create({
   faqDivider: { height: 1, backgroundColor: color.borderFaint },
 
   contactEmail: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
+  privacyLink: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.primary, textDecorationLine: 'underline' },
 
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap', marginTop: space.sm },
   actionButton: { minHeight: layout.minTouchTarget, borderRadius: radius.pill, borderWidth: 1, borderColor: color.border, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xl },

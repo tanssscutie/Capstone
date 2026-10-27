@@ -100,6 +100,14 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     const detail = isJson && payload && typeof payload === 'object' && 'detail' in (payload as any)
       ? (payload as any).detail
       : payload;
+    // Suspended, banned or deactivated mid-session (backend account_access):
+    // sign out and land on login with the reason, instead of every screen failing.
+    if (res.status === 403 && auth && typeof detail === 'string' && /suspended|banned|deactivated/i.test(detail)) {
+      tokenStore.clear();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.assign(`/login?blocked=${encodeURIComponent(detail)}`);
+      }
+    }
     throw new ApiError(res.status, detail);
   }
 
@@ -117,6 +125,44 @@ export const api = {
     request<T>(path, { ...opts, method: 'PUT', body }),
   postForm: <T>(path: string, formData: FormData, opts?: Omit<RequestOpts, 'method' | 'formData'>) =>
     request<T>(path, { ...opts, method: 'POST', formData }),
+  delete: <T>(path: string, opts?: Omit<RequestOpts, 'method' | 'body'>) =>
+    request<T>(path, { ...opts, method: 'DELETE' }),
 };
 
 export { API_BASE_URL };
+
+/** An access-checked image as a blob: URL an <Image> can show — the
+ *  endpoint needs the Authorization header, which an <Image source> can't
+ *  send. The caller revokes it (URL.revokeObjectURL) when done. Web only. */
+export async function fetchAuthedBlobUrl(path: string): Promise<string> {
+  const token = tokenStore.get();
+  const res = await fetch(`${API_BASE_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, `Could not load that image (${res.status})`);
+  return URL.createObjectURL(await res.blob());
+}
+
+/** Opens an access-checked file (raw bytes, not JSON) in a new tab. A plain
+ *  <a href> to the endpoint would carry no Authorization header and 401, so
+ *  this fetches with the token and opens the result as a blob: URL. The tab is
+ *  opened *before* the fetch, while still inside the click, so popup blockers
+ *  don't swallow it. Web only. Throws an ApiError on a refused request. */
+export async function openAuthedFile(path: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const tab = window.open('', '_blank');
+  try {
+    const token = tokenStore.get();
+    const res = await fetch(`${API_BASE_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null);
+      throw new ApiError(res.status, payload?.detail ?? `Could not open that file (${res.status})`);
+    }
+    const url = URL.createObjectURL(await res.blob());
+    if (tab) tab.location.href = url;
+    else window.open(url, '_blank');
+    // Revoked after a delay — the new tab needs the blob alive while it loads.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (e) {
+    tab?.close();
+    throw e;
+  }
+}

@@ -2,7 +2,7 @@
 // Maps to backend app/api/routes/messages.py (prefix /messages). A thread only
 // exists once the proposed winner accepts the award (one per awarded business,
 // opened with a system message) — there is no "start a chat" call here.
-import { api, API_BASE_URL, tokenStore } from './client';
+import { api, openAuthedFile } from './client';
 
 export interface MessageThreadOut {
   id: number;
@@ -44,16 +44,7 @@ export const messagesApi = {
   },
 };
 
-/** Raw bytes, so fetched by hand with the auth header and opened as a blob: URL —
- *  same reasoning as admin.ts's openAdminDocumentFile. Web only. */
-export async function openMessageAttachment(threadId: number, messageId: number): Promise<void> {
-  if (typeof window === 'undefined') return;
-  const token = tokenStore.get();
-  const res = await fetch(`${API_BASE_URL}/messages/threads/${threadId}/messages/${messageId}/file`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!res.ok) throw new Error(`Could not open that file (${res.status})`);
-  const url = URL.createObjectURL(await res.blob());
-  window.open(url, '_blank');
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+/** A message's attached file — see openAuthedFile. */
+export function openMessageAttachment(threadId: number, messageId: number): Promise<void> {
+  return openAuthedFile(`/messages/threads/${threadId}/messages/${messageId}/file`);
 }

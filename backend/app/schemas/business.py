@@ -1,7 +1,7 @@
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Literal, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.categories import CATEGORIES
 
@@ -184,6 +184,8 @@ class AdminBusinessOut(BaseModel):
     submitted_at: Optional[datetime]
     created_at: datetime
     documents: List[DocumentUploadOut] = []
+    suspended_until: Optional[datetime] = None
+    banned_at: Optional[datetime] = None
 
 
 class DashboardStatsOut(BaseModel):
@@ -200,12 +202,99 @@ class RegistrationsByDay(BaseModel):
     count: int
 
 
+class PortfolioItemOut(BaseModel):
+    """One portfolio photo; the image itself is GET /business/{id}/portfolio/{item}/image."""
+    id: int
+    caption: str
+    item_code: Optional[str]
+    item_name: Optional[str]
+    created_at: datetime
+
+
+class ReportCreate(BaseModel):
+    reason: Literal["FAKE_BUSINESS", "FRAUD", "NOT_HONORED", "MISLEADING", "SPAM", "MANIPULATION", "ABUSIVE", "OTHER"]
+    details: str = Field(min_length=10, max_length=1000)
+    related_requirement_id: Optional[int] = None
+
+
+class ReportReview(BaseModel):
+    # dismiss = no violation. Anything else resolves the report AND acts on the
+    # reported account (moderation_service) — so it needs a reason.
+    action: Literal["dismiss", "warn", "suspend_7", "suspend_30", "ban"]
+    notes: Optional[str] = Field(default=None, max_length=1000)
+
+    @field_validator("notes")
+    @classmethod
+    def _strip(cls, v):
+        return v.strip() if v else v
+
+    @model_validator(mode="after")
+    def _needs_reason(self):
+        if self.action != "dismiss" and (not self.notes or len(self.notes) < 3):
+            raise ValueError("Write the reason the business will be told")
+        return self
+
+
+class LiftRestriction(BaseModel):
+    notes: Optional[str] = Field(default=None, max_length=1000)
+
+
+class ModerationActionOut(BaseModel):
+    action: str  # warn | suspend | ban | lift
+    reason: str
+    until: Optional[datetime]
+    created_at: datetime
+
+
+class MyReportOut(BaseModel):
+    """A report the signed-in business filed. No admin notes — those are internal."""
+    id: int
+    reported_name: str
+    reason_label: str
+    status: str  # open | resolved | dismissed
+    created_at: datetime
+    reviewed_at: Optional[datetime]
+
+
+class BusinessSearchOut(BaseModel):
+    id: int
+    name: str
+    role: Optional[str]
+    category: Optional[str]
+    city: Optional[str]
+
+
+class AdminReportOut(BaseModel):
+    id: int
+    reason: str
+    reason_label: str
+    details: str
+    status: str  # open | resolved | dismissed
+    admin_notes: Optional[str]
+    created_at: datetime
+    reviewed_at: Optional[datetime]
+    reporter_id: int
+    reporter_name: str
+    reported_id: int
+    reported_name: str
+    reported_role: Optional[str]
+    reported_verification_status: Optional[str]
+    # Open reports against the same business, this one included.
+    reported_open_reports: int
+    related_requirement_id: Optional[int]
+    related_requirement_ref: Optional[str]
+    reported_suspended_until: Optional[datetime] = None
+    reported_banned: bool = False
+    reported_history: List[ModerationActionOut] = []
+
+
 class AdminStatsOut(BaseModel):
     total_businesses: int
     total_buyers: int
     total_sellers: int
     verified_businesses: int
     pending_review_count: int
+    open_reports_count: int = 0
     total_requirements: int
     open_requirements: int
     total_quotations: int

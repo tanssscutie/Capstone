@@ -583,6 +583,8 @@ class BusinessService:
                     submitted_at=user.submitted_at,
                     created_at=user.created_at,
                     documents=[DocumentUploadOut(**d.model_dump()) for d in repo.list_documents_for_user(session, user.id)],
+                    suspended_until=user.suspended_until,
+                    banned_at=user.banned_at,
                 )
                 for user in users
             ]
@@ -603,6 +605,7 @@ class BusinessService:
         return file_crypto.decrypt_bytes_lenient(encrypted), os.path.basename(document.file_path)
 
     def get_admin_stats(self) -> AdminStatsOut:
+        from app.services.report_service import report_service
         from datetime import timedelta
         from app.repositories import requirement_repository as req_repo
         from app.schemas.business import RegistrationsByDay
@@ -617,6 +620,7 @@ class BusinessService:
                 total_sellers=repo.count_users_by_role(session, "seller"),
                 verified_businesses=repo.count_verified_users(session),
                 pending_review_count=len(repo.list_flagged_users(session)),
+                open_reports_count=report_service.count_open(session),
                 total_requirements=req_repo.count_all_requirements(session),
                 open_requirements=req_repo.count_open_requirements(session),
                 total_quotations=req_repo.count_all_quotations(session),

@@ -8,6 +8,12 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "please-change-me"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    # Fewest sealed quotations a requirement needs at closing to be released
+    # and awarded. Short of it, closing is extended AUTO_EXTEND_DAYS once; still
+    # short, the requirement is archived unopened (requirement_service).
+    # Lower it in .env for a demo with fewer seller accounts.
+    MIN_QUOTATIONS_TO_RELEASE: int = 4
+    AUTO_EXTEND_DAYS: int = 3
     # Example MySQL URL: mysql+pymysql://user:password@localhost:3306/trustlink
     DATABASE_URL: str = "mysql+pymysql://root:akositanpogi@127.0.0.1:3306/trustlink"
     DB_ECHO: bool = False

@@ -17,6 +17,7 @@ from sqlmodel import SQLModel, Session, create_engine
 
 from app.api.routes.requirements import router as requirements_router
 from app.core.security import require_seller
+from app.core.config import settings
 from app.models.quotation import Quotation
 from app.models.requirement import Requirement
 from app.models.user import User
@@ -37,6 +38,10 @@ class SpecResponseTests(unittest.TestCase):
         p.start()
         self.addCleanup(p.stop)
         self.addCleanup(self.engine.dispose)
+        # These test messaging/integrity, not the minimum-quotations rule.
+        p = patch.object(settings, "MIN_QUOTATIONS_TO_RELEASE", 1)
+        p.start()
+        self.addCleanup(p.stop)
 
         self.buyer = self.save(User(business_name="Buyer", role="buyer", is_verified=True, verification_status="verified"))
         self.seller = self.save(User(business_name="Seller", role="seller", is_verified=True, verification_status="verified"))
@@ -122,7 +127,7 @@ class SpecResponseTests(unittest.TestCase):
         quotation_id = self.submit(self.answers()).json()["quotation_id"]
         self.release(self.req)
         self.assertEqual(self.load(Quotation, quotation_id).integrity_status, "valid")
-        view = requirement_service.list_quotations_view(self.req.id)
+        view = requirement_service.list_quotations_view(self.req.id, self.buyer.id)
         responses = view.quotations[0].spec_responses
         self.assertEqual([(r.label, r.complies, r.offered) for r in responses],
                          [("Size (ft)", True, None), ("Preferred brand", False, "Canon"), ("Rush", True, None)])
@@ -147,7 +152,7 @@ class SpecResponseTests(unittest.TestCase):
         self.assertIsNone(self.load(Quotation, quotation_id).spec_responses)
         self.release(req)
         self.assertEqual(self.load(Quotation, quotation_id).integrity_status, "valid")
-        self.assertEqual(requirement_service.list_quotations_view(req.id).quotations[0].spec_responses, [])
+        self.assertEqual(requirement_service.list_quotations_view(req.id, self.buyer.id).quotations[0].spec_responses, [])
 
 
 if __name__ == "__main__":

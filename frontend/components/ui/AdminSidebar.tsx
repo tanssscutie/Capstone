@@ -8,16 +8,17 @@ import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { color, font, fontSize, letterSpacing, space, radius } from './tokens';
 
-type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements';
+type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports';
 
 export const ADMIN_NAV_ITEMS: {
   label: string;
-  href: '/admin' | '/admin-businesses' | '/admin-requirements';
+  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports';
   glyph: NavGlyphKind;
 }[] = [
   { label: 'Dashboard', href: '/admin', glyph: 'dashboard' },
   { label: 'Businesses', href: '/admin-businesses', glyph: 'businesses' },
   { label: 'Requirements', href: '/admin-requirements', glyph: 'requirements' },
+  { label: 'Reports', href: '/admin-reports', glyph: 'reports' },
 ];
 
 /** No icon library in this project — each glyph is a few plain Views. */
@@ -38,6 +39,16 @@ function NavGlyph({ kind, tone }: { kind: NavGlyphKind; tone: string }) {
       <View style={glyph.box}>
         <View style={[glyph.head, { borderColor: tone }]} />
         <View style={[glyph.shoulders, { borderColor: tone }]} />
+      </View>
+    );
+  }
+  if (kind === 'reports') {
+    return (
+      <View style={glyph.box}>
+        <View style={glyph.flagRow}>
+          <View style={[glyph.flagPole, { backgroundColor: tone }]} />
+          <View style={[glyph.flag, { borderColor: tone }]} />
+        </View>
       </View>
     );
   }
@@ -146,6 +157,9 @@ const glyph = StyleSheet.create({
   doc: { width: 12, height: 15, borderWidth: 1.5, borderRadius: 2, paddingHorizontal: 2, paddingTop: 3, gap: 2 },
   docLine: { height: 1.5, borderRadius: 1 },
   docLineShort: { width: 4 },
+  flagRow: { flexDirection: 'row', alignItems: 'flex-start', height: 15 },
+  flagPole: { width: 1.5, height: 15, borderRadius: 1 },
+  flag: { width: 10, height: 7, borderWidth: 1.5, borderLeftWidth: 0, borderTopRightRadius: 2, borderBottomRightRadius: 2 },
 });
 
 const styles = StyleSheet.create({

@@ -31,7 +31,8 @@ function isPreLoginRoute(pathname: string): boolean {
     pathname.startsWith('/onboarding') ||
     pathname.startsWith('/admin') ||
     pathname.startsWith('/auth-callback') ||
-    pathname.startsWith('/complete-profile')
+    pathname.startsWith('/complete-profile') ||
+    pathname.startsWith('/privacy')
   );
 }
 
@@ -74,7 +75,9 @@ export default function RootLayout() {
         // picking buyer/seller — every other screen assumes both exist
         // (contact display, which nav/actions to show, etc.), so this is
         // required before anything else, not a skippable step.
-        if (!cancelled && (!user.mobile_number || (!user.role && !user.is_admin))) {
+        // Also an account that hasn't agreed to the current Privacy Notice
+        // (older accounts, or after the notice changed) — RA 10173.
+        if (!cancelled && (!user.mobile_number || (!user.role && !user.is_admin) || user.needs_privacy_consent)) {
           router.replace('/complete-profile');
           return;
         }

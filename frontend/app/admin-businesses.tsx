@@ -24,7 +24,7 @@ import {
   useAdminAccess,
 } from '../components/ui/AdminKit';
 import type { PillTone } from '../components/ui/AdminKit';
-import { listAllBusinesses, reviewBusiness } from '../lib/api/admin';
+import { listAllBusinesses, reviewBusiness, liftRestriction } from '../lib/api/admin';
 import type { AdminBusinessOut } from '../lib/api/admin';
 import { errorMessage } from '../lib/api/client';
 
@@ -178,6 +178,11 @@ export default function AdminBusinessesRoute() {
                     <View style={styles.pillRow}>
                       {b.role && <Pill label={b.role} tone="solid" />}
                       <Pill label={STATUS_LABELS[b.verification_status] ?? b.verification_status} tone={statusTone(b.verification_status)} />
+                      {b.banned_at ? (
+                        <Pill label="Banned" tone="danger" />
+                      ) : b.suspended_until && new Date(b.suspended_until) > new Date() ? (
+                        <Pill label={`Suspended until ${formatDate(b.suspended_until)}`} tone="danger" />
+                      ) : null}
                     </View>
                   </View>
 
@@ -191,6 +196,21 @@ export default function AdminBusinessesRoute() {
                       { label: 'Joined', value: formatDate(b.created_at) },
                     ]}
                   />
+                  {(b.banned_at || (b.suspended_until && new Date(b.suspended_until) > new Date())) && (
+                    <View style={{ alignSelf: 'flex-start' }}>
+                      <GhostButton
+                        label="Lift restriction"
+                        onPress={async () => {
+                          try {
+                            await liftRestriction(b.user_id, 'Restriction lifted by an administrator.');
+                            await load();
+                          } catch (e: any) {
+                            setError(errorMessage(e, 'Could not lift the restriction.'));
+                          }
+                        }}
+                      />
+                    </View>
+                  )}
 
                   {b.documents.length > 0 && <DocumentList docs={b.documents} onError={setError} />}
 

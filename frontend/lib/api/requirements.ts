@@ -1,6 +1,6 @@
 // lib/api/requirements.ts
 // Maps to backend app/api/routes/requirements.py (prefix /requirements).
-import { api, API_BASE_URL, tokenStore } from './client';
+import { api, openAuthedFile } from './client';
 
 export interface SpecRowOut {
   label: string;
@@ -44,6 +44,7 @@ export interface RequirementOut {
   site_address: string | null;
   barangay?: string | null;
   zip_code?: string | null;
+  auto_extended_at?: string | null;
   location: string;
   site_access_hours: string;
   site_access_notes: string;
@@ -159,6 +160,10 @@ export interface MyQuotationOut {
   quotation_ref: string;
   status: string;
   outcome: string;
+  award_response_deadline?: string | null;
+  thread_id?: number | null;
+  closeout_state?: 'open' | 'pending' | 'completed' | 'not_pushed_through' | null;
+  closeout_awaiting_me?: boolean;
   total_price: number | null;
   line_items: LineItemOut[];
   delivery_lead_time: string | null;
@@ -398,19 +403,17 @@ export const requirementsApi = {
   },
 };
 
-/** GET /requirements/{id}/document-requests/{request_id}/file — raw bytes, so
- *  fetched by hand with the auth header and opened as a blob: URL, same
- *  reasoning as admin.ts's openAdminDocumentFile. Web only. */
-export async function openRequestedDocumentFile(requirementId: number, requestId: number): Promise<void> {
-  if (typeof window === 'undefined') return;
-  const token = tokenStore.get();
-  const res = await fetch(`${API_BASE_URL}/requirements/${requirementId}/document-requests/${requestId}/file`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!res.ok) {
-    throw new Error(`Could not load that document (${res.status})`);
-  }
-  const url = URL.createObjectURL(await res.blob());
-  window.open(url, '_blank');
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+/** A shortlisted respondent's uploaded document — see openAuthedFile. */
+export function openRequestedDocumentFile(requirementId: number, requestId: number): Promise<void> {
+  return openAuthedFile(`/requirements/${requirementId}/document-requests/${requestId}/file`);
+}
+
+/** One of the requirement's own attachments — open to any signed-in business. */
+export function openRequirementAttachment(requirementId: number, attachmentId: number): Promise<void> {
+  return openAuthedFile(`/requirements/${requirementId}/attachments/${attachmentId}/file`);
+}
+
+/** A quotation's attachment — the respondent's own any time, the buyer's once released. */
+export function openQuotationAttachment(requirementId: number, quotationId: number, attachmentId: number): Promise<void> {
+  return openAuthedFile(`/requirements/${requirementId}/quotations/${quotationId}/attachments/${attachmentId}/file`);
 }

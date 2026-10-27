@@ -3,6 +3,7 @@ from typing import List
 from fastapi import APIRouter, Depends
 
 from app.core.addresses import ncr_addresses_out
+from app.core.config import settings
 from app.core.categories import ATTRIBUTES, category_tree_out
 from app.core.security import get_current_user
 from app.models.user import User
@@ -22,6 +23,12 @@ def list_categories():
 @router.get("/attributes", response_model=List[AttributeOut])
 def list_attributes():
     return list(ATTRIBUTES.values())
+
+
+# Platform rules the UI explains (minimum quotations etc.) — from .env.
+@router.get("/rules")
+def market_rules():
+    return {"min_quotations": settings.MIN_QUOTATIONS_TO_RELEASE, "auto_extend_days": settings.AUTO_EXTEND_DAYS}
 
 
 # Metro Manila cities -> barangays -> ZIP codes, for the delivery address form.

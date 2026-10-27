@@ -64,6 +64,44 @@ npx expo start --web
 
 # Latest update (branch `trustlink-updates`, hindi pa naka-commit — base: `e3b21e5`)
 
+**🔒 Security fix: sealed bidding (presyo ng kalaban)**
+- Dati, kahit sinong naka-login ay nakakabasa ng `GET /requirements/{id}/quotations` pagkatapos ng release, kasama ang presyo, notes, at attachments ng lahat ng supplier.
+- Ngayon, ang buyer na may-ari at ang admin lang ang makakabasa. 403 sa iba, pati sa mga kalabang supplier, sealed man o released. Nakikita pa rin ng supplier ang sarili niyang quotation sa "My Quotations."
+- Tests: `backend/tests/test_quotation_visibility.py`.
+
+**Portfolio (past work) sa profile ng seller**
+- Bagong "Past work" sa Business Profile ng seller: gallery ng hanggang 8 larawan, may caption at puwedeng i-tag sa item (hal. Tarpaulin). Bubukas nang buo ang larawan kapag pinindot. Naka-login na user lang ang makakakita.
+- Sa sariling profile: "+ Add photo" (JPG, PNG o WebP, hanggang 5 MB) at ✕ para tanggalin. Daan papunta rito: Account → "View public profile & past work".
+- Seller na tapos na ang onboarding lang ang makakapag-upload (hindi kailangang verified). Pinapaliit ang larawan sa 1600px at ginagawang JPEG, kaya natatanggal ang EXIF (GPS at device info). Naka-encrypt ito sa disk.
+- Backend: `models/portfolio_item.py`, `services/portfolio_service.py`, `GET /business/{id}/portfolio`, `GET /business/{id}/portfolio/{item}/image`, `POST /business/portfolio`, at `DELETE /business/portfolio/{item}`. Tests: `backend/tests/test_portfolio.py`.
+
+**"Report this business"**
+- May link na "Report this business" sa Business Profile ng iba (hindi sa sarili). Pipili ng dahilan (fake business, scam, hindi tinupad ang award, misleading na profile o documents, abusive, iba pa) at magbibigay ng detalye (10 characters pataas).
+- Confidential: hindi kailanman sinasabihan ang ini-report na business, at walang alert na ipinapadala sa kanila.
+- Mga proteksyon: verified account lang ang puwedeng mag-report, hindi puwede ang sarili o ang admin, isang bukas na report lang sa parehong business, at hanggang 5 report kada 24 oras.
+- Admin: bagong page na **Reports** (`/admin-reports`, nasa sidebar). Resolve (may ginawang aksyon) o Dismiss (walang paglabag), at may notes. Ipinapakita kung ilan ang bukas na report laban sa parehong business. May banner sa dashboard kapag may naghihintay (`open_reports_count` sa admin stats).
+- Backend: `models/business_report.py`, `services/report_service.py`, `POST /business/{id}/report`, `GET /business/admin/reports`, at `POST /business/admin/reports/{id}/review`. Tests: `backend/tests/test_business_reports.py`.
+
+**Privacy Notice at consent (RA 10173, Data Privacy Act)**
+- Bagong `/privacy` page (`features/legal/PrivacyNotice.tsx`). Nakasulat dito ang aktwal na ginagawa ng system: anong data ang kinokolekta, para saan, sino ang nakakakita ng ano (sealed quotations, contact details), mga third party (Google Gemini para sa document at category, email provider, Google Sign-In), proteksyon (bcrypt, encrypted files, hash-chained ledger), retention, mga karapatan ng data subject, at ang NPC.
+- Required na checkbox sa registration. Tinatanggihan ng backend ang register kapag walang `accept_privacy: true`. Naka-record ang oras at bersyon (`User.privacy_consent_at` at `privacy_policy_version`, auto-migrate).
+- Ang Google sign-up at ang mga dating account na wala pang consent ay ipinapadala sa `/complete-profile` para pumayag muna. Hindi kasama ang admin. Kapag binago ang notice, palitan ang bersyon sa `backend/app/core/privacy.py` **at** sa `PrivacyNotice.tsx`, at hihingan ulit ng consent ang lahat.
+- May link din sa Help & Support. Tests: `backend/tests/test_privacy_consent.py`.
+- **Kailangan pang pagpasyahan:** sino ang Data Protection Officer (support@trustlink.ph ang nakalagay ngayon), at ang eksaktong retention period.
+
+**Email notifications para sa mahahalagang alert**
+- Kusang may email copy ang mga alert sa `EMAIL_ALERT_TYPES` (`notification_repository.py`): DECISION (Notice of Award, accepted/declined, not selected, document request, close-out), REQUIREMENT_MATCH, REQUIREMENT_RELEASED, REQUIREMENT_CANCELLED, CLOSED_NO_AWARD, VERIFICATION, at DOCUMENT_FLAGGED. In-app lang ang chat messages, Q&A, closing reminders, at tier changes.
+- Ipinapadala sa background (`email_service.send_alert_email`, 2-worker pool), kaya hindi bumabagal o pumapalya ang aksyon kahit mabagal o down ang SMTP. May link ang email papunta sa requirement.
+- Bagong toggle na "Email" sa Account Settings → Notifications (`User.notify_email`, default on, auto-migrate). Kailangang naka-on din ang Activity.
+- Walang `SMTP_HOST` = sa backend console lalabas ang email, gaya ng OTP. Tests: `backend/tests/test_email_alerts.py`.
+
+**Nabubuksan na ang mga attachment ng requirement at ng quotation**
+- `GET /requirements/{id}/attachments/{aid}/file`: attachment ng requirement mismo. Puwedeng buksan ng kahit sinong naka-login na nakakakita ng requirement.
+- `GET /requirements/{id}/quotations/{qid}/attachments/{aid}/file`: kasabay ng quotation ang pagka-sealed nito. Kaya itong buksan ng supplier kahit kailan. Ang buyer at ang admin, pagka-release lang (409 habang sealed). Ang kalabang supplier, hindi kailanman (403).
+- Naka-encrypt na sa disk ang mga bagong upload (Fernet). Nabubuksan pa rin ang mga lumang hindi naka-encrypt (`decrypt_bytes_lenient`).
+- Frontend: mapipindot na ang file rows at chips sa Requirement Detail ("Open"). Bagong `openAuthedFile` sa `lib/api/client.ts`: binubuksan muna ang tab bago mag-fetch para hindi ito harangan ng popup blocker. Ginagamit na rin ito ng document requests at chat attachments.
+- Tests: `backend/tests/test_attachment_downloads.py`.
+
 **Delivery address: Barangay + ZIP (Post a Requirement, Delivery step)**
 - Mga field: City (NCR) → **Barangay** (hinahanap na dropdown, 1,715 barangay mula sa opisyal na PSA PSGC Q1 2026) → **ZIP code** → **Street / Building / Unit Number**.
 - ZIP: kusang napupunan **kapag sigurado lang** ang data (158 barangay, eksaktong tugma ang pangalan). Sa iba, pipili ang user mula sa listahan ng ZIP ng city (hal. "1605 · Ortigas Center") o ita-type niya. Puwedeng palitan sa lahat ng kaso. 4 na digit lang, bawal ang letra.

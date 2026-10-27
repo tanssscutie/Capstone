@@ -1,7 +1,7 @@
 // features/requirement-detail/RequirementDetail.tsx
 // One component, three states, driven entirely by props. No screens, no tabs.
 
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { View, Text, Pressable, Modal, ScrollView, TextInput, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import type { ViewStyle } from 'react-native';
@@ -38,11 +38,20 @@ import type {
   DocumentRequest,
 } from '../../lib/types';
 import { PREFERRED_BRAND_ID, specDisplayValue } from '../../lib/data/categories';
+import { useMarketRules } from '../../lib/data/marketRules';
+import { ReportLink } from '../../components/ui/ReportBusinessModal';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 
 /* ─── Props ─────────────────────────────────────────── */
 
+/** Opens an attachment: a requirement's own (quotationId null) or a
+ *  quotation's. Shared by every state, and handed to the file lists through
+ *  AttachmentOpenContext rather than threaded through each component. */
+export type OpenAttachmentHandler = (attachmentId: string, quotationId: string | null) => void;
+const AttachmentOpenContext = createContext<OpenAttachmentHandler | undefined>(undefined);
+
 interface RespondentNotSubmitted {
+  onOpenAttachment?: OpenAttachmentHandler;
   state: Extract<RequirementDetailState, 'RESPONDENT'>;
   requirement: Requirement;
   buyer: Business;
@@ -58,6 +67,7 @@ interface RespondentNotSubmitted {
 }
 
 interface RespondentSubmitted {
+  onOpenAttachment?: OpenAttachmentHandler;
   state: Extract<RequirementDetailState, 'RESPONDENT'>;
   requirement: Requirement;
   buyer: Business;
@@ -82,6 +92,7 @@ interface RespondentSubmitted {
 }
 
 interface OwnerSealedProps {
+  onOpenAttachment?: OpenAttachmentHandler;
   state: Extract<RequirementDetailState, 'OWNER_SEALED'>;
   requirement: Requirement;
   questions: ClarificationQuestion[];
@@ -96,6 +107,7 @@ interface OwnerSealedProps {
 type Respondent = Pick<Business, 'id' | 'registeredName' | 'city' | 'province' | 'credibility'>;
 
 interface OwnerReleasedProps {
+  onOpenAttachment?: OpenAttachmentHandler;
   state: Extract<RequirementDetailState, 'OWNER_RELEASED'>;
   requirement: Requirement;
   quotations: Quotation[];
@@ -211,6 +223,7 @@ function requirementStatusLabel(status: RequirementStatus): string {
     case 'AWARD_PENDING': return 'Award pending';
     case 'AWARDED': return 'Awarded';
     case 'CLOSED_NO_AWARD': return 'Closed — No Award';
+    case 'INSUFFICIENT_QUOTATIONS': return 'Archived — not enough quotations';
     case 'CANCELLED': return 'Cancelled';
   }
 }
@@ -387,17 +400,29 @@ function DeliverySiteView({ site }: { site: DeliverySite }) {
   );
 }
 
-function AttachmentList({ attachments }: { attachments: Attachment[] }) {
+function AttachmentList({ attachments, quotationId = null }: { attachments: Attachment[]; quotationId?: string | null }) {
+  const onOpen = useContext(AttachmentOpenContext);
   if (attachments.length === 0) {
     return <Text style={styles.mutedSmall}>No attachments</Text>;
   }
   return (
     <View style={{ gap: space.sm }}>
       {attachments.map((attachment) => (
-        <View key={attachment.id} style={styles.attachmentRow}>
-          <Text style={styles.bodyText} numberOfLines={1}>{attachment.filename}</Text>
-          <Text style={styles.mutedSmall}>{formatBytes(attachment.sizeBytes)}</Text>
-        </View>
+        <Pressable
+          key={attachment.id}
+          onPress={onOpen ? () => onOpen(attachment.id, quotationId) : undefined}
+          disabled={!onOpen}
+          accessibilityRole="link"
+          accessibilityLabel={`Open ${attachment.filename}`}
+          style={({ pressed }) => [styles.attachmentRow, pressed ? styles.attachmentRowPressed : null]}
+        >
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.bodyText} numberOfLines={1}>{attachment.filename}</Text>
+            {attachment.documentLabel && <Text style={styles.mutedSmall} numberOfLines={1}>{attachment.documentLabel}</Text>}
+          </View>
+          {attachment.sizeBytes > 0 && <Text style={styles.mutedSmall}>{formatBytes(attachment.sizeBytes)}</Text>}
+          {onOpen && <Text style={styles.attachmentOpen}>Open</Text>}
+        </Pressable>
       ))}
     </View>
   );
@@ -615,6 +640,9 @@ function CredibilityBlockView({ label, business }: { label: string; business: Bu
         <LabelValueRow label="Quotations submitted" value={String(c.quotationsSubmitted)} />
         <LabelValueRow label="Quotations awarded" value={String(c.quotationsAwarded)} />
       </View>
+      <View style={{ marginTop: space.sm, alignSelf: 'flex-start' }}>
+        <ReportLink businessId={business.id} businessName={name} label="Report this buyer" />
+      </View>
     </View>
   );
 }
@@ -626,6 +654,29 @@ function CountdownBadge({ closingAt }: { closingAt: ISODateTime }) {
       <SectionLabel>{closed ? 'Closed' : 'Closes in'}</SectionLabel>
       <Text style={[styles.countdown, closed ? styles.countdownClosed : null]}>{label}</Text>
       {!closed && <Text style={styles.mutedSmall}>{formatDateTime(closingAt)}</Text>}
+    </View>
+  );
+}
+
+/** Owner, while open: how far the requirement is from the minimum it needs
+ *  at closing (GET /meta/rules), and whether closing was already extended. */
+function MinimumQuotationsNote({ requirement }: { requirement: Requirement }) {
+  const { minQuotations, autoExtendDays } = useMarketRules();
+  if (requirement.status !== 'OPEN') return null;
+  const have = requirement.quotationCount;
+  const met = have >= minQuotations;
+  return (
+    <View style={[styles.minNote, met ? styles.minNoteMet : null]}>
+      <Text style={[styles.bodyTextSemi, met ? { color: color.primary } : null]}>
+        {met ? `✓ Minimum reached — ${have} quotations` : `${have} of ${minQuotations} quotations needed`}
+      </Text>
+      {!met && (
+        <Text style={styles.mutedSmall}>
+          {requirement.autoExtendedAt
+            ? 'Closing was already extended once. If it stays short, it will be archived unopened.'
+            : `If it's short at closing, closing extends ${autoExtendDays} days once.`}
+        </Text>
+      )}
     </View>
   );
 }
@@ -998,6 +1049,7 @@ function OwnerSealedSideContent({ requirement }: { requirement: Requirement }) {
     <>
       <CountdownBadge closingAt={requirement.closingAt} />
       <BareQuotationCount count={requirement.quotationCount} />
+      <MinimumQuotationsNote requirement={requirement} />
     </>
   );
 }
@@ -1280,7 +1332,7 @@ function QuotationCard({
       {quotation.attachments.length > 0 && (
         <View style={styles.block}>
           <SectionLabel>Attachments</SectionLabel>
-          <AttachmentList attachments={quotation.attachments} />
+          <AttachmentList attachments={quotation.attachments} quotationId={quotation.id} />
         </View>
       )}
 
@@ -1318,6 +1370,9 @@ function QuotationCard({
           <ActionButton label="Award" variant="primary" onPress={onRequestAward} disabled={awardLocked} />
         </View>
       )}
+      <View style={{ alignSelf: 'flex-end' }}>
+        <ReportLink businessId={respondent.id} businessName={name} />
+      </View>
     </View>
   );
 }
@@ -1599,16 +1654,24 @@ function WideHeader({ requirement }: { requirement: Requirement }) {
   );
 }
 
-function WideFileChips({ attachments }: { attachments: Attachment[] }) {
+function WideFileChips({ attachments, quotationId = null }: { attachments: Attachment[]; quotationId?: string | null }) {
+  const onOpen = useContext(AttachmentOpenContext);
   if (attachments.length === 0) {
     return <Text style={styles.mutedSmall}>No attachments</Text>;
   }
   return (
     <View style={styles.wideChipsRow}>
       {attachments.map((a) => (
-        <View key={a.id} style={styles.fileChip}>
-          <Text style={styles.fileChipLabel} numberOfLines={1}>{a.filename}</Text>
-        </View>
+        <Pressable
+          key={a.id}
+          onPress={onOpen ? () => onOpen(a.id, quotationId) : undefined}
+          disabled={!onOpen}
+          accessibilityRole="link"
+          accessibilityLabel={`Open ${a.filename}`}
+          style={({ pressed }) => [styles.fileChip, onOpen ? styles.fileChipOpenable : null, pressed ? styles.attachmentRowPressed : null]}
+        >
+          <Text style={[styles.fileChipLabel, onOpen ? styles.fileChipLabelOpenable : null]} numberOfLines={1}>{a.filename}</Text>
+        </Pressable>
       ))}
     </View>
   );
@@ -1788,7 +1851,10 @@ function WideInfoBand({
                 {buyer.credibility.requirementsPosted} requirements posted · {buyer.credibility.requirementsAwarded} awarded on Trustlink
               </Text>
             </View>
-            <ActionButton label="View buyer profile" variant="outline" onPress={onViewBuyerProfile} />
+            <View style={{ alignItems: 'flex-end', gap: space.xs }}>
+              <ActionButton label="View buyer profile" variant="outline" onPress={onViewBuyerProfile} />
+              <ReportLink businessId={buyer.id} businessName={buyer.displayName ?? buyer.registeredName} label="Report this buyer" />
+            </View>
           </View>
         </>
       )}
@@ -1852,6 +1918,7 @@ function WideSealedHero({ requirement, onViewLedger }: { requirement: Requiremen
       <Text style={styles.wideHeroCaption}>
         {requirement.quotationCount} sealed record{requirement.quotationCount === 1 ? '' : 's'} · contents unreadable
       </Text>
+      <MinimumQuotationsNote requirement={requirement} />
 
       <ActionButton
         label={showHow ? 'Hide how sealed quotations work' : 'How sealed quotations work'}
@@ -2301,7 +2368,7 @@ function WideQuotationCard({
         <Text style={styles.bodyText}>{quotation.notesToBuyer}</Text>
       )}
 
-      <WideFileChips attachments={quotation.attachments} />
+      <WideFileChips attachments={quotation.attachments} quotationId={quotation.id} />
 
       {predecessor && (
         <View style={styles.ledgerHistoryCard}>
@@ -2329,6 +2396,7 @@ function WideQuotationCard({
         <Text style={styles.mutedSmall}>Submitted {formatDateTime(quotation.submittedAt)}</Text>
         <View style={styles.wideMetaSpacer} />
         <View style={styles.wideQuoteFooterActions}>
+          <ReportLink businessId={respondent.id} businessName={name} />
           <ActionButton label="View profile" variant="outline" onPress={onViewProfile} />
           {isAwarded && <ActionButton label="Message" variant="outline" onPress={onMessage} />}
           {!isAwardPending && (
@@ -2522,6 +2590,14 @@ function WideOwnerReleasedScreen(props: OwnerReleasedProps) {
 /* ─── Root component ────────────────────────────────── */
 
 export default function RequirementDetail(props: RequirementDetailProps) {
+  return (
+    <AttachmentOpenContext.Provider value={props.onOpenAttachment}>
+      <RequirementDetailBody {...props} />
+    </AttachmentOpenContext.Provider>
+  );
+}
+
+function RequirementDetailBody(props: RequirementDetailProps) {
   const { requirement } = props;
   const { width } = useWindowDimensions();
   const isWide = width >= breakpoint.desktop;
@@ -2818,6 +2894,10 @@ const styles = StyleSheet.create({
     backgroundColor: color.surfaceSunken,
     borderRadius: radius.sm,
   },
+  attachmentRowPressed: { opacity: 0.7 },
+  minNote: { gap: space.xs, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.border, backgroundColor: color.surfaceSunken },
+  minNoteMet: { borderColor: color.primaryBorder, backgroundColor: color.primaryFaint },
+  attachmentOpen: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
   countdown: {
     fontFamily: font.monoMedium,
     fontSize: fontSize.xl,
@@ -3314,6 +3394,8 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: color.inkMuted,
   },
+  fileChipOpenable: { borderColor: color.primaryBorder },
+  fileChipLabelOpenable: { color: color.primary, textDecorationLine: 'underline' },
 
   wideSpecTable: {
     borderWidth: 1,

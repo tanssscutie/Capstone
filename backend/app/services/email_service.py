@@ -1,6 +1,8 @@
 import logging
 import smtplib
+from concurrent.futures import ThreadPoolExecutor
 from email.message import EmailMessage
+from typing import Optional
 
 from app.core.config import settings
 
@@ -70,3 +72,30 @@ def send_password_reset_otp_email(to: str, code: str) -> None:
         "If you didn't ask to reset your password, you can safely ignore this email — "
         "your password has not been changed.",
     )
+
+
+# Alert emails go out on a small worker pool: an SMTP round-trip can take
+# several seconds (see send_email's timeout), and the action that raised the
+# alert — an award, a new posting — must not wait on it, let alone fail.
+_alert_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="alert-email")
+
+
+def _send_quietly(to: str, subject: str, body: str) -> None:
+    try:
+        send_email(to, subject, body)
+    except Exception:
+        logger.exception("Alert email to %s failed (the in-app alert still exists)", to)
+
+
+def send_alert_email(to: str, title: str, detail: str, related_requirement_id: Optional[int] = None) -> None:
+    """Queues the email copy of an in-app alert and returns immediately."""
+    link = (f"{settings.FRONTEND_URL}/requirement?id={related_requirement_id}"
+            if related_requirement_id else f"{settings.FRONTEND_URL}/alerts")
+    body = (
+        f"{title}\n\n{detail}\n\n"
+        f"Open it on {settings.PROJECT_NAME}: {link}\n\n"
+        "—\n"
+        f"You're getting this because email alerts are on in your {settings.PROJECT_NAME} "
+        "Account Settings → Notifications. Turn off \"Email\" there to stop them."
+    )
+    _alert_pool.submit(_send_quietly, to, f"[{settings.PROJECT_NAME}] {title}", body)

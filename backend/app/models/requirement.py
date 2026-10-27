@@ -55,6 +55,9 @@ class Requirement(SQLModel, table=True):
     # Structured parts of the same address (PSGC barangay name, 4-digit ZIP).
     # Null on requirements posted before the form asked for them.
     barangay: Optional[str] = Field(default=None, max_length=120)
+    # Set the one time closing was pushed back for too few quotations — see
+    # RequirementService.release_due_requirements.
+    auto_extended_at: Optional[datetime] = None
     zip_code: Optional[str] = Field(default=None, max_length=4)
     location: str  # display string derived from city (+ site_address) at creation
     site_access_hours: str = ""  # e.g. "Mon-Sat, 7:00 AM - 6:00 PM" — editable any time, never locked

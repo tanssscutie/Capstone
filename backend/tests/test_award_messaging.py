@@ -17,6 +17,7 @@ from sqlmodel import SQLModel, Session, create_engine, select
 
 from app.api.routes.messages import router as messages_router
 from app.core.security import get_current_user
+from app.core.config import settings
 from app.models.message import Message
 from app.models.message_thread import MessageThread
 from app.models.quotation import Quotation
@@ -36,6 +37,10 @@ class AwardMessagingTests(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
         self.addCleanup(self.engine.dispose)
+        # These test messaging/integrity, not the minimum-quotations rule.
+        p = patch.object(settings, "MIN_QUOTATIONS_TO_RELEASE", 1)
+        p.start()
+        self.addCleanup(p.stop)
 
         self.buyer = self.save(User(business_name="Buyer", role="buyer", is_verified=True,
                                     contact_person="Juan Dela Cruz", contact_mobile="09171234567"))

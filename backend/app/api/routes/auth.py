@@ -81,7 +81,7 @@ async def google_callback(code: str):
 
 @router.post("/complete-profile", response_model=UserRead)
 def complete_profile(data: CompleteProfile, current_user=Depends(get_current_user)):
-    return auth_service.complete_profile(current_user.id, data.mobile_number, data.role)
+    return auth_service.complete_profile(current_user.id, data.mobile_number, data.role, data.accept_privacy)
 
 
 @router.post("/password/request-otp")

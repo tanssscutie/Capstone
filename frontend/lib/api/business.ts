@@ -162,3 +162,87 @@ export async function getDashboardStats(): Promise<DashboardStatsOut> {
 export async function getPublicProfile(businessId: number): Promise<PublicBusinessProfileOut> {
   return api.get<PublicBusinessProfileOut>(`/business/${businessId}/profile`);
 }
+
+
+/** Reasons a business can be reported for — same codes as
+ *  backend/app/services/report_service.REASONS. */
+export type ReportReason = 'FAKE_BUSINESS' | 'FRAUD' | 'NOT_HONORED' | 'MISLEADING' | 'SPAM' | 'MANIPULATION' | 'ABUSIVE' | 'OTHER';
+
+export const REPORT_REASONS: { value: ReportReason; label: string }[] = [
+  { value: 'FAKE_BUSINESS', label: 'Fake or impersonated business' },
+  { value: 'FRAUD', label: 'Scam or fraud' },
+  { value: 'NOT_HONORED', label: "Didn't honor an award or agreement" },
+  { value: 'MISLEADING', label: 'Misleading profile or documents' },
+  { value: 'SPAM', label: 'Spam or fake requirements/quotations' },
+  { value: 'MANIPULATION', label: 'Bid manipulation or collusion' },
+  { value: 'ABUSIVE', label: 'Abusive or harassing behavior' },
+  { value: 'OTHER', label: 'Something else' },
+];
+
+/** POST /business/{id}/report — reviewed by an admin; the business is never told who reported it. */
+export async function reportBusiness(businessId: number, reason: ReportReason, details: string): Promise<void> {
+  await api.post(`/business/${businessId}/report`, { reason, details: details.trim() });
+}
+
+
+export interface PortfolioItemOut {
+  id: number;
+  caption: string;
+  item_code: string | null;
+  item_name: string | null;
+  created_at: string;
+}
+
+/** Most photos a seller's portfolio holds — same as portfolio_service.MAX_ITEMS. */
+export const PORTFOLIO_MAX_ITEMS = 8;
+
+/** GET /business/{id}/portfolio — newest first. */
+export async function listPortfolio(businessId: number): Promise<PortfolioItemOut[]> {
+  return api.get<PortfolioItemOut[]>(`/business/${businessId}/portfolio`);
+}
+
+export function portfolioImagePath(businessId: number, itemId: number): string {
+  return `/business/${businessId}/portfolio/${itemId}/image`;
+}
+
+/** POST /business/portfolio — the signed-in seller's own portfolio. */
+export async function addPortfolioItem(file: File | Blob, fileName: string, caption: string, itemCode?: string | null): Promise<PortfolioItemOut> {
+  const form = new FormData();
+  form.append('file', file, fileName);
+  form.append('caption', caption.trim());
+  if (itemCode) form.append('item_code', itemCode);
+  return api.postForm<PortfolioItemOut>('/business/portfolio', form);
+}
+
+/** DELETE /business/portfolio/{id} */
+export async function removePortfolioItem(itemId: number): Promise<void> {
+  await api.delete<void>(`/business/portfolio/${itemId}`);
+}
+
+
+export interface MyReportOut {
+  id: number;
+  reported_name: string;
+  reason_label: string;
+  status: 'open' | 'resolved' | 'dismissed';
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+/** GET /business/reports/mine — reports you filed, newest first. */
+export async function listMyReports(): Promise<MyReportOut[]> {
+  return api.get<MyReportOut[]>('/business/reports/mine');
+}
+
+export interface BusinessSearchOut {
+  id: number;
+  name: string;
+  role: string | null;
+  category: string | null;
+  city: string | null;
+}
+
+/** GET /business/search?q= — businesses to report, by name (verified accounts). */
+export async function searchBusinesses(q: string): Promise<BusinessSearchOut[]> {
+  return api.get<BusinessSearchOut[]>(`/business/search?q=${encodeURIComponent(q)}`);
+}

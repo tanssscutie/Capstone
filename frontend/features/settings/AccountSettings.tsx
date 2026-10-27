@@ -25,11 +25,13 @@ export interface AccountSettingsProps {
   email: string | null;
   notifyMessages: boolean;
   notifyActivity: boolean;
+  /** Email copies of the important activity alerts. */
+  notifyEmail: boolean;
   onBack?: () => void;
   onChangeMobileNumber: (newNumber: string, currentPassword: string) => Promise<void>;
   onRequestPasswordOtp: () => Promise<void>;
   onChangePassword: (currentPassword: string, newPassword: string, code: string) => Promise<void>;
-  onChangeNotificationPreferences: (notifyMessages: boolean, notifyActivity: boolean) => Promise<void>;
+  onChangeNotificationPreferences: (notifyMessages: boolean, notifyActivity: boolean, notifyEmail: boolean) => Promise<void>;
 }
 
 function SectionLabel({ children }: { children: string }) {
@@ -352,27 +354,27 @@ function PasswordCard({
 }
 
 function NotificationsCard({
+  email,
   notifyMessages,
   notifyActivity,
+  notifyEmail,
   onChangeNotificationPreferences,
-}: Pick<AccountSettingsProps, 'notifyMessages' | 'notifyActivity' | 'onChangeNotificationPreferences'>) {
-  const [messages, setMessages] = useState(notifyMessages);
-  const [activity, setActivity] = useState(notifyActivity);
-  const [savingKey, setSavingKey] = useState<'messages' | 'activity' | null>(null);
+}: Pick<AccountSettingsProps, 'email' | 'notifyMessages' | 'notifyActivity' | 'notifyEmail' | 'onChangeNotificationPreferences'>) {
+  type Prefs = { messages: boolean; activity: boolean; email: boolean };
+  const [prefs, setPrefs] = useState<Prefs>({ messages: notifyMessages, activity: notifyActivity, email: notifyEmail });
+  const [savingKey, setSavingKey] = useState<keyof Prefs | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const flip = async (key: 'messages' | 'activity', nextValue: boolean) => {
+  const flip = async (key: keyof Prefs, nextValue: boolean) => {
     setError(null);
-    const prevMessages = messages;
-    const prevActivity = activity;
-    if (key === 'messages') setMessages(nextValue);
-    else setActivity(nextValue);
+    const previous = prefs;
+    const next = { ...prefs, [key]: nextValue };
+    setPrefs(next);
     setSavingKey(key);
     try {
-      await onChangeNotificationPreferences(key === 'messages' ? nextValue : messages, key === 'activity' ? nextValue : activity);
+      await onChangeNotificationPreferences(next.messages, next.activity, next.email);
     } catch (e: any) {
-      setMessages(prevMessages);
-      setActivity(prevActivity);
+      setPrefs(previous);
       setError(toMessage(e, 'Could not save your notification preferences.'));
     } finally {
       setSavingKey(null);
@@ -388,14 +390,26 @@ function NotificationsCard({
             <Text style={styles.fieldLabel}>Messages</Text>
             <Text style={styles.mutedSmall}>Direct messages from businesses you're talking to.</Text>
           </View>
-          <ToggleSwitch value={messages} onChange={(v) => flip('messages', v)} disabled={savingKey !== null} />
+          <ToggleSwitch value={prefs.messages} onChange={(v) => flip('messages', v)} disabled={savingKey !== null} />
         </View>
         <View style={styles.toggleRow}>
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <Text style={styles.fieldLabel}>Activity</Text>
             <Text style={styles.mutedSmall}>Award decisions, clarification Q&A, verification updates, closing reminders.</Text>
           </View>
-          <ToggleSwitch value={activity} onChange={(v) => flip('activity', v)} disabled={savingKey !== null} />
+          <ToggleSwitch value={prefs.activity} onChange={(v) => flip('activity', v)} disabled={savingKey !== null} />
+        </View>
+        <View style={styles.toggleRow}>
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            <Text style={styles.fieldLabel}>Email</Text>
+            <Text style={styles.mutedSmall}>
+              {email
+                ? `Also email ${email} about awards, new matching requirements, document requests and verification results.`
+                : 'Add an email address to your account to get alerts by email.'}
+              {prefs.email && !prefs.activity ? ' Turn on Activity to receive them.' : ''}
+            </Text>
+          </View>
+          <ToggleSwitch value={prefs.email} onChange={(v) => flip('email', v)} disabled={savingKey !== null || !email} />
         </View>
         <FieldError>{error}</FieldError>
       </View>
@@ -408,6 +422,7 @@ export default function AccountSettings({
   email,
   notifyMessages,
   notifyActivity,
+  notifyEmail,
   onBack,
   onChangeMobileNumber,
   onRequestPasswordOtp,
@@ -439,6 +454,8 @@ export default function AccountSettings({
         <NotificationsCard
           notifyMessages={notifyMessages}
           notifyActivity={notifyActivity}
+          notifyEmail={notifyEmail}
+          email={email}
           onChangeNotificationPreferences={onChangeNotificationPreferences}
         />
 

@@ -6,7 +6,8 @@
 // icon library, no chart dependency. The "chart" is plain Views sized by
 // proportion, same technique the rest of the app uses for hand-built icons.
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../components/ui/tokens';
 import { AvatarChip, initials } from '../components/ui/AvatarChip';
 import {
@@ -195,6 +196,7 @@ function QueueCard({
 }
 
 export default function AdminRoute() {
+  const router = useRouter();
   const access = useAdminAccess();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -253,6 +255,19 @@ export default function AdminRoute() {
           {stats && (
             <>
               <AttentionBanner count={stats.pending_review_count} />
+              {stats.open_reports_count > 0 && (
+                <Pressable onPress={() => router.push('/admin-reports')} style={[styles.banner, styles.bannerWaiting]} accessibilityRole="link">
+                  <View style={[styles.bannerBadge, styles.bannerBadgeWaiting]}>
+                    <Text style={styles.bannerBadgeLabel}>{stats.open_reports_count}</Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.bannerTitle, { color: color.danger }]}>
+                      {stats.open_reports_count} business report{stats.open_reports_count === 1 ? '' : 's'} waiting for review
+                    </Text>
+                    <Text style={styles.bannerBody}>Open Reports to resolve or dismiss them.</Text>
+                  </View>
+                </Pressable>
+              )}
 
               <View style={styles.statsGrid}>
                 <StatCard

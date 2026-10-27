@@ -10,6 +10,7 @@
 // raised cards) and RequirementDetail.tsx's quotation vocabulary (status labels, tones).
 
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   View,
   Text,
@@ -52,6 +53,11 @@ export interface MyQuotationsProps {
   /** Returns to the submission form, prefilled, for a withdrawn quotation whose
    *  requirement is still open. */
   onResubmit?: (requirementId: string) => void;
+  /** A Notice of Award waiting on this seller. Resolve to an error message, or null. */
+  onAcceptAward?: (requirementId: string) => Promise<string | null>;
+  onDeclineAward?: (requirementId: string) => Promise<string | null>;
+  /** The award conversation (messages, close-out). */
+  onOpenChat?: (threadId: string) => void;
 }
 
 /* ─── Formatting helpers ────────────────────────────── */
@@ -199,6 +205,9 @@ function QuotationRow({
   onOpenRequirement,
   onWithdraw,
   onResubmit,
+  onAcceptAward,
+  onDeclineAward,
+  onOpenChat,
 }: {
   quotation: Quotation;
   requirement: Requirement;
@@ -208,7 +217,8 @@ function QuotationRow({
   onOpenRequirement?: (requirementId: string) => void;
   onWithdraw?: (quotationId: string) => void;
   onResubmit?: (requirementId: string) => void;
-}) {
+} & Pick<MyQuotationsProps, 'onAcceptAward' | 'onDeclineAward' | 'onOpenChat'>) {
+  const reached = stepReached(quotation);
   const buyerName = buyer.displayName ?? buyer.registeredName;
   const sealed = quotation.status === 'SUBMITTED';
   const withdrawn = quotation.status === 'WITHDRAWN';
@@ -257,6 +267,15 @@ function QuotationRow({
         </View>
       </View>
 
+      {reached !== null && <StepTracker reached={reached} />}
+      <NextStep
+        quotation={quotation}
+        requirement={requirement}
+        onAcceptAward={onAcceptAward}
+        onDeclineAward={onDeclineAward}
+        onOpenChat={onOpenChat}
+      />
+
       {withdrawn && replacement && (
         <Pressable onPress={() => onOpenRequirement?.(requirement.id)} hitSlop={4} style={{ alignSelf: 'flex-start' }}>
           <Text style={styles.replacementLink}>Replaced by {replacement.ref} →</Text>
@@ -268,6 +287,109 @@ function QuotationRow({
         {sealed && <ActionButton label="Withdraw" variant="danger" onPress={() => onWithdraw?.(quotation.id)} />}
         {canResubmit && <ActionButton label="Resubmit" variant="primary" onPress={() => onResubmit?.(requirement.id)} />}
       </View>
+    </View>
+  );
+}
+
+/* ─── Progress: where this quotation is, and what to do next ─── */
+
+const STEPS = ['Submitted', 'Released', 'Notice of Award', 'Awarded', 'Completed'] as const;
+
+/** Index of the step reached, or null when the quotation left the main path
+ *  (withdrawn, voided, not selected) — those show only the next-step line. */
+function stepReached(quotation: Quotation): number | null {
+  switch (quotation.status) {
+    case 'SUBMITTED': return 0;
+    case 'RELEASED':
+    case 'SHORTLISTED': return 1;
+    case 'AWARD_PENDING': return 2;
+    case 'AWARDED': return quotation.progress?.closeoutState === 'COMPLETED' ? 4 : 3;
+    default: return null;
+  }
+}
+
+function StepTracker({ reached }: { reached: number }) {
+  return (
+    <View style={styles.tracker} accessibilityLabel={`Step ${reached + 1} of ${STEPS.length}: ${STEPS[reached]}`}>
+      {STEPS.map((label, i) => (
+        <View key={label} style={styles.trackerStep}>
+          <View style={[styles.trackerBar, i <= reached ? styles.trackerBarDone : null]} />
+          <Text style={[styles.trackerLabel, i === reached ? styles.trackerLabelCurrent : i < reached ? styles.trackerLabelDone : null]} numberOfLines={1}>
+            {label}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** One sentence and at most one or two actions — the only thing a seller needs to read. */
+function NextStep({ quotation, requirement, onAcceptAward, onDeclineAward, onOpenChat }: {
+  quotation: Quotation;
+  requirement: Requirement;
+  onAcceptAward?: (requirementId: string) => Promise<string | null>;
+  onDeclineAward?: (requirementId: string) => Promise<string | null>;
+  onOpenChat?: (threadId: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const p = quotation.progress;
+  const run = async (fn?: (id: string) => Promise<string | null>) => {
+    if (!fn) return;
+    setBusy(true);
+    setError(null);
+    const err = await fn(requirement.id).catch(() => 'Something went wrong. Try again.');
+    setBusy(false);
+    if (err) setError(err);
+  };
+  const chat = p?.threadId && onOpenChat ? () => onOpenChat(p.threadId as string) : undefined;
+
+  let text: string | null = null;
+  let actions: ReactNode = null;
+  let highlight = false;
+  switch (quotation.status) {
+    case 'SUBMITTED':
+      text = `Sealed until ${formatDateTime(requirement.closingAt)}. Nobody can see your price before then.`;
+      break;
+    case 'RELEASED':
+    case 'SHORTLISTED':
+      text = 'Released to the buyer — waiting for their decision.';
+      break;
+    case 'AWARD_PENDING':
+      highlight = true;
+      text = `You were chosen! Respond${p?.awardDeadline ? ` by ${formatDateTime(p.awardDeadline)}` : ''} — it declines on its own after that.`;
+      actions = (
+        <>
+          <ActionButton label={busy ? 'Saving…' : 'Accept award'} variant="primary" onPress={busy ? undefined : () => run(onAcceptAward)} />
+          <ActionButton label="Decline" variant="danger" onPress={busy ? undefined : () => run(onDeclineAward)} />
+        </>
+      );
+      break;
+    case 'AWARDED':
+      highlight = p?.closeoutState !== 'COMPLETED';
+      if (p?.closeoutState === 'COMPLETED') text = '✓ Transaction completed — confirmed by you and the buyer.';
+      else if (p?.closeoutState === 'NOT_PUSHED_THROUGH') { text = 'Both of you confirmed this did not push through.'; highlight = false; }
+      else if (p?.closeoutState === 'PENDING' && p.closeoutAwaitingMe) text = 'The buyer marked this transaction — confirm it in the chat.';
+      else if (p?.closeoutState === 'PENDING') text = 'Waiting for the buyer to confirm the transaction.';
+      else text = 'Awarded to you. Coordinate delivery with the buyer, then mark it completed in the chat.';
+      if (chat && p?.closeoutState !== 'COMPLETED' && p?.closeoutState !== 'NOT_PUSHED_THROUGH') {
+        actions = <ActionButton label="Open chat" variant="primary" onPress={chat} />;
+      }
+      break;
+    case 'NOT_SELECTED':
+      text = 'Not selected this time.';
+      break;
+    case 'WITHDRAWN':
+      if (requirement.status === 'INSUFFICIENT_QUOTATIONS') text = 'Archived — not enough quotations arrived. Yours was voided unopened.';
+      else if (requirement.status === 'CANCELLED') text = 'The buyer cancelled this requirement. Yours was voided unopened.';
+      break;
+  }
+  if (!text) return null;
+  return (
+    <View style={[styles.nextStep, highlight ? styles.nextStepHighlight : null]}>
+      <Text style={styles.nextStepText}>{text}</Text>
+      {actions && <View style={styles.rowFooter}>{actions}</View>}
+      {error && <Text style={styles.nextStepError}>{error}</Text>}
     </View>
   );
 }
@@ -284,7 +406,10 @@ function GroupSection({
   onOpenRequirement,
   onWithdraw,
   onResubmit,
-}: {
+  onAcceptAward,
+  onDeclineAward,
+  onOpenChat,
+}: Pick<MyQuotationsProps, 'onAcceptAward' | 'onDeclineAward' | 'onOpenChat'> & {
   status: QuotationStatus;
   items: Quotation[];
   requirements: Record<string, Requirement>;
@@ -317,6 +442,9 @@ function GroupSection({
               onOpenRequirement={onOpenRequirement}
               onWithdraw={onWithdraw}
               onResubmit={onResubmit}
+              onAcceptAward={onAcceptAward}
+              onDeclineAward={onDeclineAward}
+              onOpenChat={onOpenChat}
             />
           );
         })}
@@ -389,6 +517,9 @@ export default function MyQuotations(props: MyQuotationsProps) {
                 onOpenRequirement={onOpenRequirement}
                 onWithdraw={onWithdraw}
                 onResubmit={onResubmit}
+                onAcceptAward={props.onAcceptAward}
+                onDeclineAward={props.onDeclineAward}
+                onOpenChat={props.onOpenChat}
               />
             ))}
           </View>
@@ -432,6 +563,17 @@ const styles = StyleSheet.create({
 
   rowTopLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
   statusChip: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  tracker: { flexDirection: 'row', gap: space.xs, marginTop: space.sm },
+  trackerStep: { flex: 1, minWidth: 0, gap: 4 },
+  trackerBar: { height: 4, borderRadius: radius.pill, backgroundColor: color.border },
+  trackerBarDone: { backgroundColor: color.primary },
+  trackerLabel: { fontFamily: font.body, fontSize: 10, color: color.inkFaint },
+  trackerLabelDone: { color: color.inkMuted },
+  trackerLabelCurrent: { fontFamily: font.bodySemi, color: color.primary },
+  nextStep: { gap: space.sm, marginTop: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: color.surfaceSunken },
+  nextStepHighlight: { backgroundColor: color.primaryFaint, borderWidth: 1, borderColor: color.primaryBorder },
+  nextStepText: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.ink },
+  nextStepError: { fontFamily: font.body, fontSize: fontSize.sm, color: color.danger },
   statusDot: { width: 7, height: 7, borderRadius: radius.pill },
   statusLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase' },
   rowRef: { fontFamily: font.mono, fontSize: fontSize.micro, color: color.inkFaint },

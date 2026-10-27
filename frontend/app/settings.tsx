@@ -55,6 +55,7 @@ export default function SettingsRoute() {
       email={user.email}
       notifyMessages={user.notify_messages}
       notifyActivity={user.notify_activity}
+      notifyEmail={user.notify_email ?? true}
       onBack={() => router.push('/home')}
       onChangeMobileNumber={async (newNumber, currentPassword) => {
         const updated = await changeMobileNumber(newNumber, currentPassword);
@@ -64,8 +65,8 @@ export default function SettingsRoute() {
       onChangePassword={async (currentPassword, newPassword, code) => {
         await changePassword(currentPassword, newPassword, code);
       }}
-      onChangeNotificationPreferences={async (notifyMessages, notifyActivity) => {
-        const updated = await updateNotificationPreferences(notifyMessages, notifyActivity);
+      onChangeNotificationPreferences={async (notifyMessages, notifyActivity, notifyEmail) => {
+        const updated = await updateNotificationPreferences(notifyMessages, notifyActivity, notifyEmail);
         setUser(updated);
       }}
     />

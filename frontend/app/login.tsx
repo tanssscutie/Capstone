@@ -38,6 +38,7 @@ import {
 import type { YearsInBusiness } from '../lib/api/auth';
 import { useCategoryTree } from '../lib/data/categories';
 import { errorMessage } from '../lib/api/client';
+import { PrivacyConsent } from '../components/ui/PrivacyConsent';
 import { RolePicker } from '../components/ui/RolePicker';
 import type { AccountRole } from '../lib/types';
 
@@ -54,19 +55,24 @@ const RESEND_COOLDOWN_SECONDS = 60;
 
 export default function LoginRoute() {
   const router = useRouter();
-  const { googleError } = useLocalSearchParams<{ googleError?: string }>();
+  // googleError: a refused Google sign-in. blocked: signed out because the
+  // account was suspended or banned (lib/api/client.ts).
+  const { googleError, blocked } = useLocalSearchParams<{ googleError?: string; blocked?: string }>();
   const [mode, setMode] = useState<Mode>('LOGIN');
   const [businessName, setBusinessName] = useState('');
   const [role, setRole] = useState<AccountRole | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const { categories } = useCategoryTree();
   const [yearsInBusiness, setYearsInBusiness] = useState<YearsInBusiness | null>(null);
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [mobileNumber, setMobileNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(typeof googleError === 'string' ? googleError : null);
+  const [error, setError] = useState<string | null>(
+    typeof blocked === 'string' ? blocked : typeof googleError === 'string' ? googleError : null,
+  );
 
   const [code, setCode] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
@@ -124,6 +130,7 @@ export default function LoginRoute() {
           role,
           category,
           yearsInBusiness: role === 'seller' && yearsInBusiness ? yearsInBusiness : undefined,
+          acceptPrivacy: agreePrivacy,
         });
         // A code was just emailed; they log in by confirming it, not by
         // typing the password again.
@@ -235,7 +242,8 @@ export default function LoginRoute() {
         (role === 'buyer' || yearsInBusiness !== null) &&
         businessName.trim().length > 1 &&
         emailValid &&
-        passwordsMatch));
+        passwordsMatch &&
+        agreePrivacy));
 
   const resetEmailValid = EMAIL_PATTERN.test(resetEmail.trim());
   const newPasswordsMatch = newPassword === confirmNewPassword;
@@ -487,6 +495,8 @@ export default function LoginRoute() {
                 <CheckItem met={passwordLongEnough} label="At least 8 characters" />
                 <CheckItem met={confirmPassword.length > 0 && passwordsMatch} label="Passwords match" />
               </View>
+
+              <PrivacyConsent checked={agreePrivacy} onChange={setAgreePrivacy} />
             </FadeIn>
           )}
         </>

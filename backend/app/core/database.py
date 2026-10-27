@@ -22,6 +22,12 @@ def create_db_and_tables():
     _migrate_message_body_text()
     _migrate_message_attachment()
     _migrate_requirement_address_parts()
+    _add_column_if_missing("user", "notify_email", "BOOLEAN NOT NULL DEFAULT 1")
+    _add_column_if_missing("user", "privacy_consent_at", "DATETIME NULL")
+    _add_column_if_missing("user", "privacy_policy_version", "VARCHAR(20) NULL")
+    _add_column_if_missing("user", "suspended_until", "DATETIME NULL")
+    _add_column_if_missing("requirement", "auto_extended_at", "DATETIME NULL")
+    _add_column_if_missing("user", "banned_at", "DATETIME NULL")
 
 
 def _migrate_user_role():
