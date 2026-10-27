@@ -236,6 +236,9 @@ export interface RequirementQuotationsView {
 }
 
 export interface RequirementCreateInput {
+  /** "Request a quote" from a seller's profile (max 5) — they get an invite alert;
+   *  the requirement stays public and sealed. */
+  invited_business_ids?: number[];
   category: string;
   /** One of the category's items — see lib/data/categories.ts. */
   item_code: string;

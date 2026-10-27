@@ -12,8 +12,12 @@ import {
   addPortfolioItem,
   removePortfolioItem,
   portfolioImagePath,
+  profileImagePath,
+  uploadProfileImage,
+  updateProfileDetails,
   type PortfolioItemOut,
 } from '../lib/api/business';
+import { useAuthedImage } from '../lib/useAuthedImage';
 import { fetchAuthedBlobUrl, openAuthedFile } from '../lib/api/client';
 import { me } from '../lib/api/auth';
 import { mapPublicBusinessProfile, type PublicBusinessProfile } from '../lib/api/mappers';
@@ -27,6 +31,9 @@ export default function BusinessProfileRoute() {
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<PublicBusinessProfile | null>(null);
   const [viewerId, setViewerId] = useState<number | null>(null);
+  const [viewerRole, setViewerRole] = useState<string | null>(null);
+  // Bumped after an upload so the photo reloads.
+  const [imageVersion, setImageVersion] = useState(0);
   const [portfolio, setPortfolio] = useState<PortfolioItemOut[] | undefined>(undefined);
 
   const load = useCallback(async () => {
@@ -41,6 +48,7 @@ export default function BusinessProfileRoute() {
       const [raw, user] = await Promise.all([getPublicProfile(Number(id)), me().catch(() => null)]);
       setProfile(mapPublicBusinessProfile(raw));
       setViewerId(user?.id ?? null);
+      setViewerRole(user?.role ?? null);
       // Sellers only; a failed list just hides the section.
       setPortfolio(raw.role === 'seller' ? await listPortfolio(Number(id)).catch(() => []) : undefined);
     } catch (e: any) {
@@ -53,6 +61,9 @@ export default function BusinessProfileRoute() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const avatarUri = useAuthedImage(profile?.hasAvatar ? profileImagePath(profile.id, 'avatar') : null, imageVersion);
+  const coverUri = useAuthedImage(profile?.hasCover ? profileImagePath(profile.id, 'cover') : null, imageVersion);
 
   if (loading) {
     return (
@@ -83,6 +94,32 @@ export default function BusinessProfileRoute() {
     <BusinessProfile
       profile={profile}
       onBack={() => router.back()}
+      avatarUri={avatarUri}
+      coverUri={coverUri}
+      onUploadImage={isOwn ? async (kind, file) => {
+        try {
+          await uploadProfileImage(kind, file, file.name);
+          setProfile((p) => (p ? { ...p, hasAvatar: p.hasAvatar || kind === 'avatar', hasCover: p.hasCover || kind === 'cover' } : p));
+          setImageVersion((v) => v + 1);
+          return null;
+        } catch (e: any) {
+          return errorMessage(e, 'Could not upload that photo.');
+        }
+      } : undefined}
+      onSaveDetails={isOwn ? async (details) => {
+        try {
+          await updateProfileDetails(details);
+          setProfile(mapPublicBusinessProfile(await getPublicProfile(businessId)));
+          return null;
+        } catch (e: any) {
+          return errorMessage(e, 'Could not save your profile.');
+        }
+      } : undefined}
+      onUpdateCapabilities={isOwn ? () => router.push('/onboarding?mode=edit') : undefined}
+      onCompleteVerification={isOwn ? () => router.push('/verification-status') : undefined}
+      onRequestQuote={!isOwn && viewerRole === 'buyer' && profile.role === 'seller'
+        ? () => router.push({ pathname: '/post-requirement', params: { invite: profile.id, inviteName: profile.registeredName } })
+        : undefined}
       portfolio={portfolio}
       loadPortfolioImage={(itemId) => fetchAuthedBlobUrl(portfolioImagePath(businessId, itemId))}
       onOpenPortfolioImage={(itemId) => { openAuthedFile(portfolioImagePath(businessId, itemId)).catch(() => {}); }}

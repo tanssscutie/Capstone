@@ -1,4 +1,7 @@
 // features/business-profile/BusinessProfile.tsx
+// Facebook + LinkedIn style: cover photo, overlapping profile picture, badges,
+// highlights, then section cards. On your own profile: change photo/cover,
+// Edit profile, and a completeness meter.
 // A read-only view of ANOTHER business's public profile — reached via
 // "View buyer profile" (RequirementDetail, respondent view) and "View
 // profile" (RequirementDetail, owner viewing a released respondent). Same
@@ -6,8 +9,9 @@
 // Contact details stay private to the account owner and administrators.
 
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, Modal, TextInput, Image, StyleSheet, useWindowDimensions } from 'react-native';
-import { PORTFOLIO_MAX_ITEMS, type ReportReason, type PortfolioItemOut } from '../../lib/api/business';
+import { View, Text, Pressable, Modal, TextInput, Image, Linking, StyleSheet, useWindowDimensions } from 'react-native';
+import type { ViewStyle } from 'react-native';
+import { PORTFOLIO_MAX_ITEMS, type ReportReason, type PortfolioItemOut, type ProfileDetailsIn, type ProfileImageKind } from '../../lib/api/business';
 import { ReportBusinessModal } from '../../components/ui/ReportBusinessModal';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 import { itemsFor, useCategoryTree } from '../../lib/data/categories';
@@ -40,6 +44,16 @@ export interface BusinessProfileProps {
   /** Own profile only. Each resolves to an error message, or null on success. */
   onAddPortfolioItem?: (file: File, caption: string, itemCode: string | null) => Promise<string | null>;
   onRemovePortfolioItem?: (itemId: number) => Promise<string | null>;
+  /** Blob URLs of the profile picture / cover photo, null = show the default. */
+  avatarUri?: string | null;
+  coverUri?: string | null;
+  /** Own profile only (their presence = own profile). Resolve to an error message, or null. */
+  onUploadImage?: (kind: ProfileImageKind, file: File) => Promise<string | null>;
+  onSaveDetails?: (details: ProfileDetailsIn) => Promise<string | null>;
+  onUpdateCapabilities?: () => void;
+  onCompleteVerification?: () => void;
+  /** A buyer viewing a seller: Post a Requirement with this seller invited. */
+  onRequestQuote?: () => void;
 }
 
 /* ─── Past work (portfolio) ─────────────────────────── */
@@ -281,6 +295,122 @@ function TagList({ items, emptyLabel }: { items: string[]; emptyLabel: string })
   );
 }
 
+const YEARS_LABEL: Record<string, string> = {
+  LESS_THAN_1: '< 1 yr in business',
+  '1_TO_3': '1–3 yrs in business',
+  '4_TO_6': '4–6 yrs in business',
+  '7_PLUS': '7+ yrs in business',
+};
+
+// Default cover when none is uploaded — web only; native shows the plain primary fill.
+const COVER_GRADIENT = { backgroundImage: `linear-gradient(120deg, ${color.primary} 0%, ${color.ink} 100%)` } as unknown as ViewStyle;
+
+function openLink(url: string) {
+  Linking.openURL(url).catch(() => undefined);
+}
+
+function linkLabel(url: string): string {
+  return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
+function Highlight({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={styles.highlight}>
+      <Text style={styles.highlightValue}>{value}</Text>
+      <Text style={styles.highlightLabel}>{label}</Text>
+    </View>
+  );
+}
+
+type CompletenessPart = { key: string; label: string; done: boolean; action?: () => void; actionLabel?: string };
+
+function CompletenessMeter({ parts }: { parts: CompletenessPart[] }) {
+  const done = parts.filter((p) => p.done).length;
+  const pct = Math.round((done / parts.length) * 100);
+  const next = parts.find((p) => !p.done);
+  return (
+    <View style={styles.card}>
+      <View style={styles.portfolioHeader}>
+        <SectionLabel>Profile strength</SectionLabel>
+        <Text style={styles.meterPct}>{pct}% complete</Text>
+      </View>
+      <View style={styles.meterTrack}>
+        <View style={[styles.meterFill, { width: `${pct}%` }]} />
+      </View>
+      {next ? (
+        <View style={[styles.footerRow, { marginTop: space.sm }]}>
+          <Text style={[styles.mutedSmall, { flex: 1 }]}>Next: {next.label}</Text>
+          {next.action && (
+            <Pressable onPress={next.action} style={[styles.actionButton, styles.primaryButton]}>
+              <Text style={[styles.actionButtonLabel, { color: color.onPrimary }]}>{next.actionLabel ?? 'Add'}</Text>
+            </Pressable>
+          )}
+        </View>
+      ) : (
+        <Text style={[styles.mutedSmall, { marginTop: space.sm }]}>Your profile is complete. Buyers and suppliers see everything they need.</Text>
+      )}
+    </View>
+  );
+}
+
+function EditProfileModal({ profile, onSave, onClose }: {
+  profile: PublicBusinessProfile;
+  onSave: (details: ProfileDetailsIn) => Promise<string | null>;
+  onClose: () => void;
+}) {
+  const [headline, setHeadline] = useState(profile.headline ?? '');
+  const [about, setAbout] = useState(profile.description ?? '');
+  const [website, setWebsite] = useState(profile.websiteUrl ?? '');
+  const [facebook, setFacebook] = useState(profile.facebookUrl ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    const err = await onSave({ headline, about, website_url: website, facebook_url: facebook }).catch(() => 'Could not save.');
+    setSaving(false);
+    if (err) setError(err);
+    else onClose();
+  };
+
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalCard, { gap: space.md }]}>
+          <Text style={styles.modalTitle}>Edit profile</Text>
+          <View style={{ gap: space.xs }}>
+            <Text style={styles.factLabel}>Headline</Text>
+            <TextInput value={headline} onChangeText={setHeadline} maxLength={100} placeholder="e.g. Large-format printing for events and retail in Pasig" placeholderTextColor={color.inkFaint} style={styles.editInput} />
+          </View>
+          <View style={{ gap: space.xs }}>
+            <Text style={styles.factLabel}>About</Text>
+            <TextInput value={about} onChangeText={setAbout} maxLength={1000} multiline placeholder="What your business does, who you serve, what you're known for." placeholderTextColor={color.inkFaint} style={styles.reportInput} />
+          </View>
+          <View style={{ gap: space.xs }}>
+            <Text style={styles.factLabel}>Website</Text>
+            <TextInput value={website} onChangeText={setWebsite} maxLength={300} autoCapitalize="none" placeholder="https://yourbusiness.ph" placeholderTextColor={color.inkFaint} style={styles.editInput} />
+          </View>
+          <View style={{ gap: space.xs }}>
+            <Text style={styles.factLabel}>Facebook page</Text>
+            <TextInput value={facebook} onChangeText={setFacebook} maxLength={300} autoCapitalize="none" placeholder="https://facebook.com/yourbusiness" placeholderTextColor={color.inkFaint} style={styles.editInput} />
+          </View>
+          {error && <Text style={styles.reportError}>{error}</Text>}
+          <View style={styles.footerRow}>
+            <View style={{ flex: 1 }} />
+            <Pressable onPress={onClose} style={styles.actionButton}>
+              <Text style={styles.actionButtonLabel}>Cancel</Text>
+            </Pressable>
+            <Pressable onPress={save} disabled={saving} style={[styles.actionButton, styles.primaryButton, saving ? { opacity: 0.5 } : null]}>
+              <Text style={[styles.actionButtonLabel, { color: color.onPrimary }]}>{saving ? 'Saving…' : 'Save'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function BusinessProfile({
   profile,
   onBack,
@@ -290,19 +420,57 @@ export default function BusinessProfile({
   onOpenPortfolioImage,
   onAddPortfolioItem,
   onRemovePortfolioItem,
+  avatarUri,
+  coverUri,
+  onUploadImage,
+  onSaveDetails,
+  onRequestQuote,
+  onUpdateCapabilities,
+  onCompleteVerification,
 }: BusinessProfileProps) {
   const [reporting, setReporting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [uploading, setUploading] = useState<ProfileImageKind | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
   const isWide = width >= breakpoint.desktop;
   const verified = profile.credibility.status === 'VERIFIED';
   const c = profile.credibility;
+  const isOwn = !!onSaveDetails;
+  const isSeller = profile.role === 'seller';
+  const avatarSize = isWide ? 112 : 88;
 
   const statRows: { label: string; value: string }[] = [
     { label: 'Requirements posted · As buyer', value: String(c.requirementsPosted) },
     { label: 'Requirements awarded · As buyer', value: String(c.requirementsAwarded) },
     { label: 'Quotations submitted · As supplier', value: String(c.quotationsSubmitted) },
     { label: 'Quotations awarded · As supplier', value: String(c.quotationsAwarded) },
-    { label: 'Completed transactions · Confirmed by both parties', value: String(profile.transactionsCompleted) },
+    { label: 'Completed transactions', value: String(profile.transactionsCompleted) },
+    { label: 'Unconfirmed · No order updates', value: String(profile.transactionsUnconfirmed) },
+  ];
+  const awarded = c.requirementsAwarded + c.quotationsAwarded;
+  const rate = profile.completionRate === null ? '—' : `${Math.round(profile.completionRate * 100)}%`;
+
+  const pickImage = async (kind: ProfileImageKind) => {
+    if (!onUploadImage || !isWebFilePickerSupported()) return;
+    const picked = await pickWebFile('.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp');
+    if (!picked) return;
+    if (picked.size > 5 * 1024 * 1024) { setImageError('Photos can be up to 5 MB.'); return; }
+    setUploading(kind);
+    setImageError(null);
+    const err = await onUploadImage(kind, picked).catch(() => 'Could not upload that photo.');
+    setUploading(null);
+    if (err) setImageError(err);
+  };
+
+  const parts: CompletenessPart[] = [
+    { key: 'avatar', label: 'Add a profile picture', done: profile.hasAvatar, action: () => pickImage('avatar'), actionLabel: 'Add photo' },
+    { key: 'cover', label: 'Add a cover photo', done: profile.hasCover, action: () => pickImage('cover'), actionLabel: 'Add cover' },
+    { key: 'headline', label: 'Write a one-line headline', done: !!profile.headline, action: () => setEditing(true), actionLabel: 'Add headline' },
+    { key: 'about', label: 'Tell businesses about you', done: !!profile.description, action: () => setEditing(true), actionLabel: 'Write About' },
+    { key: 'capabilities', label: 'List your capabilities', done: profile.capabilities.length > 0, action: onUpdateCapabilities, actionLabel: 'Update' },
+    ...(isSeller ? [{ key: 'portfolio', label: 'Add a photo of past work (below)', done: (portfolio?.length ?? 0) > 0 }] : []),
+    { key: 'verified', label: 'Get verified', done: verified, action: onCompleteVerification, actionLabel: 'Verify' },
   ];
 
   return (
@@ -316,43 +484,96 @@ export default function BusinessProfile({
           <Text style={styles.breadcrumbCurrent}>Business Profile</Text>
         </View>
 
-        <View style={styles.hero}>
-          <View style={styles.heroTopRow}>
-            <AvatarChip label={initials(profile.registeredName)} size={56} />
-            <View style={{ minWidth: 0, flex: 1, gap: space.xs }}>
-              <Text style={styles.heroName}>{profile.registeredName}</Text>
-              <View style={styles.heroBadgeRow}>
-                <StatusBadge label={verified ? 'Verified Business' : 'Not Yet Verified'} tone={verified ? 'primary' : 'neutral'} />
+        {/* Cover + avatar + identity, one card — Facebook/LinkedIn style. */}
+        <View style={[styles.card, styles.heroCard]}>
+          <View style={[styles.cover, { height: isWide ? 200 : 130 }, coverUri ? null : COVER_GRADIENT]}>
+            {coverUri && <Image source={{ uri: coverUri }} style={styles.coverImage} resizeMode="cover" />}
+            {isOwn && onUploadImage && (
+              <Pressable onPress={() => pickImage('cover')} style={styles.coverButton} disabled={uploading !== null}>
+                <Text style={styles.coverButtonLabel}>{uploading === 'cover' ? 'Uploading…' : coverUri ? 'Change cover' : 'Add cover photo'}</Text>
+              </Pressable>
+            )}
+          </View>
+          <View style={styles.heroBody}>
+            <View style={[styles.avatarRing, { marginTop: -(avatarSize / 2) - 4 }]}>
+              <AvatarChip label={initials(profile.registeredName)} size={avatarSize} imageUri={avatarUri} round />
+            </View>
+            {isOwn && onUploadImage && (
+              <Pressable onPress={() => pickImage('avatar')} hitSlop={6} disabled={uploading !== null} style={{ alignSelf: 'flex-start' }}>
+                <Text style={styles.linkSmall}>{uploading === 'avatar' ? 'Uploading…' : avatarUri ? 'Change photo' : 'Add profile picture'}</Text>
+              </Pressable>
+            )}
+            {imageError && <Text style={styles.reportError}>{imageError}</Text>}
+
+            <Text style={styles.heroName}>{profile.registeredName}</Text>
+            {!!profile.headline && <Text style={styles.headline}>{profile.headline}</Text>}
+            <Text style={styles.mutedSmall}>
+              {[profile.category, [profile.city, profile.province].filter(Boolean).join(', '), profile.role === 'buyer' ? 'Buyer' : profile.role === 'seller' ? 'Seller' : null]
+                .filter(Boolean).join(' · ')}
+            </Text>
+            <View style={styles.heroBadgeRow}>
+              <StatusBadge label={verified ? '✓ Verified' : 'Not yet verified'} tone={verified ? 'primary' : 'neutral'} />
+              {verified && c.tier && <StatusBadge label={`Tier ${c.tier}`} tone="neutral" />}
+              {profile.yearsInBusiness && YEARS_LABEL[profile.yearsInBusiness] && (
+                <StatusBadge label={YEARS_LABEL[profile.yearsInBusiness]} tone="neutral" />
+              )}
+            </View>
+            {(profile.websiteUrl || profile.facebookUrl) && (
+              <View style={styles.linkRow}>
+                {profile.websiteUrl && (
+                  <Pressable onPress={() => openLink(profile.websiteUrl!)} hitSlop={4}>
+                    <Text style={styles.linkSmall} numberOfLines={1}>🌐 {linkLabel(profile.websiteUrl)}</Text>
+                  </Pressable>
+                )}
+                {profile.facebookUrl && (
+                  <Pressable onPress={() => openLink(profile.facebookUrl!)} hitSlop={4}>
+                    <Text style={styles.linkSmall} numberOfLines={1}>Facebook</Text>
+                  </Pressable>
+                )}
               </View>
+            )}
+
+            <View style={styles.heroActions}>
+              {onRequestQuote && (
+                <Pressable onPress={onRequestQuote} style={[styles.actionButton, styles.primaryButton]}>
+                  <Text style={[styles.actionButtonLabel, { color: color.onPrimary }]}>Request a quote</Text>
+                </Pressable>
+              )}
+              {isOwn && (
+                <Pressable onPress={() => setEditing(true)} style={styles.actionButton}>
+                  <Text style={styles.actionButtonLabel}>Edit profile</Text>
+                </Pressable>
+              )}
+              {onReport && (
+                <Pressable onPress={() => setReporting(true)} style={[styles.actionButton, styles.dangerButton]}>
+                  <Text style={[styles.actionButtonLabel, { color: color.danger }]}>Report</Text>
+                </Pressable>
+              )}
+            </View>
+
+            <View style={styles.highlightRow}>
+              <Highlight value={String(profile.transactionsCompleted)} label="Completed" />
+              <Highlight value={rate} label="Completion rate" />
+              <Highlight value={String(awarded)} label="Awarded" />
+              <Highlight value={formatMonthYear(profile.memberSince)} label="Member since" />
             </View>
           </View>
-          {!!profile.category && <Text style={styles.mutedSmall}>{profile.category}</Text>}
-          <FactRow label="Member Since" value={formatMonthYear(profile.memberSince)} />
-          <FactRow label="Verified Since" value={verified ? (c.verifiedAt ? formatMonthYear(c.verifiedAt) : 'Date not recorded') : 'Not Yet Verified'} />
-          {!!profile.description && <Text style={styles.heroBio}>{profile.description}</Text>}
         </View>
 
+        {isOwn && <CompletenessMeter parts={parts} />}
+
         <View style={styles.card}>
-          <SectionLabel>Business details</SectionLabel>
-          <View style={{ gap: space.sm, marginTop: space.sm }}>
-            {profile.role && <FactRow label="Account type" value={profile.role === 'buyer' ? 'Buyer' : 'Seller'} />}
+          <SectionLabel>About</SectionLabel>
+          {profile.description ? (
+            <Text style={styles.heroBio}>{profile.description}</Text>
+          ) : (
+            <Text style={[styles.mutedSmall, { marginTop: space.sm }]}>
+              {isOwn ? 'Tell other businesses what you do — tap Edit profile.' : 'No description yet.'}
+            </Text>
+          )}
+          <View style={{ gap: space.sm, marginTop: space.md }}>
             <FactRow label="Business type" value={businessTypeLabel(profile.businessType)} />
-            <FactRow label="Industry category" value={profile.category} />
-            <FactRow label="Location" value={[profile.city, profile.province].filter(Boolean).join(', ')} />
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <SectionLabel>Capabilities</SectionLabel>
-          <View style={{ marginTop: space.sm }}>
-            <TagList items={profile.capabilities} emptyLabel="No capabilities listed." />
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <SectionLabel>Service areas</SectionLabel>
-          <View style={{ marginTop: space.sm }}>
-            <TagList items={profile.serviceAreas} emptyLabel="No service areas listed." />
+            <FactRow label="Verified since" value={verified ? (c.verifiedAt ? formatMonthYear(c.verifiedAt) : 'Date not recorded') : 'Not yet verified'} />
           </View>
         </View>
 
@@ -368,7 +589,15 @@ export default function BusinessProfile({
         )}
 
         <View style={styles.card}>
-          <SectionLabel>Business activity overview</SectionLabel>
+          <SectionLabel>Capabilities and service areas</SectionLabel>
+          <View style={{ marginTop: space.sm, gap: space.md }}>
+            <TagList items={profile.capabilities} emptyLabel="No capabilities listed." />
+            <TagList items={profile.serviceAreas} emptyLabel="No service areas listed." />
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <SectionLabel>Activity</SectionLabel>
           <View style={styles.statsGrid}>
             {statRows.map((r) => (
               <View key={r.label} style={styles.statCell}>
@@ -381,7 +610,7 @@ export default function BusinessProfile({
             {profile.includesSealedActivity
               ? 'Supplier counts include your private sealed activity.'
               : 'Supplier counts exclude sealed activity and submissions or withdrawals before the closing deadline.'}
-            {' '}Submitted counts include recorded withdrawals and voided quotations. Awards record an accepted opportunity. Completed transactions are ones both the buyer and the supplier confirmed — TrustLink does not track delivery or payment.
+            {' '}Completed = the supplier marked it delivered and the buyer confirmed receipt (or did not respond within 14 days). Completion rate = completed ÷ awarded. Unconfirmed orders had no updates and count as neither.
           </Text>
         </View>
 
@@ -394,8 +623,6 @@ export default function BusinessProfile({
             <FactRow label="Requirements cancelled · As buyer" value={String(profile.requirementsCancelled)} />
             <FactRow label="Quotations withdrawn · As supplier" value={String(profile.quotationsWithdrawn)} />
             <FactRow label="Transactions that did not push through" value={String(profile.transactionsNotPushedThrough)} />
-            <FactRow label="Unconfirmed (no order updates)" value={String(profile.transactionsUnconfirmed)} />
-            <FactRow label="Completion rate · Completed ÷ awarded" value={profile.completionRate === null ? 'No awards yet' : `${Math.round(profile.completionRate * 100)}%`} />
             <FactRow label="Authorized contact person" value={profile.contactDetailsVisible ? (profile.contactPerson || 'Not provided') : 'Visible once your account is verified'} />
             <FactRow label="Business contact number" value={profile.contactDetailsVisible ? (profile.contactMobile || 'Not provided') : 'Visible once your account is verified'} />
           </View>
@@ -411,15 +638,12 @@ export default function BusinessProfile({
           >
             <Text style={styles.actionButtonLabel}>Back</Text>
           </Pressable>
-          <View style={{ flex: 1 }} />
-          {onReport && (
-            <Pressable onPress={() => setReporting(true)} hitSlop={6} accessibilityRole="button">
-              <Text style={styles.reportLink}>Report this business</Text>
-            </Pressable>
-          )}
         </View>
         {reporting && onReport && (
           <ReportBusinessModal businessName={profile.registeredName} onClose={() => setReporting(false)} onSubmit={onReport} />
+        )}
+        {editing && onSaveDetails && (
+          <EditProfileModal profile={profile} onSave={onSaveDetails} onClose={() => setEditing(false)} />
         )}
       </View>
     </ScreenScroll>
@@ -506,4 +730,24 @@ const styles = StyleSheet.create({
   addForm: { gap: space.sm, marginTop: space.md },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   itemChip: { paddingVertical: space.xs },
+
+  heroCard: { padding: 0, overflow: 'hidden' },
+  cover: { width: '100%', backgroundColor: color.primary },
+  coverImage: { width: '100%', height: '100%' },
+  coverButton: { position: 'absolute', right: space.md, bottom: space.md, borderRadius: radius.pill, backgroundColor: color.surface, paddingHorizontal: space.md, paddingVertical: space.xs },
+  coverButtonLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
+  heroBody: { paddingHorizontal: space.lg, paddingBottom: space.lg, gap: space.sm },
+  avatarRing: { alignSelf: 'flex-start', borderRadius: radius.pill, borderWidth: 4, borderColor: color.surface, backgroundColor: color.surface },
+  headline: { fontFamily: font.bodyMedium, fontSize: fontSize.base, lineHeight: lineHeight.base, color: color.ink },
+  linkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.lg },
+  linkSmall: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
+  heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.xs },
+  highlightRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: space.sm, borderTopWidth: 1, borderTopColor: color.borderFaint, paddingTop: space.md, rowGap: space.md },
+  highlight: { flexGrow: 1, flexBasis: 120, gap: 2 },
+  highlightValue: { fontFamily: font.display, fontSize: fontSize.lg, color: color.ink },
+  highlightLabel: { fontFamily: font.mono, fontSize: 10, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkFaint },
+  meterPct: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
+  meterTrack: { height: 8, borderRadius: radius.pill, backgroundColor: color.surfaceSunken, overflow: 'hidden', marginTop: space.sm },
+  meterFill: { height: '100%', borderRadius: radius.pill, backgroundColor: color.primary },
+  editInput: { minHeight: layout.minTouchTarget, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, paddingHorizontal: space.md, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
 });

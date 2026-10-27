@@ -81,6 +81,12 @@ export interface PublicBusinessProfileOut {
   transactions_unconfirmed_count?: number;
   /** Completed ÷ awarded (0–1); null until there's an award. */
   completion_rate?: number | null;
+  has_avatar?: boolean;
+  has_cover?: boolean;
+  headline?: string | null;
+  website_url?: string | null;
+  facebook_url?: string | null;
+  years_in_business?: string | null;
   includes_sealed_activity: boolean;
   contact_details_visible: boolean;
   contact_person: string | null;
@@ -216,6 +222,36 @@ export async function addPortfolioItem(file: File | Blob, fileName: string, capt
   form.append('caption', caption.trim());
   if (itemCode) form.append('item_code', itemCode);
   return api.postForm<PortfolioItemOut>('/business/portfolio', form);
+}
+
+export type ProfileImageKind = 'avatar' | 'cover';
+
+/** GET /business/{id}/avatar | cover — behind the login; load with fetchAuthedBlobUrl. */
+export function profileImagePath(businessId: number | string, kind: ProfileImageKind): string {
+  return `/business/${businessId}/${kind}`;
+}
+
+/** POST /business/profile/{avatar|cover} — resized, EXIF stripped, encrypted server-side. */
+export async function uploadProfileImage(kind: ProfileImageKind, file: File | Blob, fileName: string): Promise<void> {
+  const form = new FormData();
+  form.append('file', file, fileName);
+  await api.postForm<void>(`/business/profile/${kind}`, form);
+}
+
+export async function removeProfileImage(kind: ProfileImageKind): Promise<void> {
+  await api.delete<void>(`/business/profile/${kind}`);
+}
+
+export interface ProfileDetailsIn {
+  headline: string;
+  about: string;
+  website_url: string;
+  facebook_url: string;
+}
+
+/** PUT /business/profile/details — links must be http(s). */
+export async function updateProfileDetails(details: ProfileDetailsIn): Promise<void> {
+  await api.put<void>('/business/profile/details', details);
 }
 
 /** DELETE /business/portfolio/{id} */

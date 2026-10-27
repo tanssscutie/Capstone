@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, ActivityIndicator, Pressable } from 'react-native';
+import type { ReactElement } from 'react';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import PostRequirement, { pickedRequirementFiles } from '../features/post-requirement/PostRequirement';
 import type {
   RequirementDetailsDraft,
@@ -19,6 +20,11 @@ import { postRequirementClone } from '../lib/postRequirementClone';
 
 export default function PostRequirementRoute() {
   const router = useRouter();
+  // "Request a quote" from a seller's profile — that seller gets an invite alert.
+  const { invite, inviteName } = useLocalSearchParams<{ invite?: string; inviteName?: string }>();
+  const [invited, setInvited] = useState<{ id: number; name: string } | null>(
+    typeof invite === 'string' && Number(invite) > 0 ? { id: Number(invite), name: typeof inviteName === 'string' ? inviteName : 'this supplier' } : null,
+  );
   const [step, setStep] = useState<PostRequirementState>('DETAILS');
   const [details, setDetails] = useState<RequirementDetailsDraft | null>(null);
   const [delivery, setDelivery] = useState<RequirementDeliveryDraft | null>(null);
@@ -62,6 +68,21 @@ export default function PostRequirementRoute() {
     })();
   }, []);
 
+  const wrap = (screen: ReactElement) =>
+    invited ? (
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.sm, backgroundColor: color.primaryFaint, borderBottomWidth: 1, borderBottomColor: color.primaryBorder }}>
+          <Text style={{ flex: 1, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink }}>
+            Inviting <Text style={{ fontFamily: font.bodySemi }}>{invited.name}</Text> to quote — still open to every matching supplier and sealed until closing.
+          </Text>
+          <Pressable onPress={() => setInvited(null)} hitSlop={8} accessibilityLabel="Remove invite">
+            <Text style={{ fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.inkMuted }}>Remove</Text>
+          </Pressable>
+        </View>
+        {screen}
+      </View>
+    ) : screen;
+
   if (!poster) {
     return (
       <View style={{ flex: 1, backgroundColor: color.canvas, alignItems: 'center', justifyContent: 'center' }}>
@@ -80,7 +101,7 @@ export default function PostRequirementRoute() {
   }
 
   if (step === 'DELIVERY' && details) {
-    return (
+    return wrap(
       <PostRequirement
         state="DELIVERY"
         poster={poster}
@@ -96,7 +117,7 @@ export default function PostRequirementRoute() {
   }
 
   if (step === 'CLOSING' && details && delivery) {
-    return (
+    return wrap(
       <PostRequirement
         state="CLOSING"
         poster={poster}
@@ -113,7 +134,7 @@ export default function PostRequirementRoute() {
   }
 
   if (step === 'REVIEW' && details && delivery && closing) {
-    return (
+    return wrap(
       <PostRequirement
         state="REVIEW"
         poster={poster}
@@ -143,6 +164,7 @@ export default function PostRequirementRoute() {
               delivery_end: input.deliveryWindowTo ? new Date(input.deliveryWindowTo).toISOString() : null,
               required_documents: input.requiredDocuments,
               closes_at: input.closingAt,
+              invited_business_ids: invited ? [invited.id] : [],
             });
             requirementsCache.put(created);
             // Attachments need a real requirement id before they can upload, so this happens
@@ -175,7 +197,7 @@ export default function PostRequirementRoute() {
     );
   }
 
-  return (
+  return wrap(
     <PostRequirement
       state="DETAILS"
       poster={poster}

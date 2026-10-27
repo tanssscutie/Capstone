@@ -37,6 +37,8 @@ import { AvatarChip, initials } from './AvatarChip';
 import type { Business, TrustTier } from '../../lib/types';
 import { useHeaderScroll, HEADER_CONDENSE_AT } from './HeaderScrollContext';
 import { useViewer } from '../../lib/api/viewer';
+import { useAuthedImage } from '../../lib/useAuthedImage';
+import { profileImagePath } from '../../lib/api/business';
 import AccountDropdown from './AccountDropdown';
 import AlertsPopover from './AlertsPopover';
 import MobileNavMenu from './MobileNavMenu';
@@ -134,6 +136,8 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0, onAl
   const isWide = width >= breakpoint.desktop;
   const { viewer: contextViewer } = useViewer();
   const viewer = viewerOverride ?? contextViewer;
+  // Profile picture, if any (404 → initials). Reloads when the account page is left.
+  const avatarUri = useAuthedImage(viewer ? profileImagePath(viewer.id, 'avatar') : null, pathname === '/business-profile' ? 1 : 0);
 
   // Search: a real query against the open-requirements feed ("Business
   // Opportunities" on Home), not a decorative field. Typing debounces into the
@@ -392,7 +396,7 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0, onAl
             style={styles.profileChip}
             onPress={openAccountMenu}
           >
-            <AvatarChip label={initials(name)} size={32} />
+            <AvatarChip label={initials(name)} size={32} imageUri={avatarUri} round={!!avatarUri} />
             <View style={{ minWidth: 0 }}>
               <Text style={styles.profileChipName} numberOfLines={1}>{name}</Text>
               <Animated.Text style={[styles.profileChipTier, { opacity: profileTierOpacity }]} numberOfLines={1}>

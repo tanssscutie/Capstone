@@ -101,6 +101,36 @@ npx expo start --web
   - frontend: `components/ui/OrderStatusPanel.tsx` (`OrderStatusPanel` at `OrderStatusLine`)
 - Tests: `backend/tests/test_fulfillment.py`.
 
+**Profile na parang Facebook + LinkedIn (`BusinessProfile.tsx`)**
+- **Layout:**
+  - **Cover photo:** gradient kapag wala
+  - **Profile picture:** nakapatong sa cover; initials kapag wala
+  - pangalan, headline, at category · city · role
+  - **Badges:** ✓ Verified, Tier, at Years in business (seller)
+  - Website at Facebook links
+- **Highlights row:** Completed · Completion rate · Awarded · Member since.
+- **Section cards:** About, Past work, Capabilities at service areas, Activity, Business transparency.
+- **Sariling profile:**
+  - "Change cover" at "Change photo"
+  - "Edit profile" (headline, About, website, Facebook)
+  - **"Profile strength" meter:** picture, cover, headline, about, capabilities, past work (seller), at verified. May iisang button para sa susunod na kulang.
+- **Mga larawan:**
+  - **Avatar:** 512×512 square. **Cover:** 1600×400 (center-crop).
+  - Laging JPEG, kaya natatanggal ang EXIF. Naka-encrypt sa disk (`uploads/profile/<id>/`). Naka-login na user lang ang makakakita.
+  - JPG, PNG o WebP, hanggang 5 MB.
+- **Links:** http/https lang. Kapag walang scheme, idinadagdag ang `https://`. Tinatanggihan ang `javascript:` at iba pang scheme.
+- **Header:** ang larawan na rin ang nasa account chip, kung mayroon.
+- **"Request a quote":** buyer na tumitingin sa seller.
+  - Bubukas ang Post a Requirement na may banner na "Inviting {name} to quote — still open to every matching supplier and sealed until closing". Puwedeng "Remove".
+  - Pagka-publish, may alert ang inimbitahan ("{buyer} invited you to quote"), kung verified, active, at nasa parehong category ito. Hanggang 5.
+  - **Hindi ito private deal:** bukas pa rin sa lahat at sealed.
+- Code:
+  - backend: `services/profile_media_service.py`
+  - mga endpoint: `PUT /business/profile/details`, `POST/DELETE /business/profile/{avatar|cover}`, `GET /business/{id}/avatar|cover`, at `RequirementCreate.invited_business_ids` (`requirement_service._alert_invited_sellers`)
+  - bagong columns: `user.avatar_path / cover_path / headline / website_url / facebook_url` (auto-migrate)
+  - frontend: `lib/useAuthedImage.ts`, ang `imageUri` sa `AvatarChip`, at ang invite banner sa `app/post-requirement.tsx`
+- Tests: `backend/tests/test_profile_media.py`.
+
 # Latest update (branch `trustlink-updates`, base: `e3b21e5`)
 
 **Feedback batch bago ang final defense**

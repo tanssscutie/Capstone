@@ -232,6 +232,13 @@ export interface PublicBusinessProfile {
   transactionsNotPushedThrough: number;
   transactionsUnconfirmed: number;
   completionRate: number | null;
+  hasAvatar: boolean;
+  hasCover: boolean;
+  headline: string | null;
+  websiteUrl: string | null;
+  facebookUrl: string | null;
+  /** LESS_THAN_1 | 1_TO_3 | 4_TO_6 | 7_PLUS — sellers only. */
+  yearsInBusiness: string | null;
   includesSealedActivity: boolean;
   contactDetailsVisible: boolean;
   contactPerson: string | null;
@@ -269,6 +276,12 @@ export function mapPublicBusinessProfile(p: PublicBusinessProfileOut): PublicBus
     transactionsNotPushedThrough: p.transactions_not_pushed_through_count ?? 0,
     transactionsUnconfirmed: p.transactions_unconfirmed_count ?? 0,
     completionRate: p.completion_rate ?? null,
+    hasAvatar: !!p.has_avatar,
+    hasCover: !!p.has_cover,
+    headline: p.headline ?? null,
+    websiteUrl: p.website_url ?? null,
+    facebookUrl: p.facebook_url ?? null,
+    yearsInBusiness: p.years_in_business ?? null,
     includesSealedActivity: p.includes_sealed_activity,
     contactDetailsVisible: p.contact_details_visible,
     contactPerson: p.contact_person,
