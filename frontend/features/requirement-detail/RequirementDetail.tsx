@@ -699,7 +699,7 @@ function BareQuotationCount({ count }: { count: number }) {
 function ScopeBlock({ requirement }: { requirement: Requirement }) {
   return (
     <View style={styles.block}>
-      <SectionLabel>Description</SectionLabel>
+      <SectionLabel>Detail</SectionLabel>
       <Text style={styles.bodyText}>{requirement.scope}</Text>
     </View>
   );
@@ -1036,7 +1036,7 @@ function EditabilityList() {
       <Text style={styles.bodyText}>You can still edit the delivery window, site and attachments.</Text>
       <InfoHint
         label="What's locked?"
-        text="Description, specifications, quantity, indicative budget and the closing date are locked — respondents have already priced against these."
+        text="Detail, specifications, quantity, indicative budget and the closing date are locked — respondents have already priced against these."
       />
     </View>
   );
@@ -1658,7 +1658,7 @@ function OwnerReleasedPanel(props: OwnerReleasedProps) {
  * tabs are the only thing intentionally left out, since those aren't part of the product.
  * The phone stack above this point is untouched. */
 
-const LOCKED_FIELDS = ['Description and specifications', 'Quantities', 'Closing date and time'];
+const LOCKED_FIELDS = ['Detail and specifications', 'Quantities', 'Closing date and time'];
 
 function WideHeader({ requirement }: { requirement: Requirement }) {
   const tone = requirementStatusTone(requirement.status);
@@ -1707,7 +1707,7 @@ function WideScopeCard({ requirement }: { requirement: Requirement }) {
   return (
     <View style={styles.wideCard}>
       <View style={{ gap: space.md }}>
-        <SectionLabel>Description</SectionLabel>
+        <SectionLabel>Detail</SectionLabel>
         {splitParagraphs(requirement.scope).map((para, i) => (
           <Text key={i} style={styles.bodyText}>{para}</Text>
         ))}

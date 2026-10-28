@@ -10,12 +10,15 @@ from app.services import requirement_service as req_service_module
 from app.services.requirement_service import requirement_service
 from app.services import category_suggestion_service
 from app.services import quotation_draft_service
+from app.services import requirement_detail_draft_service
 from app.services.document_request_service import document_request_service
 from app.services.closeout_service import closeout_service
 from app.services.fulfillment_service import fulfillment_service
 from app.schemas.requirement import (
     CategorySuggestionRequest,
     CategorySuggestionOut,
+    DetailDraftRequest,
+    DetailDraftOut,
     RequirementCreate,
     RequirementOut,
     QuotationCreate,
@@ -180,6 +183,13 @@ def unsave_requirement(requirement_id: int, current_user=Depends(get_current_use
 def suggest_category(payload: CategorySuggestionRequest, current_user: User = Depends(get_current_user)):
     category = category_suggestion_service.suggest_category(payload.title, payload.scope)
     return CategorySuggestionOut(category=category)
+
+
+@router.post("/detail-draft", response_model=DetailDraftOut)
+def detail_draft(payload: DetailDraftRequest, current_user=Depends(require_buyer)):
+    """"Write with AI" on Post a requirement: a Detail text from Step 1.
+    Nothing is saved. A plain def, so the Gemini call runs in the thread pool."""
+    return requirement_detail_draft_service.draft(payload)
 
 
 @router.post("", response_model=RequirementOut, status_code=status.HTTP_201_CREATED)

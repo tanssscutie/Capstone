@@ -171,11 +171,17 @@ export default function PostRequirementRoute() {
             // Attachments need a real requirement id before they can upload, so this happens
             // as a second step after create() rather than inline with it. Native-fallback
             // attachments (no real File behind them — see pickedRequirementFiles) are skipped.
+            // The requirement already exists by now, so a failed file mustn't turn into
+            // a "Could not publish" that tempts a second, duplicate publish — it's skipped
+            // and logged; the buyer can still see which files made it on the detail page.
             for (const att of input.attachments) {
               const file = pickedRequirementFiles.get(att.id);
               if (!file) continue;
               try {
                 await requirementsApi.uploadAttachment(created.id, file, att.filename);
+              } catch (uploadError) {
+                // eslint-disable-next-line no-console
+                console.error('[post-requirement] attachment upload failed:', att.filename, errorMessage(uploadError, ''));
               } finally {
                 pickedRequirementFiles.delete(att.id);
               }
@@ -215,6 +221,7 @@ export default function PostRequirementRoute() {
           return null;
         }
       }}
+      onDraftDetail={(input) => requirementsApi.detailDraft(input)}
     />
   );
 }

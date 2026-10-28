@@ -483,7 +483,7 @@ function ScopeSidebarCard({
       </View>
 
       <View style={styles.sidebarDivided}>
-        <SectionLabel>Description</SectionLabel>
+        <SectionLabel>Detail</SectionLabel>
         <Text style={styles.sidebarScopeText} numberOfLines={showScope ? undefined : 2}>{requirement.scope}</Text>
         <Pressable onPress={() => setShowScope((v) => !v)} hitSlop={4}>
           <Text style={styles.sidebarMoreLink}>{showScope ? 'Less' : 'More'}</Text>

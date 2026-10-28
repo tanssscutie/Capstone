@@ -245,7 +245,7 @@ function matchReason(buyerCity: string, viewer: Business): string {
   if (buyerCity === viewer.city) {
     return `Same category as your business, and the site is in ${viewer.city} — your service area. Your profile lists ${capability}.`;
   }
-  return `Same category as your business. ${buyerCity} is within your listed delivery range, and the description fits your ${capability} capability.`;
+  return `Same category as your business. ${buyerCity} is within your listed delivery range, and the detail fits your ${capability} capability.`;
 }
 
 /* ─── Small building blocks ─────────────────────────── */

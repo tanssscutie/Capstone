@@ -76,6 +76,18 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Post a requirement (1A): item picker, "Other", Detail + Write with AI, reference files**
+- **Item picker:** isa na itong select field na "Choose an item" na nagbubukas ng 3×3 grid ng tiles. Mga ~3 rows ang kita, scrollable, at may search kapag lampas 9 ang items. Reusable sa file bilang `GridPicker`, at gagamitin din sa City sa Delivery.
+- **"Other":** may required na "What item is it?" (hal. "Acrylic keychains"). Naka-save ito bilang spec row na `{label: "Item", value}`, kaya walang bagong field. Ibinabalik din ito kapag kinopya ang requirement.
+- **Description → "Detail"** sa lahat ng UI: Post a requirement (field, Review, lock list, acknowledgement), Requirement Detail, Submit Quotation, at HomeFeed match text. Ang Privacy Notice ay nagsasabi na rin kung ano ang ipinapadala sa Gemini kapag pinindot ang Write with AI.
+- **"Write with AI"** sa tabi ng Detail: sinusulat ng Gemini ang Detail mula sa buong Step 1 (category, item o pangalan ng Other, title, specs na may laman, quantity, budget).
+  - Kapag may laman na ang Detail, nagtatanong muna ito ng **"Replace your text?"** (Replace / Keep mine). Pagkatapos palitan, may **Undo**.
+  - Walang sine-save. Kapag walang `GEMINI_API_KEY` o pumalya ang AI, template na pangungusap mula sa inputs ang lumalabas.
+  - Backend: `app/services/requirement_detail_draft_service.py` (kahawig ng `quotation_draft_service.py`), route na `POST /requirements/detail-draft` (buyer lang). Frontend: `requirementsApi.detailDraft()`.
+  - Tests: `backend/tests/test_detail_draft.py`.
+- **Reference files (attachments):** nasa Details step na, bilang huling card (optional). Wala na ito sa Delivery.
+  - Kapag pumalya ang upload ng isang file pagkatapos ma-publish, hindi na lumalabas ang "Could not publish" (na nagtutulak sa dobleng post). Nilalaktawan lang ang file na iyon.
+
 **Specifications: required na ang mga kailangan talaga**
 - Ginawang required ang mga spec na nakakaapekto sa presyo o sa mismong produkto, para hindi na "optional" ang mga ito sa Post a requirement:
   - **Lahat ng item:** Artwork (may design na o kailangan pa ng layout) sa Printing at Packaging, at Food-grade sa Packaging.

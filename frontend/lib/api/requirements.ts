@@ -308,6 +308,26 @@ export interface CategorySuggestionOut {
 }
 
 /** POST /requirements/{id}/quotation-draft — never saved, never sealed. */
+/** "Write with AI" on Post a requirement — Step 1 as typed so far. */
+export interface DetailDraftInput {
+  category: string;
+  item: string;
+  title: string;
+  specifications: { label: string; value: string }[];
+  quantity: string;
+  price_min: number | null;
+  price_max: number | null;
+  strict_budget: boolean;
+  current_text: string;
+}
+
+/** A suggested Detail text. Never saved — the buyer edits it. */
+export interface DetailDraftOut {
+  text: string;
+  source: 'ai' | 'template';
+  message: string;
+}
+
 export interface QuotationDraftOut {
   source: 'ai' | 'template';
   message: string;
@@ -361,6 +381,7 @@ export const requirementsApi = {
       site_access_notes: siteAccessNotes,
     }),
 
+  detailDraft: (input: DetailDraftInput) => api.post<DetailDraftOut>('/requirements/detail-draft', input),
   withdrawalPreview: () => api.get<WithdrawalPreviewOut>('/requirements/withdrawal-preview'),
   quotationDraft: (requirementId: number) =>
     api.post<QuotationDraftOut>(`/requirements/${requirementId}/quotation-draft`, {}),

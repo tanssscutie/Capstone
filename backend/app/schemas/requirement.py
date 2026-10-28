@@ -38,6 +38,32 @@ class CategorySuggestionOut(BaseModel):
     category: Optional[str] = None
 
 
+class DetailDraftSpec(BaseModel):
+    label: str = Field(default="", max_length=100)
+    value: str = Field(default="", max_length=200)
+
+
+class DetailDraftRequest(BaseModel):
+    """Step 1 of Post a requirement, as typed so far — for "Write with AI".
+    Everything is optional: the buyer may press it early."""
+    category: str = Field(default="", max_length=100)
+    item: str = Field(default="", max_length=200)
+    title: str = Field(default="", max_length=200)
+    specifications: List[DetailDraftSpec] = Field(default=[], max_length=40)
+    quantity: str = Field(default="", max_length=200)
+    price_min: Optional[float] = None
+    price_max: Optional[float] = None
+    strict_budget: bool = False
+    current_text: str = Field(default="", max_length=3000)
+
+
+class DetailDraftOut(BaseModel):
+    """A suggested Detail (scope) text. Never saved — the buyer edits it."""
+    text: str
+    source: str  # ai | template
+    message: str
+
+
 class RequirementCreate(BaseModel):
     # "Request a quote" from a seller's profile: those sellers get an invite
     # alert. The requirement stays public and sealed — not a private deal.

@@ -55,6 +55,7 @@ import { VALIDATION_ERROR_MARK, scrollToFirstError } from '../../lib/scrollToFir
 import { barangayLabel, foldName, useNcrAddresses } from '../../lib/data/ncrAddresses';
 import { useMarketRules } from '../../lib/data/marketRules';
 import { CaptionOrHint, InfoHint } from '../../components/ui/InfoHint';
+import type { DetailDraftInput, DetailDraftOut } from '../../lib/api/requirements';
 
 /* ─── Draft shapes ───────────────────────────────────────
  * One draft per step, assembled into a real `Requirement` by the route only once REVIEW
@@ -75,6 +76,8 @@ export interface RequirementDetailsDraft {
   /** Quotations above budgetMax are refused (off = indicative). */
   strictBudget?: boolean;
   requiredDocuments: string[];
+  /** Reference files (optional) — a floor plan, product photo or sample design. */
+  attachments?: Attachment[];
 }
 
 export interface RequirementDeliveryDraft {
@@ -86,7 +89,6 @@ export interface RequirementDeliveryDraft {
   zipCode?: string;
   windowFrom: string; // "YYYY-MM-DD"
   windowTo: string;   // "YYYY-MM-DD"
-  attachments: Attachment[];
 }
 
 export interface RequirementClosingDraft {
@@ -125,6 +127,9 @@ interface DetailsProps {
    *  fixed categories or null. Optional: the pill list below works exactly
    *  the same with or without it wired up. */
   onSuggestCategory?: (title: string, scope: string) => Promise<string | null>;
+  /** "Write with AI" — a Detail text from Step 1 (POST /requirements/detail-draft).
+   *  Nothing is saved; the button is hidden when this isn't wired. */
+  onDraftDetail?: (input: DetailDraftInput) => Promise<DetailDraftOut>;
 }
 
 interface DeliveryProps {
@@ -183,6 +188,10 @@ const SPEC_LABEL_MAX = 100;
 const SPEC_VALUE_MIN = 2;
 const SPEC_VALUE_MAX = 200;
 const SITE_ADDRESS_MAX = 200;
+/** "Other" items keep their name as a spec row with this label — no new field. */
+const OTHER_ITEM_LABEL = 'Item';
+/** A GridPicker shows a search box once it has more options than one 3×3 page. */
+const GRID_SEARCH_AFTER = 9;
 /** Barangay matches listed under the search field at once. */
 const BARANGAY_MATCHES_SHOWN = 8;
 /** Searching all of Metro Manila (no city yet) — enough to scroll through, not 1,700 rows. */
@@ -250,7 +259,7 @@ const CLOSING_PRESETS: { label: string; days: number }[] = [
 
 /** Matches RequirementDetail.tsx's OWNER_SEALED EditabilityList exactly. */
 const LOCK_ITEMS = [
-  { name: 'Description and specifications', body: 'Respondents price against exactly what you posted — changing it after publish would invalidate quotations already sealed against it.' },
+  { name: 'Detail and specifications', body: 'Respondents price against exactly what you posted — changing it after publish would invalidate quotations already sealed against it.' },
   { name: 'Quantity', body: 'A different quantity is a different job. Post a new requirement instead of changing this one underneath respondents.' },
   { name: 'Indicative budget', body: 'Shown to every respondent before they price. Moving it after publish would be moving the target they already aimed at.' },
   { name: 'Closing date and time', body: 'The only field that alerts the platform. It fires that event once, on publish, and cannot be moved afterward.' },
@@ -402,7 +411,7 @@ function buildDraftInput(details: RequirementDetailsDraft, delivery: Requirement
     deliveryZip: delivery.zipCode ?? '',
     deliveryWindowFrom: delivery.windowFrom,
     deliveryWindowTo: delivery.windowTo,
-    attachments: delivery.attachments,
+    attachments: details.attachments ?? [],
     closingAt: buildClosingISO(closing.closeDate, closing.closeTime),
   };
 }
@@ -526,6 +535,122 @@ function Pill({ label, active, onPress }: { label: string; active: boolean; onPr
     >
       <Text style={[styles.pillLabel, active ? styles.pillLabelActive : null]}>{label}</Text>
     </Pressable>
+  );
+}
+
+/** Down/up caret built from two borders of a rotated square. */
+function CaretGlyph({ open }: { open: boolean }) {
+  return <View style={[styles.caretGlyph, { transform: [{ rotate: open ? '-135deg' : '45deg' }] }]} />;
+}
+
+/** Small four-point mark for the AI button — two rotated squares. */
+function SparkGlyph() {
+  return (
+    <View style={styles.sparkGlyph}>
+      <View style={styles.sparkGlyphBar} />
+      <View style={[styles.sparkGlyphBar, { transform: [{ rotate: '45deg' }] }]} />
+    </View>
+  );
+}
+
+interface GridOption {
+  value: string;
+  label: string;
+  /** A second, quieter line on the tile. */
+  meta?: string;
+}
+
+function GridTile({ option, active, onPress }: { option: GridOption; active: boolean; onPress: () => void }) {
+  const [hovered, hoverHandlers] = useHover();
+  return (
+    <Pressable
+      {...hoverHandlers}
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: active }}
+      style={({ pressed }) => [
+        styles.gridTile,
+        webTransition('border-color, background-color, transform'),
+        hovered && !active && styles.gridTileHovered,
+        active && styles.gridTileActive,
+        pressed && styles.pressedScale,
+      ]}
+    >
+      <Text style={[styles.gridTileLabel, active && styles.gridTileLabelActive]} numberOfLines={2}>{option.label}</Text>
+      {!!option.meta && <Text style={styles.gridTileMeta} numberOfLines={1}>{option.meta}</Text>}
+    </Pressable>
+  );
+}
+
+/** A select field that opens a 3×3 grid of tiles (about three rows tall, then it
+ *  scrolls), with a search box when there are more than nine options. Used for
+ *  the item and, on Delivery, the city. */
+function GridPicker({
+  value,
+  options,
+  placeholder,
+  searchPlaceholder = 'Search',
+  invalid,
+  onChange,
+}: {
+  value: string;
+  options: GridOption[];
+  placeholder: string;
+  searchPlaceholder?: string;
+  invalid?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [hovered, hoverHandlers] = useHover();
+  const selected = options.find((o) => o.value === value);
+  const q = query.trim().toLowerCase();
+  const shown = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+  return (
+    <View>
+      <Pressable
+        {...hoverHandlers}
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        style={[
+          styles.selectField,
+          webTransition('border-color, background-color, box-shadow'),
+          hovered && !open && styles.selectFieldHovered,
+          open && styles.inputFocused,
+          invalid ? styles.inputError : null,
+        ]}
+      >
+        <Text style={[styles.selectValue, !selected && styles.selectPlaceholder]} numberOfLines={1}>
+          {selected?.label ?? placeholder}
+        </Text>
+        <CaretGlyph open={open} />
+      </Pressable>
+      {open && (
+        <View style={styles.gridPanel}>
+          {options.length > GRID_SEARCH_AFTER && (
+            <FormInput value={query} onChangeText={setQuery} placeholder={searchPlaceholder} style={[styles.input, { marginTop: 0 }]} />
+          )}
+          <ScrollView style={styles.gridScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+            <View style={styles.gridTiles}>
+              {shown.map((o) => (
+                <GridTile
+                  key={o.value}
+                  option={o}
+                  active={o.value === value}
+                  onPress={() => {
+                    onChange(o.value);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                />
+              ))}
+            </View>
+            {shown.length === 0 && <Text style={styles.optionEmpty}>Nothing matches "{query.trim()}".</Text>}
+          </ScrollView>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -945,7 +1070,7 @@ function BottomBar({
  * Category, title, scope, specifications, quantity, indicative budget. Nothing about
  * location, dates, attachments, or closing. */
 
-function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestCategory }: DetailsProps & { reportContinue: (fn: () => void) => void }) {
+function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestCategory, onDraftDetail }: DetailsProps & { reportContinue: (fn: () => void) => void }) {
   const { tree, categories, error: treeError } = useCategoryTree();
   const [category, setCategory] = useState(initial?.category ?? '');
   const [itemCode, setItemCode] = useState(initial?.itemCode ?? '');
@@ -966,8 +1091,15 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
     const result = await onSuggestCategory(currentTitle.trim(), currentScope.trim());
     if (suggestionCheckedFor.current === key) setSuggestedCategory(result);
   }
+  // "Other": what the item is, kept as the spec row labelled OTHER_ITEM_LABEL.
+  const initialOtherRow = initial?.itemCode === OTHER_ITEM_CODE
+    ? (initial?.specifications ?? []).find((s) => s.label.trim() === OTHER_ITEM_LABEL)
+    : undefined;
+  const [otherItem, setOtherItem] = useState(initialOtherRow?.value ?? '');
   const [specRows, setSpecRows] = useState<SpecRowDraft[]>(
-    () => (initial?.specifications ?? []).map((s, i) => ({ id: `spec-init-${i}`, label: s.label, value: s.value, attributeId: s.attributeId ?? null })),
+    () => (initial?.specifications ?? [])
+      .filter((s) => s !== initialOtherRow)
+      .map((s, i) => ({ id: `spec-init-${i}`, label: s.label, value: s.value, attributeId: s.attributeId ?? null })),
   );
   // A cloned requirement's specs arrive as plain rows, and the tree may still be
   // loading on first render — lay the item's template over them once it's here.
@@ -989,7 +1121,39 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   const [strictBudget, setStrictBudget] = useState(initial?.strictBudget ?? false);
   const [requiredDocuments, setRequiredDocuments] = useState<string[]>(initial?.requiredDocuments ?? []);
   const [docInput, setDocInput] = useState('');
+  const [attachments, setAttachments] = useState<Attachment[]>(initial?.attachments ?? []);
   const [attempted, setAttempted] = useState(false);
+  // "Write with AI": a draft that would replace typed text waits for a yes
+  // (aiProposal); a replaced text can be brought back once (undoText).
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiProposal, setAiProposal] = useState<DetailDraftOut | null>(null);
+  const [aiNote, setAiNote] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [undoText, setUndoText] = useState<string | null>(null);
+
+  const addFile = async () => {
+    if (isWebFilePickerSupported()) {
+      const picked = await pickWebFile('.pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,image/*');
+      if (!picked) return; // dialog closed without picking — do nothing
+      const id = `att-${Date.now()}`;
+      pickedRequirementFiles.set(id, picked);
+      setAttachments((prev) => [
+        ...prev,
+        { id, filename: picked.name, sizeBytes: picked.size, mimeType: picked.type, uri: '', documentLabel: null },
+      ]);
+      return;
+    }
+    // Native fallback — placeholder metadata only, no real bytes. Same escape hatch as
+    // Onboarding.tsx's capture(); a native file picker is a separate follow-up.
+    setAttachments((prev) => [
+      ...prev,
+      { id: `f${Date.now()}`, filename: 'New attachment.pdf', sizeBytes: 640_000, mimeType: 'application/pdf', uri: '', documentLabel: null },
+    ]);
+  };
+  const removeFile = (id: string) => {
+    setAttachments((prev) => prev.filter((f) => f.id !== id));
+    pickedRequirementFiles.delete(id);
+  };
 
   function addRequiredDoc() {
     const v = docInput.trim();
@@ -1108,7 +1272,52 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   // silently on Continue — now they block it, so nothing typed is lost unnoticed.
   const isSpecRowPartial = (r: SpecRowDraft) => !!r.label.trim() !== !!r.value.trim();
   const partialSpecRows = customRows.filter(isSpecRowPartial);
-  const outputSpecs: SpecRow[] = validSpecRows.map((r) => ({ label: r.label.trim(), value: r.value.trim(), attributeId: r.attributeId ?? null }));
+  const isOther = itemCode === OTHER_ITEM_CODE;
+  const otherItemBad = isOther && otherItem.trim().length < SPEC_VALUE_MIN;
+  const outputSpecs: SpecRow[] = [
+    ...(isOther && !otherItemBad ? [{ label: OTHER_ITEM_LABEL, value: otherItem.trim(), attributeId: null }] : []),
+    ...validSpecRows.map((r) => ({ label: r.label.trim(), value: r.value.trim(), attributeId: r.attributeId ?? null })),
+  ];
+  const itemDisplayName = isOther ? otherItem.trim() : findItem(tree, category, itemCode)?.name ?? '';
+
+  async function writeWithAi() {
+    if (!onDraftDetail || aiBusy) return;
+    setAiBusy(true);
+    setAiError(null);
+    setAiProposal(null);
+    try {
+      const out = await onDraftDetail({
+        category,
+        item: itemDisplayName,
+        title: title.trim(),
+        specifications: specRows.filter((r) => r.label.trim() && r.value.trim()).map((r) => ({ label: r.label.trim(), value: r.value.trim() })),
+        quantity,
+        price_min: num(budgetMinText),
+        price_max: num(budgetMaxText),
+        strict_budget: strictBudget,
+        current_text: scope,
+      });
+      // Never replace what the buyer typed without asking.
+      if (scope.trim()) setAiProposal(out);
+      else applyAiDraft(out);
+    } catch {
+      setAiError("Couldn't write it right now — try again, or write it yourself.");
+    } finally {
+      setAiBusy(false);
+    }
+  }
+  function applyAiDraft(out: DetailDraftOut) {
+    setUndoText(scope);
+    setScope(out.text.slice(0, SCOPE_MAX));
+    setAiNote(out.message);
+    setAiProposal(null);
+  }
+  function undoAiDraft() {
+    if (undoText === null) return;
+    setScope(undoText);
+    setUndoText(null);
+    setAiNote(null);
+  }
   // Same rules and wording as the backend (validate_item_specs).
   const templateError = category && itemCode && tree.length ? itemSpecError(tree, category, itemCode, outputSpecs, quantity) : null;
   const quantityBad = !!qtyNumber.trim() && (!isNumber(qtyNumber) || Number(qtyNumber) <= 0);
@@ -1119,10 +1328,11 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   const missing: string[] = [];
   if (!category) missing.push('a category');
   else if (!itemCode) missing.push('an item');
+  else if (otherItemBad) missing.push('what the item is');
   if (!title.trim()) missing.push('a title');
   else if (titleTooShort) missing.push(`a title of at least ${TITLE_MIN} characters`);
-  if (!scope.trim()) missing.push('a description');
-  else if (scopeTooShort) missing.push(`a description of at least ${SCOPE_MIN} characters`);
+  if (!scope.trim()) missing.push('the detail');
+  else if (scopeTooShort) missing.push(`a detail of at least ${SCOPE_MIN} characters`);
   if (validSpecRows.length === 0) missing.push('at least one real specification');
   else if (badSpecRows.length > 0) missing.push('a fix to the specification row marked below');
   if (partialSpecRows.length > 0) missing.push('both a label and a value on every specification row');
@@ -1152,6 +1362,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
       budgetMax,
       strictBudget,
       requiredDocuments,
+      attachments,
     });
   };
   reportContinue(handleContinue);
@@ -1188,12 +1399,30 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
           <View>
             <FieldLabel>Item</FieldLabel>
             <Text style={styles.fieldCaption}>Picking one fills in the specifications respondents need to price it. Not listed? Choose Other.</Text>
-            <View style={styles.pillGroupWrap}>
-              {itemsFor(tree, category).map((item) => (
-                <Pill key={item.code} label={item.name} active={itemCode === item.code} onPress={() => selectItem(item.code)} />
-              ))}
-            </View>
+            <GridPicker
+              value={itemCode}
+              options={itemsFor(tree, category).map((item) => ({ value: item.code, label: item.name }))}
+              placeholder="Choose an item"
+              searchPlaceholder={`Search ${category} items`}
+              invalid={attempted && !itemCode}
+              onChange={selectItem}
+            />
             {attempted && !itemCode && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick an item from {category}.</Text>}
+            {isOther && (
+              <View style={{ marginTop: space.md }}>
+                <FieldLabel>What item is it?</FieldLabel>
+                <FormInput
+                  value={otherItem}
+                  onChangeText={setOtherItem}
+                  maxLength={SPEC_VALUE_MAX}
+                  placeholder="e.g. Acrylic keychains"
+                  style={[styles.input, attempted && otherItemBad ? styles.inputError : null]}
+                />
+                {attempted && otherItemBad && (
+                  <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Name the item, so the right suppliers see it.</Text>
+                )}
+              </View>
+            )}
           </View>
         )}
 
@@ -1214,10 +1443,27 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
         </View>
 
         <View>
-          <FieldLabel>Description</FieldLabel>
+          <View style={styles.labelRow}>
+            <FieldLabel>Detail</FieldLabel>
+            {!!onDraftDetail && (
+              <Pressable
+                onPress={() => void writeWithAi()}
+                disabled={aiBusy}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.aiButton, aiBusy && { opacity: 0.6 }, pressed && styles.pressedScale]}
+              >
+                <SparkGlyph />
+                <Text style={styles.aiButtonLabel}>{aiBusy ? 'Writing…' : 'Write with AI'}</Text>
+              </Pressable>
+            )}
+          </View>
           <FormInput
             value={scope}
-            onChangeText={setScope}
+            onChangeText={(v) => {
+              setScope(v);
+              // Typing over the AI text makes it the buyer's own — no undo past that.
+              if (undoText !== null) setUndoText(null);
+            }}
             onBlur={() => void checkCategorySuggestion(title, scope)}
             multiline
             numberOfLines={6}
@@ -1230,8 +1476,27 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
           ) : attempted && scopeTooShort ? (
             <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Needs at least {SCOPE_MIN} characters ({scope.trim().length}/{SCOPE_MIN}).</Text>
           ) : (
-            <Text style={styles.fieldCaption}>A vague description produces quotations you cannot compare.</Text>
+            <Text style={styles.fieldCaption}>A vague detail produces quotations you cannot compare.</Text>
           )}
+          {!!aiProposal && (
+            <View style={styles.aiProposal}>
+              <Text style={styles.aiProposalTitle}>Replace your text?</Text>
+              <Text style={styles.aiProposalBody} numberOfLines={5}>{aiProposal.text}</Text>
+              <View style={styles.aiProposalActions}>
+                <ActionButton label="Replace" variant="primary" onPress={() => applyAiDraft(aiProposal)} />
+                <ActionButton label="Keep mine" variant="outline" onPress={() => setAiProposal(null)} />
+              </View>
+            </View>
+          )}
+          {undoText !== null && (
+            <View style={styles.aiNoteRow}>
+              <Text style={[styles.fieldCaption, { flex: 1, marginTop: 0 }]}>{aiNote}</Text>
+              <Pressable onPress={undoAiDraft} hitSlop={8} accessibilityRole="button">
+                <Text style={styles.pickedChange}>Undo</Text>
+              </Pressable>
+            </View>
+          )}
+          {!!aiError && <Text style={styles.errorText}>{aiError}</Text>}
         </View>
       </SectionCard>
 
@@ -1408,6 +1673,28 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
           </View>
         </View>
       </SectionCard>
+
+      <SectionCard
+        index={5}
+        title="Reference files"
+        optional
+        caption="A floor plan, product photo or sample design. Visible to every business browsing this requirement, not just respondents."
+      >
+        <View style={[styles.pillGroupWrap, { marginTop: 0 }]}>
+          {attachments.map((f) => (
+            <View key={f.id} style={styles.fileChip}>
+              <View style={styles.fileGlyph}>
+                <View style={styles.fileGlyphFold} />
+              </View>
+              <Text style={styles.fileChipName} numberOfLines={1}>{f.filename}</Text>
+              <Pressable onPress={() => removeFile(f.id)} hitSlop={8}>
+                <XGlyph tone={color.inkFaint} />
+              </Pressable>
+            </View>
+          ))}
+          <AddDashedButton label="Add file" onPress={addFile} />
+        </View>
+      </SectionCard>
     </View>
   );
 }
@@ -1516,7 +1803,6 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
   };
   const [windowFrom, setWindowFrom] = useState(initial?.windowFrom ?? '');
   const [windowTo, setWindowTo] = useState(initial?.windowTo ?? '');
-  const [attachments, setAttachments] = useState<Attachment[]>(initial?.attachments ?? []);
   const [attempted, setAttempted] = useState(false);
 
   // DateField only ever writes a real picked date, so these mainly guard the native
@@ -1541,38 +1827,13 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
 
   const ready = missing.length === 0 && !windowBad && !windowPast && !windowFromInvalid && !windowToInvalid;
 
-  const addFile = async () => {
-    if (isWebFilePickerSupported()) {
-      const picked = await pickWebFile('.pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,image/*');
-      if (!picked) return; // dialog closed without picking — do nothing, same as before
-      const id = `att-${Date.now()}`;
-      pickedRequirementFiles.set(id, picked);
-      setAttachments((prev) => [
-        ...prev,
-        { id, filename: picked.name, sizeBytes: picked.size, mimeType: picked.type, uri: '', documentLabel: null },
-      ]);
-      return;
-    }
-
-    // Native fallback — placeholder metadata only, no real bytes. Same escape hatch as
-    // Onboarding.tsx's capture(); a native file picker is a separate follow-up.
-    setAttachments((prev) => [
-      ...prev,
-      { id: `f${Date.now()}`, filename: 'New attachment.pdf', sizeBytes: 640_000, mimeType: 'application/pdf', uri: '', documentLabel: null },
-    ]);
-  };
-  const removeFile = (id: string) => {
-    setAttachments((prev) => prev.filter((f) => f.id !== id));
-    pickedRequirementFiles.delete(id);
-  };
-
   const handleContinue = () => {
     if (!ready) {
       setAttempted(true);
       scrollToFirstError();
       return;
     }
-    onContinue({ city, address: address.trim(), barangay, zipCode, windowFrom, windowTo, attachments });
+    onContinue({ city, address: address.trim(), barangay, zipCode, windowFrom, windowTo });
   };
   reportContinue(handleContinue);
 
@@ -1728,27 +1989,6 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
         </View>
       </SectionCard>
 
-      <SectionCard
-        index={3}
-        title="Attachments"
-        optional
-        caption="Reference files — a floor plan, product photo, or spec sheet. Visible to every business browsing this requirement, not just respondents."
-      >
-        <View style={[styles.pillGroupWrap, { marginTop: 0 }]}>
-          {attachments.map((f) => (
-            <View key={f.id} style={styles.fileChip}>
-              <View style={styles.fileGlyph}>
-                <View style={styles.fileGlyphFold} />
-              </View>
-              <Text style={styles.fileChipName} numberOfLines={1}>{f.filename}</Text>
-              <Pressable onPress={() => removeFile(f.id)} hitSlop={8}>
-                <XGlyph tone={color.inkFaint} />
-              </Pressable>
-            </View>
-          ))}
-          <AddDashedButton label="Add file" onPress={addFile} />
-        </View>
-      </SectionCard>
     </View>
   );
 }
@@ -1933,7 +2173,7 @@ function BeforePublishCard({ draft, ack, onToggleAck }: { draft: RequirementDraf
         <View style={[styles.checkbox, ack ? styles.checkboxOn : null]}>{ack && <CheckGlyph />}</View>
         <Text style={styles.ackText}>
           I understand that verified businesses in my category and service area will be alerted, that quotations stay sealed until{' '}
-          <Text style={styles.ackBold}>{formatDateTime(draft.closingAt)}</Text>, and that the description and specifications, quantity, indicative
+          <Text style={styles.ackBold}>{formatDateTime(draft.closingAt)}</Text>, and that the detail and specifications, quantity, indicative
           budget, and the closing date and time cannot be changed once I publish.
         </Text>
       </Pressable>
@@ -1994,7 +2234,7 @@ function ReviewScreen({
           <SummaryLine label="Category" value={draft.category} />
           {!!itemName && <SummaryLine label="Item" value={itemName} />}
           <SummaryLine label="Title" value={draft.title} />
-          <SummaryBlock label="Description" value={draft.scope} />
+          <SummaryBlock label="Detail" value={draft.scope} />
           {!!specText && <SummaryBlock label="Specifications" value={specText} />}
           <SummaryLine label="Quantity" value={draft.quantity} />
           <SummaryLine label={draft.strictBudget ? "Budget (strict maximum)" : "Indicative budget"} value={formatBudget(draft.budgetMin, draft.budgetMax)} />
@@ -2266,6 +2506,30 @@ const styles = StyleSheet.create({
   optionRowPressed: { backgroundColor: color.surfaceSunken },
   optionName: { flex: 1, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
   optionMeta: { fontFamily: font.mono, fontSize: fontSize.micro, color: color.inkFaint },
+  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, flexWrap: 'wrap' },
+  aiButton: { flexDirection: 'row', alignItems: 'center', gap: space.xs, borderWidth: 1, borderColor: color.primaryBorder, backgroundColor: color.primaryFaint, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs },
+  aiButtonLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
+  sparkGlyph: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },
+  sparkGlyphBar: { position: 'absolute', width: 7, height: 7, backgroundColor: color.primary, borderRadius: 1 },
+  aiProposal: { marginTop: space.sm, gap: space.sm, borderWidth: 1, borderColor: color.primaryBorder, backgroundColor: color.primaryFaint, borderRadius: radius.md, padding: space.md },
+  aiProposalTitle: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
+  aiProposalBody: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
+  aiProposalActions: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' },
+  aiNoteRow: { marginTop: space.xs, flexDirection: 'row', alignItems: 'center', gap: space.md },
+  selectField: { marginTop: space.xs, minHeight: layout.minTouchTarget, flexDirection: 'row', alignItems: 'center', gap: space.sm, backgroundColor: color.canvas, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, paddingHorizontal: space.md },
+  selectFieldHovered: { borderColor: color.borderStrong },
+  selectValue: { flex: 1, minWidth: 0, fontFamily: font.body, fontSize: fontSize.base, color: color.ink },
+  selectPlaceholder: { color: color.inkFaint },
+  caretGlyph: { width: 8, height: 8, marginTop: -3, borderRightWidth: 2, borderBottomWidth: 2, borderColor: color.inkMuted },
+  gridPanel: { marginTop: space.xs, gap: space.sm, borderRadius: radius.md, backgroundColor: color.surface, padding: space.sm, ...elevation.card },
+  gridScroll: { maxHeight: 3 * 64 + 2 * space.sm + 4 },
+  gridTiles: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  gridTile: { flexBasis: '31%', flexGrow: 1, maxWidth: '33%', minHeight: 64, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: color.border, borderRadius: radius.md, backgroundColor: color.canvas, paddingHorizontal: space.sm, paddingVertical: space.sm },
+  gridTileHovered: { borderColor: color.borderStrong, backgroundColor: color.surfaceSunken },
+  gridTileActive: { borderColor: color.primary, backgroundColor: color.primaryFaint },
+  gridTileLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink, textAlign: 'center' },
+  gridTileLabelActive: { fontFamily: font.bodySemi, color: color.primary },
+  gridTileMeta: { marginTop: 2, fontFamily: font.body, fontSize: fontSize.micro, color: color.inkMuted, textAlign: 'center' },
   optionEmpty: { padding: space.md, fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
   pickedRow: { marginTop: space.xs, minHeight: layout.minTouchTarget, flexDirection: 'row', alignItems: 'center', gap: space.md, borderWidth: 1, borderColor: color.primaryBorder, backgroundColor: color.primaryFaint, borderRadius: radius.md, paddingHorizontal: space.md },
   pickedValue: { flex: 1, fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
