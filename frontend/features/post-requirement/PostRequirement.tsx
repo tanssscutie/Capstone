@@ -224,79 +224,11 @@ interface FieldExample {
   tip: string;
 }
 
-/** Sample values for spec rows, by attribute id (and unit for sizes). Select
- *  specs need none — their example is the first real choice. */
-const SPEC_EXAMPLE_VALUES: Record<string, string> = {
-  size: '3 x 6',
-  'size:in': '2 x 3.5',
-  'size:cm': '30 x 20 x 15',
-  'size:mm': '60 x 150',
-  color: 'Navy blue',
-  paper_weight: '120',
-  page_count: '24',
-  cover_paper: '250gsm C2S, matte',
-  inside_paper: '100gsm book paper',
-  sizes_breakdown: 'S 10, M 20, L 15, XL 5',
-  print_locations: 'Front chest logo, full back print',
-  fill_capacity: '250 g coffee beans',
-  thickness: '50',
-  container: '500 ml round PET bottle',
-  preferred_brand: '3M',
-  remarks: 'Deliver in two batches, half by the 15th',
-};
-
-const SPEC_EXAMPLE_TIPS: Record<string, string> = {
-  artwork: 'Print-ready: you already have the final file — attach it here. Needs layout: the supplier designs it (usually priced extra).',
-  size: 'Width x height in the unit shown. Suppliers price the material by it.',
-  sizes_breakdown: 'How many of each size, so suppliers order the right blanks.',
-  preferred_brand: 'Suppliers see it as "or equivalent" — it never limits who can respond.',
-};
-
-function specExample(spec: SpecTemplate): FieldExample {
-  const tip = SPEC_EXAMPLE_TIPS[spec.id]
-    ?? (spec.can_recommend
-      ? 'Not sure? Tap "Not sure — supplier to recommend" and suppliers will suggest one.'
-      : 'Suppliers price against exactly what you put here.');
-  if (spec.type === 'select') {
-    const picked = spec.options.find((o) => o !== 'None' && o !== 'No') ?? spec.options[0] ?? '';
-    return { kind: 'pills', options: spec.options, value: picked, tip };
-  }
-  const value = SPEC_EXAMPLE_VALUES[`${spec.id}:${spec.unit}`] ?? SPEC_EXAMPLE_VALUES[spec.id] ?? 'e.g. as specific as you can';
-  return { kind: 'input', value, suffix: spec.unit ?? undefined, tip };
-}
-
-const FIELD_EXAMPLES: Record<string, Record<string, FieldExample>> = {
-  Printing: {
-    item: { kind: 'select', value: 'Tarpaulin', tip: 'Pick the closest item — what suppliers need to know appears below. Not listed? Choose Other.' },
-    title: { value: 'Tarpaulins for our Pasig store opening', tip: 'One line: what you need, and what it is for.' },
-    detail: {
-      kind: 'textarea',
-      value: 'Two tarpaulins for the store front and the entrance, up for about a month outdoors. We have the final design (attached). Please include delivery to the store and say if you recommend a thicker material.',
-      tip: 'What it is for, anything it must have, and what suppliers should include in their price.',
-    },
-  },
-  'Packaging & Labeling': {
-    item: { kind: 'select', value: 'Corrugated boxes', tip: 'Pick the closest item — what suppliers need to know appears below. Not listed? Choose Other.' },
-    title: { value: 'Shipping boxes for our online orders', tip: 'One line: what you need, and what it is for.' },
-    detail: {
-      kind: 'textarea',
-      value: 'Printed shipping boxes for small appliances, about 2 kg each. Logo on two sides, one color. Please include delivery to our Caloocan warehouse and the lead time for repeat orders.',
-      tip: 'What it is for, anything it must have, and what suppliers should include in their price.',
-    },
-  },
-};
 const COMMON_EXAMPLES: Record<string, FieldExample> = {
-  otherItem: { value: 'Acrylic keychains', tip: 'Name it the way a supplier would search for it.' },
   quantity: { value: '500', suffix: 'pcs', tip: 'Count what you will receive. Boxes, packs or rolls? Say how many pieces are in each.' },
   budget: { value: '₱5,000  –  ₱20,000', tip: 'A realistic range helps suppliers price. It is not a promise to pay the maximum.' },
   customSpec: { value: 'Size  ·  2 x 3 in', tip: 'Anything else suppliers should know: write what it is on the left and the detail on the right.' },
-  documents: { kind: 'pills', options: ['DENR Permit', 'Sample of a similar job'], value: 'DENR Permit', tip: 'Only what this job needs — registration papers are already verified by TrustLink.' },
-  files: { value: 'store-front-tarpaulin-final.pdf', tip: 'A floor plan, product photo or sample design. Every business browsing this requirement can open it.' },
 };
-
-function fieldExample(category: string, key: string): FieldExample | undefined {
-  return (FIELD_EXAMPLES[category] ?? FIELD_EXAMPLES['Printing'])[key] ?? COMMON_EXAMPLES[key];
-}
 
 /** Typical qualifying documents per category — a starting suggestion for
  *  the (optional, per the study's own Scope and Delimitation) Required
@@ -897,7 +829,7 @@ function TemplateSpecRow({
   const recommended = spec.can_recommend && row.value === SUPPLIER_TO_RECOMMEND;
   return (
     <View>
-      <FieldHeader label={spec.label} optional={!spec.required} example={specExample(spec)} />
+      <FieldLabel optional={!spec.required}>{spec.label}</FieldLabel>
       {spec.id === PREFERRED_BRAND_ID && (
         <Text style={styles.fieldCaption}>Respondents see it as "or equivalent" — it never limits who can respond.</Text>
       )}
@@ -1467,9 +1399,17 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
     ...validSpecRows.map((r) => ({ label: r.label.trim(), value: r.value.trim(), attributeId: r.attributeId ?? null })),
   ];
   const itemDisplayName = isOther ? otherItem.trim() : findItem(tree, category, itemCode)?.name ?? '';
+  // Write with AI writes from the rest of the step, so it waits until there's enough to go on.
+  const aiNeeds: string[] = [];
+  if (!itemCode) aiNeeds.push('the item');
+  else if (otherItemBad) aiNeeds.push('what the item is');
+  if (!title.trim()) aiNeeds.push('the title');
+  if (requiredRows.some((r) => !r.value.trim()) || otherNeedsDetail) aiNeeds.push('the specifications');
+  if (!qtyNumber.trim()) aiNeeds.push('the quantity');
+  if (budgetMinMissing || budgetMaxMissing) aiNeeds.push('the budget');
 
   async function writeWithAi() {
-    if (!onDraftDetail || aiBusy) return;
+    if (!onDraftDetail || aiBusy || aiNeeds.length > 0) return;
     setAiBusy(true);
     setAiError(null);
     setAiProposal(null);
@@ -1585,7 +1525,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
 
         {!!category && (
           <View>
-            <FieldHeader label="Item" example={fieldExample(category, 'item')} />
+            <FieldLabel>Item</FieldLabel>
             <Text style={styles.fieldCaption}>Picking one shows what suppliers need to know to price it. Not listed? Choose Other.</Text>
             <GridPicker
               value={itemCode}
@@ -1598,7 +1538,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
             {attempted && !itemCode && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick an item from {category}.</Text>}
             {isOther && (
               <View style={{ marginTop: space.md }}>
-                <FieldHeader label="What item is it?" example={fieldExample(category, 'otherItem')} />
+                <FieldLabel>What item is it?</FieldLabel>
                 <FormInput
                   value={otherItem}
                   onChangeText={setOtherItem}
@@ -1615,7 +1555,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
         )}
 
         <View>
-          <FieldHeader label="Title" example={fieldExample(category, 'title')} />
+          <FieldLabel>Title</FieldLabel>
           <FormInput
             value={title}
             onChangeText={setTitle}
@@ -1630,63 +1570,6 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
           )}
         </View>
 
-        <View>
-          <FieldHeader
-            label="Detail"
-            example={fieldExample(category, 'detail')}
-            action={!!onDraftDetail && (
-              <Pressable
-                onPress={() => void writeWithAi()}
-                disabled={aiBusy}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.aiButton, aiBusy && { opacity: 0.6 }, pressed && styles.pressedScale]}
-              >
-                <SparkGlyph />
-                <Text style={styles.aiButtonLabel}>{aiBusy ? 'Writing…' : 'Write with AI'}</Text>
-              </Pressable>
-            )}
-          />
-          <FormInput
-            value={scope}
-            onChangeText={(v) => {
-              setScope(v);
-              // Typing over the AI text makes it the buyer's own — no undo past that.
-              if (undoText !== null) setUndoText(null);
-            }}
-            onBlur={() => void checkCategorySuggestion(title, scope)}
-            multiline
-            numberOfLines={6}
-            maxLength={SCOPE_MAX}
-            placeholder={detailsExample.scope}
-            style={[styles.textareaLarge, attempted && (scopeTooShort || !scope.trim()) ? styles.inputError : null]}
-          />
-          {attempted && !scope.trim() ? (
-            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Describe what you need.</Text>
-          ) : attempted && scopeTooShort ? (
-            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Needs at least {SCOPE_MIN} characters ({scope.trim().length}/{SCOPE_MIN}).</Text>
-          ) : (
-            <Text style={styles.fieldCaption}>A vague detail produces quotations you cannot compare.</Text>
-          )}
-          {!!aiProposal && (
-            <View style={styles.aiProposal}>
-              <Text style={styles.aiProposalTitle}>Replace your text?</Text>
-              <Text style={styles.aiProposalBody} numberOfLines={5}>{aiProposal.text}</Text>
-              <View style={styles.aiProposalActions}>
-                <ActionButton label="Replace" variant="primary" onPress={() => applyAiDraft(aiProposal)} />
-                <ActionButton label="Keep mine" variant="outline" onPress={() => setAiProposal(null)} />
-              </View>
-            </View>
-          )}
-          {undoText !== null && (
-            <View style={styles.aiNoteRow}>
-              <Text style={[styles.fieldCaption, { flex: 1, marginTop: 0 }]}>{aiNote}</Text>
-              <Pressable onPress={undoAiDraft} hitSlop={8} accessibilityRole="button">
-                <Text style={styles.pickedChange}>Undo</Text>
-              </Pressable>
-            </View>
-          )}
-          {!!aiError && <Text style={styles.errorText}>{aiError}</Text>}
-        </View>
       </SectionCard>
 
       <SectionCard
@@ -1788,7 +1671,30 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
         )}
       </SectionCard>
 
-      <SectionCard index={3} title="Quantity and budget">
+      <SectionCard
+        index={3}
+        title="Reference files"
+        optional
+        caption="A floor plan, product photo or sample design. Visible to every business browsing this requirement, not just respondents."
+      >
+        <View style={[styles.pillGroupWrap, { marginTop: 0 }]}>
+          {attachments.map((f) => (
+            <View key={f.id} style={styles.fileChip}>
+              <View style={styles.fileGlyph}>
+                <View style={styles.fileGlyphFold} />
+              </View>
+              <Text style={styles.fileChipName} numberOfLines={1}>{f.filename}</Text>
+              {!!f.documentLabel && <Text style={styles.fileChipTag}>{f.documentLabel}</Text>}
+              <Pressable onPress={() => removeFile(f.id)} hitSlop={8}>
+                <XGlyph tone={color.inkFaint} />
+              </Pressable>
+            </View>
+          ))}
+          <AddDashedButton label="Add file" onPress={() => void addFile()} />
+        </View>
+      </SectionCard>
+
+      <SectionCard index={4} title="Quantity and budget">
         <View style={styles.twoColRow}>
           <View style={styles.twoCol}>
             <FieldHeader label="Quantity" example={COMMON_EXAMPLES.quantity} />
@@ -1867,10 +1773,83 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
       </SectionCard>
 
       <SectionCard
-        index={4}
+        index={5}
+        title="Detail"
+        caption="What it's for, anything it must have, and what suppliers should include in their price."
+      >
+        <View>
+          <FieldHeader
+            label="Detail"
+            action={!!onDraftDetail && (
+              <Pressable
+                onPress={() => void writeWithAi()}
+                disabled={aiBusy || aiNeeds.length > 0}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: aiBusy || aiNeeds.length > 0 }}
+                style={({ pressed }) => [styles.aiButton, (aiBusy || aiNeeds.length > 0) && { opacity: 0.5 }, pressed && styles.pressedScale]}
+              >
+                <SparkGlyph />
+                <Text style={styles.aiButtonLabel}>{aiBusy ? 'Writing…' : 'Write with AI'}</Text>
+              </Pressable>
+            )}
+          />
+          <FormInput
+            value={scope}
+            onChangeText={(v) => {
+              setScope(v);
+              // Typing over the AI text makes it the buyer's own — no undo past that.
+              if (undoText !== null) setUndoText(null);
+            }}
+            onBlur={() => void checkCategorySuggestion(title, scope)}
+            multiline
+            numberOfLines={6}
+            maxLength={SCOPE_MAX}
+            placeholder={detailsExample.scope}
+            style={[styles.textareaLarge, attempted && (scopeTooShort || !scope.trim()) ? styles.inputError : null]}
+          />
+          {attempted && !scope.trim() ? (
+            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Describe what you need.</Text>
+          ) : attempted && scopeTooShort ? (
+            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Needs at least {SCOPE_MIN} characters ({scope.trim().length}/{SCOPE_MIN}).</Text>
+          ) : (
+            <Text style={styles.fieldCaption}>A vague detail produces quotations you cannot compare.</Text>
+          )}
+          {!!aiProposal && (
+            <View style={styles.aiProposal}>
+              <Text style={styles.aiProposalTitle}>Replace your text?</Text>
+              <Text style={styles.aiProposalBody} numberOfLines={5}>{aiProposal.text}</Text>
+              <View style={styles.aiProposalActions}>
+                <ActionButton label="Replace" variant="primary" onPress={() => applyAiDraft(aiProposal)} />
+                <ActionButton label="Keep mine" variant="outline" onPress={() => setAiProposal(null)} />
+              </View>
+            </View>
+          )}
+          {undoText !== null && (
+            <View style={styles.aiNoteRow}>
+              <Text style={[styles.fieldCaption, { flex: 1, marginTop: 0 }]}>{aiNote}</Text>
+              <Pressable onPress={undoAiDraft} hitSlop={8} accessibilityRole="button">
+                <Text style={styles.pickedChange}>Undo</Text>
+              </Pressable>
+            </View>
+          )}
+          {!!aiError && <Text style={styles.errorText}>{aiError}</Text>}
+          {!!onDraftDetail && (
+            <View style={styles.aiTip}>
+              <Text style={styles.aiTipText}>
+                {aiNeeds.length > 0
+                  ? `Write with AI works from everything above — fill in ${listOut(aiNeeds)} first.`
+                  : 'Write with AI drafts this from everything above.'}{' '}
+                <Text style={styles.ackBold}>Tip:</Text> treat it as a start. Your own words and small tweaks tell suppliers exactly what you mean.
+              </Text>
+            </View>
+          )}
+        </View>
+      </SectionCard>
+
+      <SectionCard
+        index={6}
         title="Required documents"
         caption="Qualifying documents each respondent should attach to their quotation. Add at least one."
-        example={COMMON_EXAMPLES.documents}
       >
         <View>
           <View style={[styles.pillGroupWrap, { marginTop: 0 }]}>
@@ -1907,29 +1886,6 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
         </View>
       </SectionCard>
 
-      <SectionCard
-        index={5}
-        title="Reference files"
-        optional
-        caption="A floor plan, product photo or sample design. Visible to every business browsing this requirement, not just respondents."
-        example={COMMON_EXAMPLES.files}
-      >
-        <View style={[styles.pillGroupWrap, { marginTop: 0 }]}>
-          {attachments.map((f) => (
-            <View key={f.id} style={styles.fileChip}>
-              <View style={styles.fileGlyph}>
-                <View style={styles.fileGlyphFold} />
-              </View>
-              <Text style={styles.fileChipName} numberOfLines={1}>{f.filename}</Text>
-              {!!f.documentLabel && <Text style={styles.fileChipTag}>{f.documentLabel}</Text>}
-              <Pressable onPress={() => removeFile(f.id)} hitSlop={8}>
-                <XGlyph tone={color.inkFaint} />
-              </Pressable>
-            </View>
-          ))}
-          <AddDashedButton label="Add file" onPress={() => void addFile()} />
-        </View>
-      </SectionCard>
     </View>
   );
 }
@@ -2766,6 +2722,8 @@ const styles = StyleSheet.create({
   aiProposalTitle: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
   aiProposalBody: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
   aiProposalActions: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' },
+  aiTip: { marginTop: space.sm, borderRadius: radius.md, backgroundColor: color.surfaceSunken, paddingHorizontal: space.md, paddingVertical: space.sm },
+  aiTipText: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
   aiNoteRow: { marginTop: space.xs, flexDirection: 'row', alignItems: 'center', gap: space.md },
   selectField: { marginTop: space.xs, minHeight: layout.minTouchTarget, flexDirection: 'row', alignItems: 'center', gap: space.sm, backgroundColor: color.canvas, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, paddingHorizontal: space.md },
   selectFieldHovered: { borderColor: color.borderStrong },

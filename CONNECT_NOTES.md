@@ -76,6 +76,13 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Post a requirement: bagong ayos ng Details step (feedback sa 1B)**
+- **"See example"** sa mga complex na field na lang: "Your own details" (sa More details), Quantity at Indicative budget. Tinanggal na ito sa Item, Title, bawat spec, Required documents at Reference files.
+- **Bagong pagkakasunod ng cards:** What you need → Specifications → **Reference files** → Quantity and budget → **Detail** → Required documents.
+- **Write with AI** (nasa Detail na, pagkatapos ng budget):
+  - Naka-disable ito hanggang mapunan ang item, title, required specs, quantity at budget. Sinasabi nito kung ano pa ang kulang.
+  - May tip na mas maganda pa rin kapag sarili mong salita o may sariling tweaks.
+
 **Post a requirement (1B): mas simpleng Specifications, "See example", Design file**
 - **Wala na ang Size at Color sa general layer.** Puwede pa rin itong idagdag sa "Add your own detail", at may "Did you mean Size?" pa rin. Mananatili ang size ng item mismo (hal. Tarpaulin Size (ft), Corrugated box dimensions) at ang Garment color ng apparel.
 - **"Artwork" → "Design file".** Kapag "Print-ready file provided" ang pinili, lalabas doon mismo ang **"Attach your design file"**. Napupunta ang file sa Reference files, may tag na "Design file", at optional ito.
