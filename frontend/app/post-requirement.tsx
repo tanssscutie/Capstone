@@ -161,8 +161,9 @@ export default function PostRequirementRoute() {
               site_address: input.deliveryAddress || null,
               barangay: input.deliveryBarangay || null,
               zip_code: input.deliveryZip || null,
-              delivery_start: input.deliveryWindowFrom ? new Date(input.deliveryWindowFrom).toISOString() : null,
-              delivery_end: input.deliveryWindowTo ? new Date(input.deliveryWindowTo).toISOString() : null,
+              // The delivery date is agreed after the award, not at posting.
+              delivery_start: null,
+              delivery_end: null,
               required_documents: input.requiredDocuments,
               closes_at: input.closingAt,
               invited_business_ids: invited ? [invited.id] : [],

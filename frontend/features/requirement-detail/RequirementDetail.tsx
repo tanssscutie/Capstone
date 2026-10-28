@@ -733,7 +733,7 @@ function DeliveryWindowBlock({ requirement }: { requirement: Requirement }) {
   return (
     <View style={styles.block}>
       <SectionLabel>Delivery window</SectionLabel>
-      <Text style={styles.bodyText}>{requirement.deliveryWindow}</Text>
+      <Text style={styles.bodyText}>{requirement.deliveryWindow || 'To agree with the awarded supplier'}</Text>
     </View>
   );
 }
@@ -1878,9 +1878,9 @@ function WideInfoBand({
             <View style={styles.factsGridItem}>
               <SectionLabel>Needed by</SectionLabel>
               <Text style={styles.factValue}>
-                {requirement.deliveryWindow}
+                {requirement.deliveryWindow || 'To agree after award'}
                 {'\n'}
-                <Text style={styles.factValueMuted}>Installation window</Text>
+                <Text style={styles.factValueMuted}>{requirement.deliveryWindow ? 'Installation window' : 'Set with the awarded supplier'}</Text>
               </Text>
             </View>
           </View>

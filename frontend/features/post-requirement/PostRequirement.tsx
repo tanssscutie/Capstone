@@ -82,13 +82,14 @@ export interface RequirementDetailsDraft {
 
 export interface RequirementDeliveryDraft {
   city: string;
-  /** Street / building / unit number. */
+  /** Address line 1 — house/unit no., building, street. */
   address: string;
+  /** Address line 2 — subdivision, village, landmark (optional). Sent joined
+   *  to line 1 as site_address ("line 1, line 2"); no separate field. */
+  addressLine2?: string;
   /** PSGC barangay name; optional only so an older clone still loads. */
   barangay?: string;
   zipCode?: string;
-  windowFrom: string; // "YYYY-MM-DD"
-  windowTo: string;   // "YYYY-MM-DD"
 }
 
 export interface RequirementClosingDraft {
@@ -112,8 +113,6 @@ export interface RequirementDraftInput {
   deliveryAddress: string;
   deliveryBarangay: string;
   deliveryZip: string;
-  deliveryWindowFrom: string;
-  deliveryWindowTo: string;
   attachments: Attachment[];
   closingAt: ISODateTime;
 }
@@ -348,13 +347,6 @@ function formatDateTime(iso: ISODateTime): string {
   return `${formatDate(iso)}, ${h}:${mm} ${ampm}`;
 }
 
-function formatWindow(fromDate: string, toDate: string): string {
-  if (!fromDate || !toDate) return 'Not set';
-  const a = new Date(`${fromDate}T00:00:00`);
-  const b = new Date(`${toDate}T00:00:00`);
-  return `${a.getDate()} ${MONTHS[a.getMonth()]} — ${b.getDate()} ${MONTHS[b.getMonth()]} ${b.getFullYear()}`;
-}
-
 function withCommas(n: number): string {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
@@ -426,24 +418,6 @@ function daysFromNowDateString(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Today's date in Philippine time ("YYYY-MM-DD") — the same clock the backend
- *  judges "already past" by (app/core/clock.py), whatever timezone the device is in. */
-function todayPHDateString(): string {
-  return new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
-}
-
-/** Rejects strings that merely look like a date ("2026-02-30") in addition to ones
- *  that don't — `new Date(...)` alone silently rolls invalid days into the next month. */
-function isValidDateString(v: string): boolean {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
-  if (!m) return false;
-  const year = Number(m[1]);
-  const month = Number(m[2]);
-  const day = Number(m[3]);
-  const d = new Date(year, month - 1, day);
-  return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day;
-}
-
 function buildClosingISO(dateStr: string, timeValue: string): ISODateTime {
   if (!dateStr) return '';
   return `${dateStr}T${timeValue}:00+08:00`;
@@ -468,11 +442,9 @@ function buildDraftInput(details: RequirementDetailsDraft, delivery: Requirement
     strictBudget: details.strictBudget ?? false,
     requiredDocuments: details.requiredDocuments,
     deliveryCity: delivery.city,
-    deliveryAddress: delivery.address,
+    deliveryAddress: [delivery.address, delivery.addressLine2 ?? ''].map((l) => l.trim()).filter(Boolean).join(', '),
     deliveryBarangay: delivery.barangay ?? '',
     deliveryZip: delivery.zipCode ?? '',
-    deliveryWindowFrom: delivery.windowFrom,
-    deliveryWindowTo: delivery.windowTo,
     attachments: details.attachments ?? [],
     closingAt: buildClosingISO(closing.closeDate, closing.closeTime),
   };
@@ -2198,7 +2170,9 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
     const saved = initial?.city ?? '';
     return NCR_CITIES.includes(saved) ? saved : '';
   });
+  // A cloned requirement's whole address lands in line 1.
   const [address, setAddress] = useState(initial?.address ?? '');
+  const [addressLine2, setAddressLine2] = useState(initial?.addressLine2 ?? '');
   const { byCity, error: addressDataError } = useNcrAddresses();
   const [barangay, setBarangay] = useState(initial?.barangay ?? '');
   const [barangayQuery, setBarangayQuery] = useState('');
@@ -2245,31 +2219,17 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
     setAutoZip(b.zip);
     setZipCode(b.zip ?? '');
   };
-  const [windowFrom, setWindowFrom] = useState(initial?.windowFrom ?? '');
-  const [windowTo, setWindowTo] = useState(initial?.windowTo ?? '');
   const [attempted, setAttempted] = useState(false);
-
-  // DateField only ever writes a real picked date, so these mainly guard the native
-  // fallback (no picker there yet — see DateField's comment above).
-  const windowFromInvalid = !!windowFrom && !isValidDateString(windowFrom);
-  const windowToInvalid = !!windowTo && !isValidDateString(windowTo);
-  const windowBad =
-    !!windowFrom && !!windowTo && !windowFromInvalid && !windowToInvalid && new Date(windowTo) < new Date(windowFrom);
-  // A delivery can't be planned for a day that's already gone. "YYYY-MM-DD"
-  // strings compare correctly as plain strings, so no Date parsing needed.
-  const today = todayPHDateString();
-  const windowFromPast = !!windowFrom && !windowFromInvalid && windowFrom < today;
-  const windowToPast = !!windowTo && !windowToInvalid && windowTo < today;
-  const windowPast = windowFromPast || windowToPast;
+  // "line 1, line 2" has to fit site_address (200).
+  const addressTooLong = address.trim().length + (addressLine2.trim() ? addressLine2.trim().length + 2 : 0) > SITE_ADDRESS_MAX;
 
   const missing: string[] = [];
-  if (!address.trim()) missing.push('the street, building or unit number');
+  if (!address.trim()) missing.push('address line 1 (house or unit number, building, street)');
   if (!barangayValid) missing.push('a barangay');
-  if (!city) missing.push('a delivery city');
   if (city && !zipValid) missing.push('a 4-digit ZIP code');
-  if (!windowFrom || !windowTo) missing.push('a delivery window');
+  if (!city) missing.push('a delivery city');
 
-  const ready = missing.length === 0 && !windowBad && !windowPast && !windowFromInvalid && !windowToInvalid;
+  const ready = missing.length === 0 && !addressTooLong;
 
   const handleContinue = () => {
     if (!ready) {
@@ -2277,33 +2237,47 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
       scrollToFirstError();
       return;
     }
-    onContinue({ city, address: address.trim(), barangay, zipCode, windowFrom, windowTo });
+    onContinue({ city, address: address.trim(), addressLine2: addressLine2.trim(), barangay, zipCode });
   };
   reportContinue(handleContinue);
 
   return (
     <View style={styles.stepContent}>
-      <ScreenTitle step="DELIVERY" title="Where and when" subtitle="The delivery location and the window respondents should plan around." />
-      {attempted && windowPast && <SummaryBanner message="The delivery window has a date that has already passed — pick today or a later date." />}
-      {attempted && windowBad && <SummaryBanner message="The delivery window ends before it starts — fix the dates below." />}
+      <ScreenTitle step="DELIVERY" title="Delivery location" subtitle="Where suppliers deliver. The delivery date is agreed with the supplier you award." />
       {attempted && missing.length > 0 && <SummaryBanner message={`Still needed before you continue: ${listOut(missing)}.`} />}
 
       <SectionCard index={1} title="Delivery location" caption="TrustLink currently covers Metro Manila.">
         <View>
-          <FieldLabel>Street / Building / Unit Number</FieldLabel>
+          <FieldLabel>Address line 1</FieldLabel>
+          <Text style={styles.fieldCaption}>House or unit no., building, street</Text>
           <FormInput
             value={address}
             onChangeText={setAddress}
             maxLength={SITE_ADDRESS_MAX}
             placeholder="e.g. Unit 4B, Tektite Tower, Exchange Rd."
-            style={[styles.input, attempted && !address.trim() ? styles.inputError : null]}
+            style={[styles.input, attempted && (!address.trim() || addressTooLong) ? styles.inputError : null]}
           />
           {attempted && !address.trim() && (
-            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Add the street, building or unit number.</Text>
+            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Add the house or unit number, building and street.</Text>
+          )}
+        </View>
+        <View>
+          <FieldLabel optional>Address line 2</FieldLabel>
+          <Text style={styles.fieldCaption}>Subdivision, village or landmark</Text>
+          <FormInput
+            value={addressLine2}
+            onChangeText={setAddressLine2}
+            maxLength={SITE_ADDRESS_MAX}
+            placeholder="e.g. Ortigas Center, near Robinsons Galleria"
+            style={[styles.input, addressTooLong ? styles.inputError : null]}
+          />
+          {addressTooLong && (
+            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Lines 1 and 2 together can be up to {SITE_ADDRESS_MAX} characters — shorten one.</Text>
           )}
         </View>
         <View>
           <FieldLabel>Barangay</FieldLabel>
+          <Text style={styles.fieldCaption}>Search it — picking one fills in the ZIP code and city.</Text>
           {barangayValid ? (
             <View style={styles.pickedRow}>
               <Text style={styles.pickedValue}>{barangayLabel(barangay)}</Text>
@@ -2348,16 +2322,6 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
         </View>
 
         <View>
-          <FieldLabel>City</FieldLabel>
-          <View style={styles.pillGroupWrap}>
-            {NCR_CITIES.map((c) => (
-              <Pill key={c} label={c} active={city === c} onPress={() => pickCity(c)} />
-            ))}
-          </View>
-          {attempted && !city && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick the city the delivery goes to.</Text>}
-        </View>
-
-        <View>
           <FieldLabel>ZIP code</FieldLabel>
           <FormInput
             value={zipCode}
@@ -2366,7 +2330,7 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
             keyboardType="number-pad"
             inputMode="numeric"
             editable={!!city}
-            placeholder={city ? 'e.g. 1605' : 'Pick a city first'}
+            placeholder="e.g. 1605"
             style={[styles.input, styles.zipInput, attempted && city && !zipValid ? styles.inputError : null]}
           />
           {!!autoZip && zipCode === autoZip ? (
@@ -2390,48 +2354,21 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
           )}
         </View>
 
+        <View>
+          <FieldLabel>City</FieldLabel>
+          <GridPicker
+            value={city}
+            options={NCR_CITIES.map((c) => ({ value: c, label: c }))}
+            placeholder="Choose a city"
+            searchPlaceholder="Search Metro Manila cities"
+            invalid={attempted && !city}
+            onChange={pickCity}
+          />
+          {attempted && !city && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick the city the delivery goes to.</Text>}
+        </View>
+
       </SectionCard>
 
-      <SectionCard index={2} title="Delivery window" caption="The dates respondents should plan their delivery around.">
-        <View>
-          <View style={[styles.dateRangeRow, { marginTop: 0 }]}>
-            <DateField
-              value={windowFrom}
-              onPick={setWindowFrom}
-              placeholder="Start date"
-              min={today}
-              error={windowFromPast || (attempted && (windowBad || windowFromInvalid))}
-            />
-            <Text style={styles.toLabel}>to</Text>
-            <DateField
-              value={windowTo}
-              onPick={setWindowTo}
-              placeholder="End date"
-              min={windowFrom && !windowFromInvalid && windowFrom > today ? windowFrom : today}
-              error={windowToPast || (attempted && (windowBad || windowToInvalid))}
-            />
-          </View>
-          {!!windowFrom && !!windowTo && !windowBad && !windowPast && !windowFromInvalid && !windowToInvalid && (
-            <Text style={styles.fieldCaption}>{formatWindow(windowFrom, windowTo)}</Text>
-          )}
-          {/* Shown as soon as a past date is picked, not only after Continue —
-              there's no reason to let someone carry on thinking it's fine. */}
-          {windowPast && (
-            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>
-              {windowFromPast && windowToPast
-                ? 'Both dates have already passed.'
-                : windowFromPast
-                  ? 'The start date has already passed.'
-                  : 'The end date has already passed.'}{' '}
-              Pick today ({formatDate(`${today}T00:00:00`)}) or later.
-            </Text>
-          )}
-          {!windowPast && windowBad && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>The end date is before the start date.</Text>}
-          {attempted && !windowBad && (windowFromInvalid || windowToInvalid) && (
-            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick a date using the calendar field.</Text>
-          )}
-        </View>
-      </SectionCard>
 
     </View>
   );
@@ -2687,7 +2624,6 @@ function ReviewScreen({
 
         <SummaryGroup title="Where and when">
           <SummaryLine label="Location" value={locationText} />
-          <SummaryLine label="Delivery window" value={formatWindow(draft.deliveryWindowFrom, draft.deliveryWindowTo)} />
           <SummaryLine label="Attachments" value={attachmentsText} />
         </SummaryGroup>
 

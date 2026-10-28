@@ -76,6 +76,18 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Post a requirement (1E): Delivery step — address lines, city picker, walang delivery window**
+- **Wala nang delivery window sa pag-post.** Laging `null` ang ipinapadalang `delivery_start/end`. Ang petsa ng delivery ay pagkakasunduan pagkatapos ng award (hiwalay na part mamaya).
+  - Sa mga requirement na walang window, "To agree after award" ang "Needed by" (Requirement Detail at Submit Quotation), sa halip na blangko.
+- **Bagong pagkakasunod ng address, may hint ang bawat isa:**
+  1. Address line 1 (house/unit no., building, street; required)
+  2. Address line 2 (subdivision, village, landmark; optional)
+  3. Barangay (search; pagpili, napupunan ang ZIP at City)
+  4. ZIP code
+  5. City (select field na nagbubukas ng 3×3 `GridPicker`, may search)
+- Ang line 1 at line 2 ay pinagsasama bilang `site_address` ("line 1, line 2", hanggang 200), kaya walang bagong field. Sa kinopyang requirement, buong address ang napupunta sa line 1.
+- Bagong title ng step: "Delivery location".
+
 **Requirement Detail: required documents bilang checklist**
 - Hindi na mukhang button ang mga required document. Simpleng listahan na ito na may check mark (walang mapipindot).
 - Kasama na rin ito sa **phone layout**, na wala nito dati.

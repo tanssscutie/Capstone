@@ -478,7 +478,7 @@ function ScopeSidebarCard({
 
       <View style={styles.sidebarFacts}>
         <FactBlock label={requirement.strictBudget ? 'Budget (strict maximum)' : 'Indicative budget'} value={formatBudget(requirement.budgetMin, requirement.budgetMax)} />
-        <FactBlock label="Needed by" value={requirement.deliveryWindow} />
+        <FactBlock label="Needed by" value={requirement.deliveryWindow || 'To agree after award'} />
         <FactBlock label="Location" value={requirement.deliverySite.address} />
       </View>
 
@@ -938,7 +938,9 @@ function TermsSection({ requirement, st }: { requirement: Requirement; st: FormS
             />
             <Text style={styles.leadUnit}>weeks</Text>
           </View>
-          <Text style={styles.fieldNote}>Buyer needs delivery {requirement.deliveryWindow}.</Text>
+          <Text style={styles.fieldNote}>
+            {requirement.deliveryWindow ? `Buyer needs delivery ${requirement.deliveryWindow}.` : 'The delivery date is agreed with the buyer after the award.'}
+          </Text>
         </View>
 
         <View style={styles.termsGridItem}>
