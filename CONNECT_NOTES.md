@@ -76,6 +76,19 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Post a requirement (1C): bundled units at budget na Slide o Type**
+- **Quantity:** pcs ang default.
+  - Kapag sets, boxes, packs, rolls o reams ang unit, may required na "How many pcs in each box?" (sheets kapag reams). Whole number ito na lampas sa 0.
+  - May **"≈ 5,000 pcs total"** sa ilalim.
+  - Naka-save ito bilang spec row (hal. `Pcs per box: 50`, `Sheets per ream: 500`), kaya walang bagong field. Ibinabalik din ito kapag kinopya ang requirement.
+- **Indicative budget:** may pagpipilian na **Slide** (default) o **Type**.
+  - **Slide:** custom na two-thumb slider, walang library (PanResponder, gumagana sa mouse at touch).
+    - Log scale ito mula ₱500 hanggang ₱2M. Nag-i-snap sa ₱100, ₱500, ₱1,000 o ₱5,000 depende sa laki.
+    - Hindi nagtatawiran ang dalawang thumb. Pagpindot sa amount, lilipat sa Type para ma-type ito nang eksakto.
+  - **Type:** ang dating dalawang field. Kapag mas mababa ang maximum kaysa sa starting amount, lumalabas agad ang error habang nagta-type, at hindi makakapag-Continue.
+  - Mas maikli na ang caption ng Strict maximum.
+- Code: `RangeSlider`, `snapBudget` at `PER_UNIT_LABEL` sa `PostRequirement.tsx`.
+
 **Post a requirement: bagong ayos ng Details step (feedback sa 1B)**
 - **"See example"** sa mga complex na field na lang: "Your own details" (sa More details), Quantity at Indicative budget. Tinanggal na ito sa Item, Title, bawat spec, Required documents at Reference files.
 - **Bagong pagkakasunod ng cards:** What you need → Specifications → **Reference files** → Quantity and budget → **Detail** → Required documents.

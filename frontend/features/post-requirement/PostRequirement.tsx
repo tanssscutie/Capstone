@@ -26,7 +26,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
-import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform, PanResponder, useWindowDimensions } from 'react-native';
 import type { TextInputProps, ViewStyle } from 'react-native';
 import ScreenScroll from '../../components/ui/ScreenScroll';
 import type { LayoutChangeEvent } from 'react-native';
@@ -190,6 +190,23 @@ const SPEC_VALUE_MAX = 200;
 const SITE_ADDRESS_MAX = 200;
 /** "Other" items keep their name as a spec row with this label — no new field. */
 const OTHER_ITEM_LABEL = 'Item';
+/** Bundled units ask how many pieces come in one — kept as a spec row with
+ *  this label (e.g. "Pcs per box: 50"), so no new field. */
+const PER_UNIT_LABEL: Record<string, { label: string; piece: string; one: string }> = {
+  sets: { label: 'Pcs per set', piece: 'pcs', one: 'set' },
+  boxes: { label: 'Pcs per box', piece: 'pcs', one: 'box' },
+  packs: { label: 'Pcs per pack', piece: 'pcs', one: 'pack' },
+  rolls: { label: 'Pcs per roll', piece: 'pcs', one: 'roll' },
+  reams: { label: 'Sheets per ream', piece: 'sheets', one: 'ream' },
+};
+const PER_UNIT_DIGITS_MAX = 6;
+
+/** The budget slider's range (log scale) and its default range before the
+ *  buyer moves it. Amounts outside it can still be typed. */
+const BUDGET_FLOOR = 500;
+const BUDGET_CEIL = 2_000_000;
+const BUDGET_DEFAULT: [number, number] = [5_000, 20_000];
+
 /** A GridPicker shows a search box once it has more options than one 3×3 page. */
 const GRID_SEARCH_AFTER = 9;
 /** Barangay matches listed under the search field at once. */
@@ -1202,9 +1219,12 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
     ? (initial?.specifications ?? []).find((s) => s.label.trim() === OTHER_ITEM_LABEL)
     : undefined;
   const [otherItem, setOtherItem] = useState(initialOtherRow?.value ?? '');
+  // A bundled unit's "how many per …" row, on a cloned requirement.
+  const initialPerUnitRow = (initial?.specifications ?? []).find((s) =>
+    Object.values(PER_UNIT_LABEL).some((u) => u.label === s.label.trim()));
   const [specRows, setSpecRows] = useState<SpecRowDraft[]>(
     () => (initial?.specifications ?? [])
-      .filter((s) => s !== initialOtherRow)
+      .filter((s) => s !== initialOtherRow && s !== initialPerUnitRow)
       .map((s, i) => ({ id: `spec-init-${i}`, label: s.label, value: s.value, attributeId: s.attributeId ?? null })),
   );
   // A cloned requirement's specs arrive as plain rows, and the tree may still be
@@ -1222,9 +1242,15 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   // Unit is a general spec, so any item's list works before one is picked.
   const unitOptions = (findItem(tree, category, itemCode) ?? tree[0]?.items[0])?.specs.find((s) => s.id === 'unit')?.options ?? [];
   const quantity = qtyNumber.trim() ? `${qtyNumber.trim()} ${qtyUnit}`.trim() : '';
+  const [perUnit, setPerUnit] = useState(() => sanitizeWholeNumber(initialPerUnitRow?.value ?? ''));
+  const bundle = PER_UNIT_LABEL[qtyUnit];
+  const perUnitBad = !!bundle && (!perUnit || Number(perUnit) <= 0);
+  const totalPieces = bundle && !perUnitBad && Number(qtyNumber) > 0 ? Number(qtyNumber) * Number(perUnit) : null;
   const [budgetMinText, setBudgetMinText] = useState(initial?.budgetMin != null ? String(initial.budgetMin) : '');
   const [budgetMaxText, setBudgetMaxText] = useState(initial?.budgetMax != null ? String(initial.budgetMax) : '');
   const [strictBudget, setStrictBudget] = useState(initial?.strictBudget ?? false);
+  // Slide (default) or type the budget — the amounts are the same state either way.
+  const [budgetMode, setBudgetMode] = useState<'slide' | 'type'>('slide');
   const [requiredDocuments, setRequiredDocuments] = useState<string[]>(initial?.requiredDocuments ?? []);
   const [docInput, setDocInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>(initial?.attachments ?? []);
@@ -1396,6 +1422,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   ));
   const outputSpecs: SpecRow[] = [
     ...(isOther && !otherItemBad ? [{ label: OTHER_ITEM_LABEL, value: otherItem.trim(), attributeId: null }] : []),
+    ...(bundle && !perUnitBad ? [{ label: bundle.label, value: perUnit, attributeId: null }] : []),
     ...validSpecRows.map((r) => ({ label: r.label.trim(), value: r.value.trim(), attributeId: r.attributeId ?? null })),
   ];
   const itemDisplayName = isOther ? otherItem.trim() : findItem(tree, category, itemCode)?.name ?? '';
@@ -1468,6 +1495,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   if (!qtyNumber.trim()) missing.push('quantity');
   else if (quantityBad) missing.push('a quantity more than 0');
   else if (!qtyUnit) missing.push('a unit for the quantity');
+  else if (perUnitBad) missing.push(`how many ${bundle!.piece} come in each ${bundle!.one}`);
   if (budgetMinMissing || budgetMaxMissing) missing.push('an indicative budget (from and to)');
   if (requiredDocuments.length === 0) missing.push('at least one required document');
 
@@ -1695,60 +1723,138 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
       </SectionCard>
 
       <SectionCard index={4} title="Quantity and budget">
-        <View style={styles.twoColRow}>
-          <View style={styles.twoCol}>
+        <View style={{ gap: space.xl }}>
+          <View>
             <FieldHeader label="Quantity" example={COMMON_EXAMPLES.quantity} />
-            <FormInput
-              value={qtyNumber}
-              onChangeText={(v) => setQtyNumber(sanitizeWholeNumber(v))}
-              maxLength={QUANTITY_DIGITS_MAX}
-              keyboardType="number-pad"
-              inputMode="numeric"
-              placeholder={detailsExample.quantity}
-              style={[styles.input, attempted && (!qtyNumber.trim() || quantityBad) ? styles.inputError : null]}
-            />
-            <View style={[styles.pillGroupWrap, { marginTop: space.sm }]}>
-              {unitOptions.map((u) => (
-                <Pill key={u} label={u} active={qtyUnit === u} onPress={() => setQtyUnit(u)} />
-              ))}
+            <View style={styles.qtyRow}>
+              <FormInput
+                value={qtyNumber}
+                onChangeText={(v) => setQtyNumber(sanitizeWholeNumber(v))}
+                maxLength={QUANTITY_DIGITS_MAX}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                placeholder={detailsExample.quantity}
+                style={[styles.input, styles.qtyInput, attempted && (!qtyNumber.trim() || quantityBad) ? styles.inputError : null]}
+              />
+              <View style={[styles.pillGroupWrap, { flex: 1, minWidth: 220 }]}>
+                {unitOptions.map((u) => (
+                  <Pill key={u} label={u} active={qtyUnit === u} onPress={() => setQtyUnit(u)} />
+                ))}
+              </View>
             </View>
             {attempted && !qtyNumber.trim() && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Add the quantity you need.</Text>}
             {attempted && quantityBad && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Quantity must be more than 0.</Text>}
             {attempted && !!qtyNumber.trim() && !quantityBad && !unitOptions.includes(qtyUnit) && (
               <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick a unit for the quantity.</Text>
             )}
+            {!!bundle && (
+              <View style={styles.perUnitBox}>
+                <FieldLabel>{`How many ${bundle.piece} in each ${bundle.one}?`}</FieldLabel>
+                <View style={styles.qtyRow}>
+                  <FormInput
+                    value={perUnit}
+                    onChangeText={(v) => setPerUnit(sanitizeWholeNumber(v))}
+                    maxLength={PER_UNIT_DIGITS_MAX}
+                    keyboardType="number-pad"
+                    inputMode="numeric"
+                    placeholder={qtyUnit === 'reams' ? 'e.g. 500' : 'e.g. 50'}
+                    style={[styles.input, styles.qtyInput, attempted && perUnitBad ? styles.inputError : null]}
+                  />
+                  <Text style={styles.unitSuffix}>{bundle.label.toLowerCase()}</Text>
+                </View>
+                {totalPieces !== null ? (
+                  <Text style={styles.totalNote}>≈ {withCommas(totalPieces)} {bundle.piece} total</Text>
+                ) : attempted && perUnitBad ? (
+                  <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Add how many {bundle.piece} are in each {bundle.one} — a whole number above 0.</Text>
+                ) : (
+                  <Text style={styles.fieldCaption}>So suppliers price the same total, whatever their box size.</Text>
+                )}
+              </View>
+            )}
           </View>
-          <View style={styles.twoCol}>
-            <FieldHeader label="Indicative budget" example={COMMON_EXAMPLES.budget} />
-            <View style={styles.budgetRow}>
-              <BudgetField
-                value={budgetMinText}
-                onChange={setBudgetMinText}
-                placeholder="From"
-                invalid={attempted && (budgetReversed || budgetMinMissing || (budgetMin !== null && budgetMin <= 0))}
-              />
-              <Text style={styles.budgetSep}>—</Text>
-              <BudgetField
-                value={budgetMaxText}
-                onChange={setBudgetMaxText}
-                placeholder="To"
-                invalid={attempted && (budgetReversed || budgetMaxMissing || (budgetMax !== null && budgetMax <= 0))}
-              />
-            </View>
+
+          <View>
+            <FieldHeader
+              label="Indicative budget"
+              example={COMMON_EXAMPLES.budget}
+              action={
+                <View style={styles.modeSwitch} accessibilityRole="radiogroup">
+                  {(['slide', 'type'] as const).map((m) => (
+                    <Pressable
+                      key={m}
+                      onPress={() => setBudgetMode(m)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: budgetMode === m }}
+                      style={[styles.modeOption, budgetMode === m && styles.modeOptionOn]}
+                    >
+                      <Text style={[styles.modeLabel, budgetMode === m && styles.modeLabelOn]}>{m === 'slide' ? 'Slide' : 'Type'}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              }
+            />
+            {budgetMode === 'slide' ? (
+              <View>
+                <View style={styles.budgetReadout}>
+                  {(['min', 'max'] as const).map((end, i) => (
+                    <View key={end} style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                      {i === 1 && <Text style={styles.budgetSep}>—</Text>}
+                      <Pressable onPress={() => setBudgetMode('type')} accessibilityRole="button" accessibilityLabel={`Type the ${end === 'min' ? 'starting' : 'maximum'} amount`} style={styles.amountChip}>
+                        <Text style={[styles.amountChipText, (end === 'min' ? budgetMin : budgetMax) === null && styles.amountChipEmpty]}>
+                          {formatPHP((end === 'min' ? budgetMin : budgetMax) ?? BUDGET_DEFAULT[i])}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+                <RangeSlider
+                  low={budgetMin ?? BUDGET_DEFAULT[0]}
+                  high={budgetMax ?? BUDGET_DEFAULT[1]}
+                  onChange={(lo, hi) => {
+                    setBudgetMinText(String(lo));
+                    setBudgetMaxText(String(hi));
+                  }}
+                />
+                <Text style={styles.fieldCaption}>
+                  {budgetMin === null || budgetMax === null
+                    ? 'Drag both ends to your range. Tap an amount to type it exactly.'
+                    : 'Tap an amount to type it exactly.'}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.budgetRow}>
+                <BudgetField
+                  value={budgetMinText}
+                  onChange={setBudgetMinText}
+                  placeholder="From"
+                  invalid={attempted && (budgetReversed || budgetMinMissing || (budgetMin !== null && budgetMin <= 0))}
+                />
+                <Text style={styles.budgetSep}>—</Text>
+                <BudgetField
+                  value={budgetMaxText}
+                  onChange={setBudgetMaxText}
+                  placeholder="To"
+                  invalid={budgetReversed || (attempted && (budgetMaxMissing || (budgetMax !== null && budgetMax <= 0)))}
+                />
+              </View>
+            )}
             {attempted && (budgetMinMissing || budgetMaxMissing) ? (
               <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>
-                {budgetMinMissing && budgetMaxMissing
-                  ? 'Add a budget range — both from and to.'
-                  : budgetMinMissing
-                    ? 'Add the starting amount (from).'
-                    : 'Add the maximum amount (to).'}
+                {budgetMode === 'slide'
+                  ? 'Set your budget range — drag the slider or tap an amount.'
+                  : budgetMinMissing && budgetMaxMissing
+                    ? 'Add a budget range — both from and to.'
+                    : budgetMinMissing
+                      ? 'Add the starting amount (from).'
+                      : 'Add the maximum amount (to).'}
               </Text>
             ) : attempted && budgetZero ? (
               <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Amounts must be more than ₱0.</Text>
-            ) : attempted && budgetReversed ? (
-              <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>That reads as a smaller maximum than minimum.</Text>
+            ) : budgetReversed ? (
+              // Shown as you type, not only on Continue.
+              <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>The maximum can't be lower than the starting amount.</Text>
             ) : (
-              <Text style={styles.fieldCaption}>Shown to respondents so their quotations land in a realistic range.</Text>
+              budgetMode === 'type' && <Text style={styles.fieldCaption}>Shown to respondents so their quotations land in a realistic range.</Text>
             )}
             <Pressable
               onPress={() => setStrictBudget((v) => !v)}
@@ -1760,11 +1866,11 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
                 {strictBudget && <Text style={styles.strictCheck}>✓</Text>}
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.strictLabel}>Strict maximum — don't accept quotations above it</Text>
+                <Text style={styles.strictLabel}>Strict maximum</Text>
                 <Text style={styles.fieldCaption}>
                   {strictBudget
-                    ? 'Suppliers see "Strict maximum" and can\'t seal a higher price. Some may not quote at all.'
-                    : 'Off: suppliers may quote above it, but must tell you why. You see the reason when quotations open.'}
+                    ? 'No quotation can go above it.'
+                    : 'Off: suppliers may go above it if they say why.'}
                 </Text>
               </View>
             </Pressable>
@@ -1886,6 +1992,110 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
         </View>
       </SectionCard>
 
+    </View>
+  );
+}
+
+/** Rounds to a step that reads naturally at that size: ₱100 under ₱2,000,
+ *  ₱500 under ₱10,000, ₱1,000 under ₱100,000, ₱5,000 above. */
+function snapBudget(v: number): number {
+  const step = v < 2_000 ? 100 : v < 10_000 ? 500 : v < 100_000 ? 1_000 : 5_000;
+  return Math.min(BUDGET_CEIL, Math.max(BUDGET_FLOOR, Math.round(v / step) * step));
+}
+const BUDGET_SPAN = Math.log(BUDGET_CEIL / BUDGET_FLOOR);
+function budgetToT(v: number): number {
+  return Math.min(1, Math.max(0, Math.log(Math.max(v, BUDGET_FLOOR) / BUDGET_FLOOR) / BUDGET_SPAN));
+}
+function budgetFromT(t: number): number {
+  return snapBudget(BUDGET_FLOOR * Math.exp(Math.min(1, Math.max(0, t)) * BUDGET_SPAN));
+}
+function shortPHP(v: number): string {
+  if (v >= 1_000_000) return `₱${(v / 1_000_000).toFixed(v % 1_000_000 ? 1 : 0)}M`;
+  if (v >= 1_000) return `₱${Math.round(v / 1_000)}k`;
+  return `₱${v}`;
+}
+
+const THUMB = 24;
+
+/** Two-thumb range slider on a log scale (₱500 – ₱2M), no library: one
+ *  PanResponder per thumb, positions from the track's measured width. The
+ *  thumbs can't cross — the low one stops at the high one and vice versa. */
+function RangeSlider({
+  low,
+  high,
+  onChange,
+}: {
+  low: number;
+  high: number;
+  onChange: (low: number, high: number) => void;
+}) {
+  const [width, setWidth] = useState(0);
+  const latest = useRef({ low, high, width, onChange });
+  latest.current = { low, high, width, onChange };
+  const startT = useRef(0);
+
+  const makeResponder = (which: 'low' | 'high') =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        startT.current = budgetToT(which === 'low' ? latest.current.low : latest.current.high);
+      },
+      onPanResponderMove: (_e, g) => {
+        const { width: w, low: lo, high: hi, onChange: change } = latest.current;
+        if (!w) return;
+        const v = budgetFromT(startT.current + g.dx / w);
+        if (which === 'low') change(Math.min(v, hi), hi);
+        else change(lo, Math.max(v, lo));
+      },
+    });
+  const lowResponder = useRef(makeResponder('low')).current;
+  const highResponder = useRef(makeResponder('high')).current;
+
+  const step = (which: 'low' | 'high', dir: 1 | -1) => {
+    const t = budgetToT(which === 'low' ? low : high) + dir * 0.02;
+    const v = budgetFromT(t);
+    if (which === 'low') onChange(Math.min(v, high), high);
+    else onChange(low, Math.max(v, low));
+  };
+
+  const lowX = budgetToT(low) * width;
+  const highX = budgetToT(high) * width;
+  const thumb = (which: 'low' | 'high', x: number, handlers: object) => (
+    <View
+      {...handlers}
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel={which === 'low' ? 'Budget from' : 'Budget to'}
+      accessibilityValue={{ text: formatPHP(which === 'low' ? low : high) }}
+      accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+      onAccessibilityAction={(e) => step(which, e.nativeEvent.actionName === 'increment' ? 1 : -1)}
+      style={[styles.sliderThumb, { left: x - THUMB / 2 }, Platform.OS === 'web' ? ({ cursor: 'grab', touchAction: 'none' } as unknown as ViewStyle) : null]}
+    />
+  );
+  return (
+    <View style={[styles.sliderWrap, Platform.OS === 'web' ? ({ userSelect: 'none' } as unknown as ViewStyle) : null]}>
+      <View style={styles.sliderTrackArea} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}>
+        <View style={styles.sliderTrack} />
+        {width > 0 && (
+          <>
+            <View style={[styles.sliderFill, { left: lowX, width: Math.max(0, highX - lowX) }]} />
+            {thumb('low', lowX, lowResponder.panHandlers)}
+            {thumb('high', highX, highResponder.panHandlers)}
+          </>
+        )}
+      </View>
+      <View style={styles.sliderScale}>
+        {width > 0 && [BUDGET_FLOOR, 10_000, 100_000, BUDGET_CEIL].map((v) => {
+          const t = budgetToT(v);
+          // The two ends hug the track's edges; the middle ticks centre on their spot.
+          const edge = t === 0 ? { left: 0 } : t === 1 ? { right: 0 } : { left: t * width - 20, width: 40 };
+          return (
+            <Text key={v} style={[styles.sliderScaleLabel, edge]}>{shortPHP(v)}</Text>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -2722,6 +2932,26 @@ const styles = StyleSheet.create({
   aiProposalTitle: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
   aiProposalBody: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
   aiProposalActions: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' },
+  qtyRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.md },
+  qtyInput: { width: 160 },
+  perUnitBox: { marginTop: space.md, borderLeftWidth: 2, borderLeftColor: color.primaryBorder, paddingLeft: space.md },
+  totalNote: { marginTop: space.xs, fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
+  modeSwitch: { flexDirection: 'row', borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, padding: 2, backgroundColor: color.surfaceSunken },
+  modeOption: { paddingHorizontal: space.md, paddingVertical: space.xs, borderRadius: radius.pill },
+  modeOptionOn: { backgroundColor: color.surface, ...elevation.card },
+  modeLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
+  modeLabelOn: { color: color.ink },
+  budgetReadout: { marginTop: space.sm, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.sm },
+  amountChip: { borderWidth: 1, borderColor: color.border, borderRadius: radius.md, backgroundColor: color.canvas, paddingHorizontal: space.md, paddingVertical: space.sm },
+  amountChipText: { fontFamily: font.monoMedium, fontSize: fontSize.lg, color: color.ink },
+  amountChipEmpty: { color: color.inkFaint },
+  sliderWrap: { marginTop: space.md, paddingHorizontal: THUMB / 2 },
+  sliderTrackArea: { height: THUMB + 12, justifyContent: 'center' },
+  sliderTrack: { height: 6, borderRadius: radius.pill, backgroundColor: color.surfaceSunken, borderWidth: 1, borderColor: color.border },
+  sliderFill: { position: 'absolute', height: 6, borderRadius: radius.pill, backgroundColor: color.primary },
+  sliderThumb: { position: 'absolute', width: THUMB, height: THUMB, borderRadius: THUMB / 2, backgroundColor: color.surface, borderWidth: 2, borderColor: color.primary },
+  sliderScale: { height: 16, marginTop: space.xs },
+  sliderScaleLabel: { position: 'absolute', textAlign: 'center', fontFamily: font.mono, fontSize: fontSize.micro, color: color.inkFaint },
   aiTip: { marginTop: space.sm, borderRadius: radius.md, backgroundColor: color.surfaceSunken, paddingHorizontal: space.md, paddingVertical: space.sm },
   aiTipText: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
   aiNoteRow: { marginTop: space.xs, flexDirection: 'row', alignItems: 'center', gap: space.md },
