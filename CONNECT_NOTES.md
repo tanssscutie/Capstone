@@ -76,6 +76,25 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Specifications: required na ang mga kailangan talaga**
+- Ginawang required ang mga spec na nakakaapekto sa presyo o sa mismong produkto, para hindi na "optional" ang mga ito sa Post a requirement:
+  - **Lahat ng item:** Artwork (may design na o kailangan pa ng layout) sa Printing at Packaging, at Food-grade sa Packaging.
+  - **Bawat item:**
+    - Lamination: business cards, stickers, posters
+    - Finish: tarpaulin, product labels, folding cartons
+    - Eyelets: tarpaulin
+    - Cut: stickers
+    - Finishing at Envelope: invitations
+    - Illuminated: signage
+    - Print locations at Garment color: apparel
+    - Window: folding cartons
+    - Printing: paper bags, poly bags, shrink sleeves
+    - Closure: poly bags
+    - Attachment: hang tags
+- **Optional pa rin** ang mga teknikal na baka hindi alam ng buyer: paper weight (gsm), cover/inside paper, thickness (microns), fill capacity. Ganoon din ang general na Size, Color, Preferred brand at Remarks. May "None" o "No" na pagpipilian ang karamihan ng required, kaya madali pa ring sagutan.
+- Sa bagong post at edit lang ito tumatama. Hindi apektado ang mga dating requirement.
+- Code: `backend/app/core/categories.py` (`required=True`). Mula sa `GET /meta/categories` kinukuha ng frontend, kaya automatic na nawawala ang "— optional". Na-update ang tests: `test_category_items`, `test_match_alerts`, `test_delivery_address`.
+
 **Withdrawn quotations na hindi pinalitan (supplier)**
 - Bago mag-withdraw, may confirmation na **"Withdraw this quotation?"**, na nagsasabi kung ano ang mangyayari kapag **hindi** nag-resubmit bago magsara. Halimbawa: *"If you don't resubmit before closing, this is your 2nd withdrawal in 90 days — You'll receive a formal warning."* May "Keep my quotation" at "Withdraw anyway". Nasa My Quotations, sa sealed receipt, at sa Requirement Detail.
 - **Hindi kailanman binibilang ang withdraw na sinundan ng resubmit**, dahil ganito itinatama ang mali sa sealed quotation. Ang binibilang lang: withdraw na **walang ipinalit pagsara** ng requirement (na-release man o na-archive). Hindi pa ito binibilang habang naka-extend pa ang requirement.

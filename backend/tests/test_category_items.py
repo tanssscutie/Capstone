@@ -119,12 +119,19 @@ class CategoryItemTests(unittest.TestCase):
         self.app.dependency_overrides[require_buyer] = lambda: self.buyer
         payload = dict(
             category="Printing", item_code="tarpaulin", title="Event tarpaulins", scope="Tarpaulins for a store opening.",
-            specifications=[{"label": "Size (ft)", "value": "3 x 6"}, {"label": "Finish", "value": "Matte"}],
+            specifications=[{"label": "Size (ft)", "value": "3 x 6"}, {"label": "Finish", "value": "Matte"},
+                            {"label": "Eyelets", "value": "Corners only"},
+                            {"label": "Artwork", "value": "Print-ready file provided"}],
             quantity="10 pcs", price_min=1000, price_max=2000, city="Pasig", site_address="Unit 4B, Ortigas Ave.",
             required_documents=["BIR 2303"], closes_at=(datetime.now() + timedelta(days=7)).isoformat(),
         )
         payload.update(overrides)
         return self.client.post("/requirements", json=payload)
+
+    # Tarpaulin's required rows besides Size: Artwork (category), Finish, Eyelets.
+    TARP_REST = [{"attribute_id": "artwork", "label": "Artwork", "value": "Print-ready file provided"},
+                 {"attribute_id": "finish", "label": "Finish", "value": "Matte"},
+                 {"attribute_id": "eyelets", "label": "Eyelets", "value": "Corners only"}]
 
     def test_requirement_with_template_item_is_accepted(self):
         response = self.post_requirement()
@@ -145,7 +152,9 @@ class CategoryItemTests(unittest.TestCase):
         self.assertEqual(self.post_requirement(specifications=specs).status_code, 422)
 
     def test_requirement_other_item_accepts_free_form_specs(self):
-        response = self.post_requirement(item_code="other", specifications=[{"label": "Anything", "value": "Goes"}])
+        response = self.post_requirement(item_code="other",
+                                         specifications=[{"label": "Anything", "value": "Goes"},
+                                                         {"label": "Artwork", "value": "Needs layout / design"}])
         self.assertEqual(response.status_code, 201, response.text)
 
     def test_existing_requirement_with_null_item_still_loads(self):
@@ -159,7 +168,7 @@ class CategoryItemTests(unittest.TestCase):
 
     def flyer_specs(self, **values):
         specs = {"size": ("Size", "A4"), "fold": ("Fold", "Tri-fold"), "paper_type": ("Paper", "Glossy"),
-                 "printed_sides": ("Printed sides", "2 sides")}
+                 "printed_sides": ("Printed sides", "2 sides"), "artwork": ("Artwork", "Print-ready file provided")}
         specs.update(values)
         return [{"attribute_id": k, "label": label, "value": v} for k, (label, v) in specs.items()]
 
@@ -189,7 +198,7 @@ class CategoryItemTests(unittest.TestCase):
     def test_preferred_brand_is_optional_stored_by_id_and_kept_out_of_matching(self):
         self.assertEqual(self.post_requirement().status_code, 201)  # no brand at all
         specs = [{"attribute_id": "size", "label": "Size (ft)", "value": "3 x 6"},
-                 {"attribute_id": "preferred_brand", "label": "Preferred brand", "value": "Epson"}]
+                 {"attribute_id": "preferred_brand", "label": "Preferred brand", "value": "Epson"}] + self.TARP_REST
         response = self.post_requirement(specifications=specs)
         self.assertEqual(response.status_code, 201, response.text)
         rows = response.json()["specifications"]
@@ -200,17 +209,19 @@ class CategoryItemTests(unittest.TestCase):
 
     def test_template_rows_keep_attribute_id_and_normalized_units(self):
         specs = [{"attribute_id": "size", "label": "Size (ft)", "value": "3 x 6"},
-                 {"label": "Haba ng tali", "value": "2 m"}]
+                 {"label": "Haba ng tali", "value": "2 m"}] + self.TARP_REST
         response = self.post_requirement(specifications=specs)
         self.assertEqual(response.status_code, 201, response.text)
-        size, custom = response.json()["specifications"]
+        rows = response.json()["specifications"]
+        size = next(r for r in rows if r["attribute_id"] == "size")
+        custom = next(r for r in rows if r["label"] == "Haba ng tali")
         self.assertEqual((size["attribute_id"], size["value"]), ("size", "3 x 6"))
         self.assertEqual((size["normalized_value"], size["normalized_unit"]), ("91.44 x 182.88", "cm"))
         self.assertEqual((custom["attribute_id"], custom["normalized_value"], custom["normalized_unit"]), (None, "200", "cm"))
 
     def test_unknown_attribute_id_is_rejected(self):
         specs = [{"attribute_id": "size", "label": "Size (ft)", "value": "3 x 6"},
-                 {"attribute_id": "not_a_thing", "label": "X", "value": "Y"}]
+                 {"attribute_id": "not_a_thing", "label": "X", "value": "Y"}] + self.TARP_REST
         self.assertEqual(self.post_requirement(specifications=specs).status_code, 422)
 
     # ---------- meta ----------

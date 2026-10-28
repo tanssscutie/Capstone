@@ -141,13 +141,13 @@ GENERAL_SPECS: list[dict] = [
 CATEGORY_TREE: list[dict] = [
     {
         "name": "Printing",
-        "specs": [_use("artwork")],
+        "specs": [_use("artwork", required=True)],
         "items": [
             {"code": "business_cards", "name": "Business cards", "specs": [
                 _use("size", required=True, type="select", options=["2 x 3.5 in (standard)", "2.5 x 2.5 in (square)", "Custom"]),
                 _use("paper_type", required=True, options=["Matte", "Glossy", "Textured / Linen"]),
                 _use("printed_sides", required=True),
-                _use("lamination"),
+                _use("lamination", required=True),
             ]},
             {"code": "flyers_brochures", "name": "Flyers / Brochures", "specs": [
                 _use("size", required=True, type="select", options=["A4", "A5", "Letter", "Legal", "Custom"]),
@@ -158,19 +158,19 @@ CATEGORY_TREE: list[dict] = [
             ]},
             {"code": "tarpaulin", "name": "Tarpaulin", "specs": [
                 _use("size", required=True, unit="ft"),
-                _use("finish"),
-                _use("eyelets"),
+                _use("finish", required=True),
+                _use("eyelets", required=True),
             ]},
             {"code": "stickers_decals", "name": "Stickers / Decals", "specs": [
                 _use("size", required=True, unit="in"),
                 _use("material", required=True, options=["Vinyl", "Paper", "Clear / Transparent"]),
-                _use("cut"),
-                _use("lamination"),
+                _use("cut", required=True),
+                _use("lamination", required=True),
             ]},
             {"code": "posters", "name": "Posters", "specs": [
                 _use("size", required=True, type="select", options=["A3", "A2", "A1", "18 x 24 in", "24 x 36 in", "Custom"]),
                 _use("paper_type", required=True, options=["Matte", "Glossy", "Photo paper"]),
-                _use("lamination"),
+                _use("lamination", required=True),
             ]},
             {"code": "booklets_catalogs", "name": "Booklets / Catalogs", "specs": [
                 _use("size", required=True, type="select", options=["A4", "A5", "Letter", "Custom"]),
@@ -182,33 +182,33 @@ CATEGORY_TREE: list[dict] = [
             {"code": "invitations_certificates", "name": "Invitations / Certificates", "specs": [
                 _use("size", required=True, type="select", options=["A4", "5 x 7 in", "4 x 6 in", "Custom"]),
                 _use("paper_type", required=True, options=["Cardstock", "Specialty / Textured", "Glossy"]),
-                _use("finishing"),
-                _use("envelope"),
+                _use("finishing", required=True),
+                _use("envelope", required=True),
             ]},
             {"code": "signage", "name": "Signage", "specs": [
                 _use("signage_type", required=True),
                 _use("size", required=True, unit="ft"),
                 _use("installation", required=True),
-                _use("illuminated"),
+                _use("illuminated", required=True),
             ]},
             {"code": "shirt_apparel_printing", "name": "Shirt / Apparel printing", "specs": [
                 _use("garment", required=True),
                 _use("print_method", required=True),
                 _use("sizes_breakdown", required=True),
-                _use("print_locations"),
-                _use("color", label="Garment color"),
+                _use("print_locations", required=True),
+                _use("color", required=True, label="Garment color"),
             ]},
         ],
     },
     {
         "name": "Packaging & Labeling",
-        "specs": [_use("artwork"), _use("food_grade")],
+        "specs": [_use("artwork", required=True), _use("food_grade", required=True)],
         "items": [
             {"code": "product_labels", "name": "Product labels", "specs": [
                 _use("size", required=True, unit="in"),
                 _use("material", required=True, options=["Paper", "Vinyl", "Clear / Transparent", "Waterproof synthetic"]),
                 _use("label_format", required=True),
-                _use("finish", options=["None", "Matte", "Glossy"]),
+                _use("finish", required=True, options=["None", "Matte", "Glossy"]),
             ]},
             {"code": "corrugated_boxes", "name": "Corrugated boxes", "specs": [
                 _use("size", required=True, label="Inside dimensions (L x W x H)", unit="cm"),
@@ -219,8 +219,8 @@ CATEGORY_TREE: list[dict] = [
                 _use("size", required=True, label="Dimensions (L x W x H)", unit="cm"),
                 _use("board", required=True),
                 _use("printing", required=True),
-                _use("finish", options=["None", "Matte lamination", "Glossy lamination", "Spot UV"]),
-                _use("window"),
+                _use("finish", required=True, options=["None", "Matte lamination", "Glossy lamination", "Spot UV"]),
+                _use("window", required=True),
             ]},
             {"code": "stand_up_pouches", "name": "Stand-up pouches", "specs": [
                 _use("size", required=True, label="Size (W x H)", unit="cm"),
@@ -232,26 +232,26 @@ CATEGORY_TREE: list[dict] = [
                 _use("size", required=True, label="Size (W x H x gusset)", unit="in"),
                 _use("paper_type", required=True, options=["Kraft brown", "Kraft white", "Art paper / Laminated"]),
                 _use("handle", required=True),
-                _use("printing"),
+                _use("printing", required=True),
             ]},
             {"code": "plastic_poly_bags", "name": "Plastic / Poly bags", "specs": [
                 _use("size", required=True, label="Size (W x H)", unit="in"),
                 _use("material", required=True, options=["LDPE", "HDPE", "PP", "Biodegradable"]),
                 _use("thickness"),
-                _use("closure"),
-                _use("printing"),
+                _use("closure", required=True),
+                _use("printing", required=True),
             ]},
             {"code": "hang_tags", "name": "Hang tags", "specs": [
                 _use("size", required=True, unit="in"),
                 _use("paper_type", required=True, options=["Cardstock", "Kraft", "Textured"]),
                 _use("printed_sides", required=True),
-                _use("attachment"),
+                _use("attachment", required=True),
             ]},
             {"code": "shrink_sleeves", "name": "Shrink sleeves", "specs": [
                 _use("container", required=True),
                 _use("size", required=True, label="Sleeve size (W x H)", unit="mm"),
                 _use("material", required=True, options=["PVC", "PETG", "OPS"]),
-                _use("printing"),
+                _use("printing", required=True),
             ]},
         ],
     },
