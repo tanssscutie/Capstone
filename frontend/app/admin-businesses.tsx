@@ -27,6 +27,7 @@ import type { PillTone } from '../components/ui/AdminKit';
 import { listAllBusinesses, reviewBusiness, liftRestriction } from '../lib/api/admin';
 import type { AdminBusinessOut } from '../lib/api/admin';
 import { errorMessage } from '../lib/api/client';
+import { BusinessLink, BusinessNameLink } from '../components/ui/BusinessLink';
 
 const STATUS_LABELS: Record<string, string> = {
   unverified: 'Unverified',
@@ -170,9 +171,11 @@ export default function AdminBusinessesRoute() {
               return (
                 <AdminCard key={b.user_id} highlight={reviewing}>
                   <View style={styles.cardHeader}>
-                    <AvatarChip label={initials(name)} size={44} dark={!b.is_verified} />
+                    <BusinessLink businessId={b.user_id} name={name}>
+                      <AvatarChip label={initials(name)} size={44} dark={!b.is_verified} />
+                    </BusinessLink>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.name} numberOfLines={1}>{name}</Text>
+                      <BusinessNameLink businessId={b.user_id} name={name} style={styles.name} numberOfLines={1} />
                       {!!sub && <Text style={styles.sub} numberOfLines={1}>{sub}</Text>}
                     </View>
                     <View style={styles.pillRow}>

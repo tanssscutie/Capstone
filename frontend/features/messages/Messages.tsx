@@ -10,6 +10,7 @@ import { ReportLink } from '../../components/ui/ReportBusinessModal';
 import { ConversationPane, ThreadRow, TrustlinkMark } from '../home-feed/HomeFeed';
 import type { FulfillmentOut } from '../../lib/api/requirements';
 import type { BusinessId, Message, MessageThread } from '../../lib/types';
+import { BusinessNameLink } from '../../components/ui/BusinessLink';
 
 export interface MessagesProps {
   viewerId: BusinessId;
@@ -97,7 +98,7 @@ export default function Messages({
                       </Pressable>
                     )}
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.headName} numberOfLines={1}>{selected.counterpartyName}</Text>
+                      <BusinessNameLink businessId={selected.counterpartyId} name={selected.counterpartyName} style={styles.headName} numberOfLines={1} />
                       {onOpenRequirement ? (
                         <Pressable onPress={() => onOpenRequirement(selected.requirementId)} hitSlop={4}>
                           <Text style={styles.headRef}>{selected.requirementRef} · View requirement</Text>

@@ -43,6 +43,7 @@ import { ReportLink } from '../../components/ui/ReportBusinessModal';
 import { OrderStatusPanel, isChatClosed } from '../../components/ui/OrderStatusPanel';
 import { CaptionOrHint, InfoHint } from '../../components/ui/InfoHint';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
+import { BusinessLink, BusinessNameLink } from '../../components/ui/BusinessLink';
 
 /* ─── Props ─────────────────────────────────────────── */
 
@@ -631,7 +632,7 @@ function CredibilityBlockView({ label, business }: { label: string; business: Bu
   return (
     <View style={styles.block}>
       <SectionLabel>{label}</SectionLabel>
-      <Text style={styles.bodyTextSemi}>{name}</Text>
+      <BusinessNameLink businessId={business.id} name={name} style={styles.bodyTextSemi} />
       <View style={{ gap: space.xs, marginTop: space.xs }}>
         <LabelValueRow label="Status" value={businessStatusLabel(c.status)} />
         <LabelValueRow label="Tier" value={tierLabel(c.tier)} />
@@ -1260,7 +1261,7 @@ function SpecComparisonTable({
             <View style={[styles.specCompareCell, styles.specCompareAskedCol]}><Text style={styles.specCompareHead}>You asked</Text></View>
             {quotations.map((q) => (
               <View key={q.id} style={[styles.specCompareCell, styles.specCompareQuoteCol]}>
-                <Text style={styles.specCompareHead} numberOfLines={2}>{respondents[q.respondentId]?.registeredName ?? q.ref}</Text>
+                <BusinessNameLink businessId={respondents[q.respondentId] ? q.respondentId : null} name={respondents[q.respondentId]?.registeredName ?? q.ref} style={styles.specCompareHead} numberOfLines={2} />
               </View>
             ))}
           </View>
@@ -1313,7 +1314,7 @@ function QuotationCard({
     <View style={[styles.quotationCard, isAwarded ? styles.quotationCardAwarded : null, isFlagged ? styles.quotationCardFlagged : null]}>
       <View style={styles.quotationCardHeader}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.respondentName}>{name}</Text>
+          <BusinessNameLink businessId={respondent.id} name={name} style={styles.respondentName} />
           <Text style={styles.mutedSmall}>{quotation.ref}</Text>
         </View>
         <View style={{ gap: space.xs, alignItems: 'flex-end' }}>
@@ -1947,7 +1948,7 @@ function WideInfoBand({
             </View>
             <View style={styles.wideBuyerInfo}>
               <View style={styles.wideBuyerNameRow}>
-                <Text style={styles.wideBuyerName}>{buyer.displayName ?? buyer.registeredName}</Text>
+                <BusinessNameLink businessId={buyer.id} name={buyer.displayName ?? buyer.registeredName} style={styles.wideBuyerName} />
                 {buyer.credibility.verifiedAt && (
                   <View style={styles.verifiedTag}>
                     <Text style={styles.verifiedTagLabel}>Verified {formatDate(buyer.credibility.verifiedAt)}</Text>
@@ -2413,12 +2414,14 @@ function WideQuotationCard({
   return (
     <View style={[styles.wideQuoteCard, { borderLeftColor: accentColor }, isFlagged ? styles.wideQuoteCardFlagged : null]}>
       <View style={styles.wideQuoteHeader}>
-        <View style={[styles.avatarChip, { backgroundColor: avatarBg }]}>
-          <Text style={styles.avatarChipLabel}>{initials(name)}</Text>
-        </View>
+        <BusinessLink businessId={respondent.id} name={name}>
+          <View style={[styles.avatarChip, { backgroundColor: avatarBg }]}>
+            <Text style={styles.avatarChipLabel}>{initials(name)}</Text>
+          </View>
+        </BusinessLink>
         <View style={styles.wideBuyerInfo}>
           <View style={styles.wideBuyerNameRow}>
-            <Text style={styles.wideBuyerName}>{name}</Text>
+            <BusinessNameLink businessId={respondent.id} name={name} style={styles.wideBuyerName} />
             {respondent.credibility.verifiedAt && (
               <View style={styles.verifiedTag}>
                 <Text style={styles.verifiedTagLabel}>Verified {formatDate(respondent.credibility.verifiedAt)}</Text>

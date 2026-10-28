@@ -23,6 +23,7 @@ import type { PillTone } from '../components/ui/AdminKit';
 import { listAllRequirements } from '../lib/api/admin';
 import type { AdminRequirementOut } from '../lib/api/admin';
 import { errorMessage } from '../lib/api/client';
+import { BusinessNameLink } from '../components/ui/BusinessLink';
 
 const STATUS_LABELS: Record<string, string> = {
   open: 'Open',
@@ -138,7 +139,7 @@ export default function AdminRequirementsRoute() {
                     <Text style={styles.ref}>{r.ref_code}</Text>
                     <Text style={styles.title} numberOfLines={2}>{r.title}</Text>
                     <Text style={styles.sub} numberOfLines={1}>
-                      Posted by <Text style={styles.subStrong}>{r.owner_business_name}</Text>
+                      Posted by <BusinessNameLink inline businessId={r.owner_id} name={r.owner_business_name} style={styles.subStrong} />
                       {r.category ? ` · ${r.category}` : ''}
                       {r.city ? ` · ${r.city}` : ''}
                     </Text>

@@ -41,6 +41,7 @@ import type {
   QuotationStatus,
   Requirement,
 } from '../../lib/types';
+import { BusinessLink, BusinessNameLink } from '../../components/ui/BusinessLink';
 
 /* ─── Props ─────────────────────────────────────────── */
 
@@ -252,8 +253,10 @@ function QuotationRow({
       <Text style={[styles.rowTitle, withdrawn ? styles.mutedInk : null]} numberOfLines={2}>{requirement.title}</Text>
 
       <View style={styles.rowBuyerRow}>
-        <AvatarChip label={initials(buyerName)} size={24} dark={!withdrawn} />
-        <Text style={[styles.rowBuyerName, withdrawn ? styles.mutedInk : null]}>{buyerName}</Text>
+        <BusinessLink businessId={buyer.id} name={buyerName}>
+          <AvatarChip label={initials(buyerName)} size={24} dark={!withdrawn} />
+        </BusinessLink>
+        <BusinessNameLink businessId={buyer.id} name={buyerName} style={[styles.rowBuyerName, withdrawn ? styles.mutedInk : null]} />
         <Text style={styles.rowBuyerMeta}>{buyer.city}, {buyer.province}</Text>
       </View>
 

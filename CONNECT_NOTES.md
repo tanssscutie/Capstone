@@ -76,6 +76,19 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Profile links: bawat pangalan o avatar ng business ay nagbubukas ng profile nito**
+- Bagong `components/ui/BusinessLink.tsx`:
+  - `BusinessLink` para sa avatar
+  - `BusinessNameLink` para sa pangalan, may underline kapag naka-hover
+  - `inline` mode para sa pangalang nasa loob ng isang linya ng text
+  - Lahat ay pumupunta sa `/business-profile?id=N`.
+- **Saan na ito:**
+  - Home feed: poster card (avatar at pangalan), closed rows, closing soon, avatar sa message list, at "Profile" sa chat dock
+  - Requirement Detail: "Posted by" sa phone, mga quotation card pagkatapos ng release (phone at desktop), spec comparison header, at buyer band sa desktop
+  - My Quotations, Saved, Messages (pangalan sa itaas ng chat), Reports
+  - Admin: Dashboard review queue, Businesses, Reports, Change requests, Requirements ("Posted by")
+- Naroon pa rin ang dating "View profile", "View buyer profile" at "Request a quote" sa profile.
+
 **Admin: bagong Settings page (`/admin-settings`)**
 - May bagong **Settings** sa admin sidebar, na may cog icon na gawa sa shapes.
 - **Appearance:** System, Light o Dark, naka-save sa admin account. Dati, hindi naa-apply ang theme sa mga admin page dahil nilalaktawan ng app layout ang admin routes. Ina-apply na ito ngayon sa `useAdminAccess`.

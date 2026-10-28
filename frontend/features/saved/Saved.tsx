@@ -24,6 +24,7 @@ import {
 import { AvatarChip, initials } from '../../components/ui/AvatarChip';
 import ScreenScroll from '../../components/ui/ScreenScroll';
 import type { Business, BusinessId, ISODateTime, Requirement, RequirementStatus } from '../../lib/types';
+import { BusinessLink, BusinessNameLink } from '../../components/ui/BusinessLink';
 
 /* ─── Props ─────────────────────────────────────────── */
 
@@ -151,8 +152,10 @@ function SavedRow({
         </View>
         <Text style={[styles.rowTitle, closed ? { color: color.inkMuted } : null]} numberOfLines={2}>{requirement.title}</Text>
         <View style={styles.rowBuyerRow}>
-          <AvatarChip label={initials(buyerName)} size={22} />
-          <Text style={styles.rowBuyerName}>{buyerName}</Text>
+          <BusinessLink businessId={requirement.buyerId} name={buyerName}>
+            <AvatarChip label={initials(buyerName)} size={22} />
+          </BusinessLink>
+          <BusinessNameLink businessId={requirement.buyerId} name={buyerName} style={styles.rowBuyerName} />
         </View>
         <Text style={styles.mutedSmall}>
           {requirement.category} · {requirement.deliverySite.address} · {formatBudget(requirement.budgetMin, requirement.budgetMax)}

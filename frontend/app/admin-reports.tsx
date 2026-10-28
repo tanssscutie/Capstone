@@ -23,6 +23,7 @@ import {
 } from '../components/ui/AdminKit';
 import { listReports, openWithdrawalProof, reviewReport, type AdminReportOut, type ModerationAction } from '../lib/api/admin';
 import { errorMessage } from '../lib/api/client';
+import { BusinessNameLink } from '../components/ui/BusinessLink';
 
 type StatusFilter = 'open' | 'resolved' | 'dismissed' | 'all';
 
@@ -195,7 +196,7 @@ export default function AdminReportsRoute() {
                 <View style={styles.cardTop}>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.reason}>{r.reason_label}</Text>
-                    <Text style={styles.title} numberOfLines={1}>{r.reported_name}</Text>
+                    <BusinessNameLink businessId={r.reported_id} name={r.reported_name} style={styles.title} numberOfLines={1} />
                     <Text style={styles.sub}>
                       {r.reason === 'WITHDRAWALS' ? (
                         <>Filed automatically by TrustLink</>

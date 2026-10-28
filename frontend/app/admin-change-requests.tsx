@@ -22,6 +22,7 @@ import {
 } from '../components/ui/AdminKit';
 import { listChangeRequestsForAdmin, lockedFieldLabel, reviewChangeRequest, type AdminChangeRequestOut } from '../lib/api/business';
 import { errorMessage } from '../lib/api/client';
+import { BusinessNameLink } from '../components/ui/BusinessLink';
 
 type StatusFilter = 'pending' | 'approved' | 'rejected' | 'all';
 
@@ -135,7 +136,7 @@ export default function AdminChangeRequestsRoute() {
                 <View style={styles.cardTop}>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.kicker}>Locked details</Text>
-                    <Text style={styles.title} numberOfLines={1}>{r.business_name}</Text>
+                    <BusinessNameLink businessId={r.user_id} name={r.business_name} style={styles.title} numberOfLines={1} />
                     <Text style={styles.sub}>{r.verification_status.replace(/_/g, ' ')} · requested {timeAgo(r.created_at)}</Text>
                   </View>
                   <Pill

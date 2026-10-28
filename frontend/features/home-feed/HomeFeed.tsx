@@ -49,6 +49,7 @@ import type {
   TrustTier,
   RequirementStatus,
 } from '../../lib/types';
+import { BusinessLink, BusinessNameLink } from '../../components/ui/BusinessLink';
 
 /* ─── Props ─────────────────────────────────────────── */
 
@@ -400,7 +401,9 @@ function PulseDot({ dotColor, pulse }: { dotColor: string; pulse: boolean }) {
 export function ThreadRow({ thread, now, onPress }: { thread: MessageThread; now: number; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.threadRow, pressed ? styles.threadRowPressed : null]}>
-      <AvatarChip label={initials(thread.counterpartyName)} size={30} dark={!thread.unread} />
+      <BusinessLink businessId={thread.counterpartyId} name={thread.counterpartyName}>
+        <AvatarChip label={initials(thread.counterpartyName)} size={30} dark={!thread.unread} />
+      </BusinessLink>
       <View style={{ flex: 1, minWidth: 0, gap: space.xs }}>
         <View style={styles.alertTopRow}>
           <Text style={[styles.threadName, { fontFamily: thread.unread ? font.bodySemi : font.body }]} numberOfLines={1}>
@@ -636,6 +639,7 @@ function ConversationWindow({
           </View>
         </Pressable>
         <View style={{ flex: 1 }} />
+        {open && <BusinessNameLink businessId={thread.counterpartyId} name="Profile" style={styles.dockMeta} />}
         {open && <ReportLink businessId={thread.counterpartyId} businessName={thread.counterpartyName} />}
         {open && onExpand && (
           <Pressable onPress={onExpand} hitSlop={8} accessibilityLabel="Open in Messages page">
@@ -1316,10 +1320,12 @@ function RequirementCard({
       <Text style={styles.cardTitle}>{requirement.title}</Text>
 
       <View style={styles.buyerRow}>
-        <AvatarChip label={initials(buyerName)} size={32} />
+        <BusinessLink businessId={buyer.id} name={buyerName}>
+          <AvatarChip label={initials(buyerName)} size={32} />
+        </BusinessLink>
         <View style={{ minWidth: 0, flex: 1, gap: space.xs }}>
           <View style={styles.buyerNameRow}>
-            <Text style={styles.buyerName}>{buyerName}</Text>
+            <BusinessNameLink businessId={buyer.id} name={buyerName} style={styles.buyerName} />
             <VerifiedTag verifiedAt={buyer.credibility.verifiedAt} />
             <TierTag tier={buyer.credibility.tier} />
           </View>
@@ -1449,7 +1455,6 @@ function ClosedRequirementRow({ requirement, buyerName, now }: { requirement: Re
     requirement.status === 'AWARDED'
       ? { label: `Awarded · ${requirement.quotationCount} quotation${requirement.quotationCount === 1 ? '' : 's'}`, color: color.primary, border: color.primaryBorder }
       : { label: 'Closed · no quotations received', color: color.inkFaint, border: color.border };
-  const meta = `${buyerName} · ${requirement.deliverySite.address} · ${formatBudget(requirement.budgetMin, requirement.budgetMax)}`;
 
   return (
     <View style={styles.closedRow}>
@@ -1461,7 +1466,10 @@ function ClosedRequirementRow({ requirement, buyerName, now }: { requirement: Re
           <Text style={styles.cardRef}>{requirement.ref} · closed {requirement.publishedAt ? timeAgoWords(requirement.closingAt, now) : ''}</Text>
         </View>
         <Text style={styles.closedTitle}>{requirement.title}</Text>
-        <Text style={styles.mutedSmall}>{meta}</Text>
+        <Text style={styles.mutedSmall}>
+          <BusinessNameLink inline businessId={requirement.buyerId} name={buyerName} style={styles.mutedSmall} />
+          {` · ${requirement.deliverySite.address} · ${formatBudget(requirement.budgetMin, requirement.budgetMax)}`}
+        </Text>
       </View>
       <View style={[styles.outcomeTag, { borderColor: outcome.border }]}>
         <View style={[styles.dot, { backgroundColor: outcome.color }]} />
@@ -1481,7 +1489,9 @@ function ClosingSoonItem({ requirement, buyerName, now, onSelect }: { requiremen
       onPress={onSelect}
     >
       <Text style={styles.closingSoonTitle} numberOfLines={2}>{requirement.title}</Text>
-      <Text style={styles.mutedSmall}>{buyerName} · {formatBudget(requirement.budgetMin, requirement.budgetMax)}</Text>
+      <Text style={styles.mutedSmall}>
+        <BusinessNameLink inline businessId={requirement.buyerId} name={buyerName} style={styles.mutedSmall} /> · {formatBudget(requirement.budgetMin, requirement.budgetMax)}
+      </Text>
       <View style={styles.myReqStatusRow}>
         <View style={[styles.dot, { backgroundColor: color.danger }]} />
         <Text style={[styles.closingSoonCountdown]}>{shortCountdown(hoursLeft, closed)}</Text>

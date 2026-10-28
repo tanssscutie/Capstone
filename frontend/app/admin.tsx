@@ -28,6 +28,7 @@ import {
 import { listFlagged, reviewBusiness, getAdminStats } from '../lib/api/admin';
 import type { AdminFlaggedBusinessOut, AdminStatsOut } from '../lib/api/admin';
 import { errorMessage } from '../lib/api/client';
+import { BusinessLink, BusinessNameLink } from '../components/ui/BusinessLink';
 
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
@@ -161,9 +162,11 @@ function QueueCard({
   return (
     <AdminCard highlight>
       <View style={styles.queueHeader}>
-        <AvatarChip label={initials(name)} size={44} dark={false} />
+        <BusinessLink businessId={b.user_id} name={name}>
+          <AvatarChip label={initials(name)} size={44} dark={false} />
+        </BusinessLink>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.queueName} numberOfLines={1}>{name}</Text>
+          <BusinessNameLink businessId={b.user_id} name={name} style={styles.queueName} numberOfLines={1} />
           <Text style={styles.queueSub}>Submitted {timeAgo(b.submitted_at)}</Text>
         </View>
         <View style={styles.pillRow}>

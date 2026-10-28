@@ -11,6 +11,7 @@ import ScreenScroll from '../../components/ui/ScreenScroll';
 import { color, font, fontSize, lineHeight, letterSpacing, space, radius, elevation, layout, breakpoint } from '../../components/ui/tokens';
 import { ReportBusinessModal } from '../../components/ui/ReportBusinessModal';
 import type { BusinessSearchOut, MyReportOut, ReportSuggestionOut } from '../../lib/api/business';
+import { BusinessNameLink } from '../../components/ui/BusinessLink';
 
 export interface ReportsProps {
   reports: MyReportOut[];
@@ -102,7 +103,7 @@ export default function Reports({ reports, suggestions = [], onSearch, onReporte
           {results.map((b) => (
             <Pressable key={b.id} onPress={() => setTarget(b)} style={({ pressed }) => [styles.resultRow, pressed ? styles.pressed : null]}>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.resultName} numberOfLines={1}>{b.name}</Text>
+                <BusinessNameLink businessId={b.id} name={b.name} style={styles.resultName} numberOfLines={1} />
                 <Text style={styles.muted} numberOfLines={1}>
                   {[b.role === 'buyer' ? 'Buyer' : b.role === 'seller' ? 'Seller' : null, b.category, b.city].filter(Boolean).join(' · ')}
                 </Text>
@@ -121,7 +122,7 @@ export default function Reports({ reports, suggestions = [], onSearch, onReporte
             {suggestions.map((b) => (
               <Pressable key={b.id} onPress={() => setTarget(b)} style={({ pressed }) => [styles.resultRow, pressed ? styles.pressed : null]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.resultName} numberOfLines={1}>{b.name}</Text>
+                  <BusinessNameLink businessId={b.id} name={b.name} style={styles.resultName} numberOfLines={1} />
                   <Text style={styles.muted} numberOfLines={1}>
                     {b.relation === 'supplier' ? 'Quoted on' : 'You quoted on'} {b.context}
                   </Text>
