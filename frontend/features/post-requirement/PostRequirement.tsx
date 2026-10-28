@@ -44,7 +44,7 @@ import {
 } from '../../components/ui/tokens';
 import type { Business, Attachment, ISODateTime, SpecRow, PostRequirementState } from '../../lib/types';
 import {
-  OTHER_ITEM_CODE, PREFERRED_BRAND_ID, QUANTITY_ATTRIBUTE_IDS, findItem, isNumber, itemSpecError, itemsFor,
+  OTHER_ITEM_CODE, PREFERRED_BRAND_ID, QUANTITY_ATTRIBUTE_IDS, SUPPLIER_TO_RECOMMEND, findItem, isNumber, itemSpecError, itemsFor,
   specDisplayValue, specLabel, splitQuantity, useCategoryTree,
 } from '../../lib/data/categories';
 import { suggestAttribute } from '../../lib/api/meta';
@@ -207,6 +207,96 @@ const SPEC_EXAMPLE_BY_CATEGORY: Record<string, { label: string; value: string }>
   'Packaging & Labeling': { label: 'e.g. Box dimensions', value: 'e.g. 30 cm × 20 cm × 15 cm, corrugated' },
 };
 const DEFAULT_SPEC_EXAMPLE = SPEC_EXAMPLE_BY_CATEGORY['Printing'];
+
+/** "Design file" (the category layer's artwork attribute): picking this one
+ *  offers the file upload right there, into Reference files. */
+const DESIGN_FILE_ID = 'artwork';
+const DESIGN_FILE_READY = 'Print-ready file provided';
+const DESIGN_FILE_LABEL = 'Design file';
+
+/** What a "See example" shows: the field as it looks filled in, plus one tip. */
+interface FieldExample {
+  value: string;
+  kind?: 'input' | 'textarea' | 'pills' | 'select';
+  /** Pills: the choices shown, `value` being the picked one. */
+  options?: string[];
+  suffix?: string;
+  tip: string;
+}
+
+/** Sample values for spec rows, by attribute id (and unit for sizes). Select
+ *  specs need none — their example is the first real choice. */
+const SPEC_EXAMPLE_VALUES: Record<string, string> = {
+  size: '3 x 6',
+  'size:in': '2 x 3.5',
+  'size:cm': '30 x 20 x 15',
+  'size:mm': '60 x 150',
+  color: 'Navy blue',
+  paper_weight: '120',
+  page_count: '24',
+  cover_paper: '250gsm C2S, matte',
+  inside_paper: '100gsm book paper',
+  sizes_breakdown: 'S 10, M 20, L 15, XL 5',
+  print_locations: 'Front chest logo, full back print',
+  fill_capacity: '250 g coffee beans',
+  thickness: '50',
+  container: '500 ml round PET bottle',
+  preferred_brand: '3M',
+  remarks: 'Deliver in two batches, half by the 15th',
+};
+
+const SPEC_EXAMPLE_TIPS: Record<string, string> = {
+  artwork: 'Print-ready: you already have the final file — attach it here. Needs layout: the supplier designs it (usually priced extra).',
+  size: 'Width x height in the unit shown. Suppliers price the material by it.',
+  sizes_breakdown: 'How many of each size, so suppliers order the right blanks.',
+  preferred_brand: 'Suppliers see it as "or equivalent" — it never limits who can respond.',
+};
+
+function specExample(spec: SpecTemplate): FieldExample {
+  const tip = SPEC_EXAMPLE_TIPS[spec.id]
+    ?? (spec.can_recommend
+      ? 'Not sure? Tap "Not sure — supplier to recommend" and suppliers will suggest one.'
+      : 'Suppliers price against exactly what you put here.');
+  if (spec.type === 'select') {
+    const picked = spec.options.find((o) => o !== 'None' && o !== 'No') ?? spec.options[0] ?? '';
+    return { kind: 'pills', options: spec.options, value: picked, tip };
+  }
+  const value = SPEC_EXAMPLE_VALUES[`${spec.id}:${spec.unit}`] ?? SPEC_EXAMPLE_VALUES[spec.id] ?? 'e.g. as specific as you can';
+  return { kind: 'input', value, suffix: spec.unit ?? undefined, tip };
+}
+
+const FIELD_EXAMPLES: Record<string, Record<string, FieldExample>> = {
+  Printing: {
+    item: { kind: 'select', value: 'Tarpaulin', tip: 'Pick the closest item — what suppliers need to know appears below. Not listed? Choose Other.' },
+    title: { value: 'Tarpaulins for our Pasig store opening', tip: 'One line: what you need, and what it is for.' },
+    detail: {
+      kind: 'textarea',
+      value: 'Two tarpaulins for the store front and the entrance, up for about a month outdoors. We have the final design (attached). Please include delivery to the store and say if you recommend a thicker material.',
+      tip: 'What it is for, anything it must have, and what suppliers should include in their price.',
+    },
+  },
+  'Packaging & Labeling': {
+    item: { kind: 'select', value: 'Corrugated boxes', tip: 'Pick the closest item — what suppliers need to know appears below. Not listed? Choose Other.' },
+    title: { value: 'Shipping boxes for our online orders', tip: 'One line: what you need, and what it is for.' },
+    detail: {
+      kind: 'textarea',
+      value: 'Printed shipping boxes for small appliances, about 2 kg each. Logo on two sides, one color. Please include delivery to our Caloocan warehouse and the lead time for repeat orders.',
+      tip: 'What it is for, anything it must have, and what suppliers should include in their price.',
+    },
+  },
+};
+const COMMON_EXAMPLES: Record<string, FieldExample> = {
+  otherItem: { value: 'Acrylic keychains', tip: 'Name it the way a supplier would search for it.' },
+  quantity: { value: '500', suffix: 'pcs', tip: 'Count what you will receive. Boxes, packs or rolls? Say how many pieces are in each.' },
+  budget: { value: '₱5,000  –  ₱20,000', tip: 'A realistic range helps suppliers price. It is not a promise to pay the maximum.' },
+  customSpec: { value: 'Size  ·  2 x 3 in', tip: 'Anything else suppliers should know: write what it is on the left and the detail on the right.' },
+  documents: { kind: 'pills', options: ['DENR Permit', 'Sample of a similar job'], value: 'DENR Permit', tip: 'Only what this job needs — registration papers are already verified by TrustLink.' },
+  files: { value: 'store-front-tarpaulin-final.pdf', tip: 'A floor plan, product photo or sample design. Every business browsing this requirement can open it.' },
+};
+
+function fieldExample(category: string, key: string): FieldExample | undefined {
+  return (FIELD_EXAMPLES[category] ?? FIELD_EXAMPLES['Printing'])[key] ?? COMMON_EXAMPLES[key];
+}
 
 /** Typical qualifying documents per category — a starting suggestion for
  *  the (optional, per the study's own Scope and Delimitation) Required
@@ -459,15 +549,19 @@ function SectionCard({
   title,
   caption,
   optional,
+  example,
   children,
 }: {
   index?: number;
   title: string;
   caption?: string;
   optional?: boolean;
+  /** "See example" in the header — the card's main field, filled in. */
+  example?: FieldExample;
   children: ReactNode;
 }) {
   const { width } = useWindowDimensions();
+  const [exampleOpen, setExampleOpen] = useState(false);
   return (
     <View style={[styles.sectionCard, width < 480 && styles.sectionCardCompact]}>
       <View style={styles.sectionCardHeader}>
@@ -482,8 +576,11 @@ function SectionCard({
             <Text style={styles.optionalTagLabel}>Optional</Text>
           </View>
         )}
+        {!!example && <View style={{ flex: 1 }} />}
+        {!!example && <ExampleLink open={exampleOpen} onPress={() => setExampleOpen((v) => !v)} />}
       </View>
       {!!caption && <CaptionOrHint text={caption} style={styles.sectionCardCaption} />}
+      {!!example && exampleOpen && <ExampleShot label={title} example={example} />}
       <View style={styles.sectionCardBody}>{children}</View>
     </View>
   );
@@ -784,14 +881,23 @@ function withTemplate(rows: SpecRowDraft[], item: CategoryItem | undefined): Spe
 }
 
 /** A template row: fixed label, value typed in — or picked, for a select spec. */
-function TemplateSpecRow({ row, missing, onChangeValue }: { row: SpecRowDraft; missing: boolean; onChangeValue: (v: string) => void }) {
+function TemplateSpecRow({
+  row,
+  missing,
+  onChangeValue,
+  children,
+}: {
+  row: SpecRowDraft;
+  missing: boolean;
+  onChangeValue: (v: string) => void;
+  /** Extra content under the field — the Design file upload. */
+  children?: ReactNode;
+}) {
   const spec = row.template!;
+  const recommended = spec.can_recommend && row.value === SUPPLIER_TO_RECOMMEND;
   return (
     <View>
-      <Text style={styles.templateSpecLabel}>
-        {row.label}
-        {spec.required ? '' : <Text style={styles.fieldLabelOptional}> — optional</Text>}
-      </Text>
+      <FieldHeader label={spec.label} optional={!spec.required} example={specExample(spec)} />
       {spec.id === PREFERRED_BRAND_ID && (
         <Text style={styles.fieldCaption}>Respondents see it as "or equivalent" — it never limits who can respond.</Text>
       )}
@@ -802,15 +908,29 @@ function TemplateSpecRow({ row, missing, onChangeValue }: { row: SpecRowDraft; m
           ))}
         </View>
       ) : (
-        <FormInput
-          value={row.value}
-          onChangeText={onChangeValue}
-          maxLength={SPEC_VALUE_MAX}
-          keyboardType={spec.type === 'number' ? 'decimal-pad' : 'default'}
-          placeholder={spec.unit ? `In ${spec.unit}` : 'Value'}
-          style={[styles.input, missing ? styles.inputError : null]}
-        />
+        <View style={styles.unitInputRow}>
+          <FormInput
+            value={recommended ? '' : row.value}
+            onChangeText={onChangeValue}
+            maxLength={SPEC_VALUE_MAX}
+            keyboardType={spec.type === 'number' ? 'decimal-pad' : 'default'}
+            placeholder={recommended ? 'Supplier will recommend' : spec.type === 'number' ? 'Number' : 'Type it here'}
+            style={[styles.input, { flex: 1 }, missing ? styles.inputError : null]}
+          />
+          {!!spec.unit && <Text style={styles.unitSuffix}>{spec.unit}</Text>}
+        </View>
       )}
+      {spec.can_recommend && (
+        <View style={styles.pillGroupWrap}>
+          <Pill
+            label="Not sure — supplier to recommend"
+            active={recommended}
+            onPress={() => onChangeValue(recommended ? '' : SUPPLIER_TO_RECOMMEND)}
+          />
+        </View>
+      )}
+      {missing && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>{spec.can_recommend ? 'Add it, or tap "Not sure".' : spec.type === 'select' ? 'Pick one.' : 'Add a value.'}</Text>}
+      {children}
     </View>
   );
 }
@@ -935,6 +1055,60 @@ function SummaryBanner({ message }: { message: string }) {
     <View style={styles.summaryBanner}>
       <View style={styles.summaryDot} />
       <Text style={styles.summaryText}>{message}</Text>
+    </View>
+  );
+}
+
+function ExampleLink({ open, onPress }: { open: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} hitSlop={6} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+      <Text style={styles.exampleLink}>{open ? 'Hide example' : 'See example'}</Text>
+    </Pressable>
+  );
+}
+
+/** A "screenshot" of a field filled in with sample data — drawn with the same
+ *  shapes as the real field, so it follows light and dark mode. Never editable. */
+function ExampleShot({ label, example }: { label: string; example: FieldExample }) {
+  const kind = example.kind ?? 'input';
+  return (
+    <View style={styles.exampleShot} accessibilityLabel={`Example for ${label}: ${example.value}`}>
+      <Text style={styles.exampleEyebrow}>EXAMPLE</Text>
+      <Text style={styles.exampleLabel}>{label}</Text>
+      {kind === 'pills' ? (
+        <View style={styles.pillGroupWrap}>
+          {(example.options ?? []).map((o) => (
+            <View key={o} style={[styles.pill, o === example.value ? styles.pillActive : null]}>
+              <Text style={[styles.pillLabel, o === example.value ? styles.pillLabelActive : null]}>{o}</Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <View style={[styles.exampleField, kind === 'textarea' && styles.exampleFieldTall]}>
+          <Text style={styles.exampleValue}>{example.value}</Text>
+          {!!example.suffix && <Text style={styles.unitSuffix}>{example.suffix}</Text>}
+          {kind === 'select' && <CaretGlyph open={false} />}
+        </View>
+      )}
+      <Text style={styles.exampleTip}>{example.tip}</Text>
+    </View>
+  );
+}
+
+/** A field's label with its "See example" link (and any action, e.g. Write with
+ *  AI) on the right; the example opens right under the label. */
+function FieldHeader({ label, optional, example, action }: { label: string; optional?: boolean; example?: FieldExample; action?: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View>
+      <View style={styles.labelRow}>
+        <FieldLabel optional={optional}>{label}</FieldLabel>
+        <View style={styles.labelActions}>
+          {!!example && <ExampleLink open={open} onPress={() => setOpen((v) => !v)} />}
+          {action}
+        </View>
+      </View>
+      {open && !!example && <ExampleShot label={label} example={example} />}
     </View>
   );
 }
@@ -1123,6 +1297,8 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   const [docInput, setDocInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>(initial?.attachments ?? []);
   const [attempted, setAttempted] = useState(false);
+  // "More details (optional)" — folded until opened, or while it has something in it.
+  const [moreOpen, setMoreOpen] = useState(false);
   // "Write with AI": a draft that would replace typed text waits for a yes
   // (aiProposal); a replaced text can be brought back once (undoText).
   const [aiBusy, setAiBusy] = useState(false);
@@ -1131,7 +1307,9 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   const [aiError, setAiError] = useState<string | null>(null);
   const [undoText, setUndoText] = useState<string | null>(null);
 
-  const addFile = async () => {
+  /** documentLabel marks a file added from a field (the Design file) — it still
+   *  uploads as a plain reference file; the label only groups it on screen. */
+  const addFile = async (documentLabel: string | null = null) => {
     if (isWebFilePickerSupported()) {
       const picked = await pickWebFile('.pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,image/*');
       if (!picked) return; // dialog closed without picking — do nothing
@@ -1139,7 +1317,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
       pickedRequirementFiles.set(id, picked);
       setAttachments((prev) => [
         ...prev,
-        { id, filename: picked.name, sizeBytes: picked.size, mimeType: picked.type, uri: '', documentLabel: null },
+        { id, filename: picked.name, sizeBytes: picked.size, mimeType: picked.type, uri: '', documentLabel },
       ]);
       return;
     }
@@ -1147,7 +1325,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
     // Onboarding.tsx's capture(); a native file picker is a separate follow-up.
     setAttachments((prev) => [
       ...prev,
-      { id: `f${Date.now()}`, filename: 'New attachment.pdf', sizeBytes: 640_000, mimeType: 'application/pdf', uri: '', documentLabel: null },
+      { id: `f${Date.now()}`, filename: 'New attachment.pdf', sizeBytes: 640_000, mimeType: 'application/pdf', uri: '', documentLabel },
     ]);
   };
   const removeFile = (id: string) => {
@@ -1274,6 +1452,16 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   const partialSpecRows = customRows.filter(isSpecRowPartial);
   const isOther = itemCode === OTHER_ITEM_CODE;
   const otherItemBad = isOther && otherItem.trim().length < SPEC_VALUE_MIN;
+  const requiredRows = templateRows.filter((r) => r.template?.required);
+  const optionalRows = templateRows.filter((r) => !r.template?.required);
+  // "Other" has no item specs of its own, so the buyer's own rows are what
+  // suppliers price from — at least one. Every listed item has its required rows.
+  const otherNeedsDetail = isOther && customRows.filter(isSpecRowValid).length === 0;
+  const moreShown = moreOpen || isOther || customRows.length > 0 || optionalRows.some((r) => r.value.trim());
+  const designFiles = attachments.filter((a) => a.documentLabel === DESIGN_FILE_LABEL);
+  const optionalSpecRows = optionalRows.map((row) => (
+    <TemplateSpecRow key={row.id} row={row} missing={false} onChangeValue={(v) => updateSpecRow(row.id, 'value', v)} />
+  ));
   const outputSpecs: SpecRow[] = [
     ...(isOther && !otherItemBad ? [{ label: OTHER_ITEM_LABEL, value: otherItem.trim(), attributeId: null }] : []),
     ...validSpecRows.map((r) => ({ label: r.label.trim(), value: r.value.trim(), attributeId: r.attributeId ?? null })),
@@ -1333,8 +1521,8 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   else if (titleTooShort) missing.push(`a title of at least ${TITLE_MIN} characters`);
   if (!scope.trim()) missing.push('the detail');
   else if (scopeTooShort) missing.push(`a detail of at least ${SCOPE_MIN} characters`);
-  if (validSpecRows.length === 0) missing.push('at least one real specification');
-  else if (badSpecRows.length > 0) missing.push('a fix to the specification row marked below');
+  if (otherNeedsDetail) missing.push('at least one detail about the item');
+  if (badSpecRows.length > 0) missing.push('a fix to the specification row marked below');
   if (partialSpecRows.length > 0) missing.push('both a label and a value on every specification row');
   if (templateError) missing.push(`the item's required specifications`);
   if (!qtyNumber.trim()) missing.push('quantity');
@@ -1397,8 +1585,8 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
 
         {!!category && (
           <View>
-            <FieldLabel>Item</FieldLabel>
-            <Text style={styles.fieldCaption}>Picking one fills in the specifications respondents need to price it. Not listed? Choose Other.</Text>
+            <FieldHeader label="Item" example={fieldExample(category, 'item')} />
+            <Text style={styles.fieldCaption}>Picking one shows what suppliers need to know to price it. Not listed? Choose Other.</Text>
             <GridPicker
               value={itemCode}
               options={itemsFor(tree, category).map((item) => ({ value: item.code, label: item.name }))}
@@ -1410,7 +1598,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
             {attempted && !itemCode && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick an item from {category}.</Text>}
             {isOther && (
               <View style={{ marginTop: space.md }}>
-                <FieldLabel>What item is it?</FieldLabel>
+                <FieldHeader label="What item is it?" example={fieldExample(category, 'otherItem')} />
                 <FormInput
                   value={otherItem}
                   onChangeText={setOtherItem}
@@ -1427,7 +1615,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
         )}
 
         <View>
-          <FieldLabel>Title</FieldLabel>
+          <FieldHeader label="Title" example={fieldExample(category, 'title')} />
           <FormInput
             value={title}
             onChangeText={setTitle}
@@ -1443,9 +1631,10 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
         </View>
 
         <View>
-          <View style={styles.labelRow}>
-            <FieldLabel>Detail</FieldLabel>
-            {!!onDraftDetail && (
+          <FieldHeader
+            label="Detail"
+            example={fieldExample(category, 'detail')}
+            action={!!onDraftDetail && (
               <Pressable
                 onPress={() => void writeWithAi()}
                 disabled={aiBusy}
@@ -1456,7 +1645,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
                 <Text style={styles.aiButtonLabel}>{aiBusy ? 'Writing…' : 'Write with AI'}</Text>
               </Pressable>
             )}
-          </View>
+          />
           <FormInput
             value={scope}
             onChangeText={(v) => {
@@ -1503,63 +1692,106 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
       <SectionCard
         index={2}
         title="Specifications"
-        caption="Materials, dimensions, standards, finish — whatever a business needs to price accurately, as labelled rows."
+        caption="What suppliers need to know to price it."
       >
-        <View>
-          {templateRows.length > 0 && (
-            <View style={{ gap: space.md, marginBottom: space.md }}>
-              {templateRows.map((row) => (
-                <TemplateSpecRow
-                  key={row.id}
-                  row={row}
-                  missing={attempted && !!row.template?.required && !row.value.trim()}
-                  onChangeValue={(v) => updateSpecRow(row.id, 'value', v)}
-                />
-              ))}
-              {attempted && !!templateError && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>{templateError}</Text>}
-            </View>
-          )}
-          {!!itemCode && itemCode !== OTHER_ITEM_CODE && templateRows.length > 0 && (
-            <Text style={styles.fieldCaption}>Anything else respondents should know? Add your own rows below.</Text>
-          )}
-          {customRows.length > 0 && (
-            <View style={styles.specHeaderRow}>
-              <Text style={[styles.specHeaderLabel, { flex: 1 }]}>Label</Text>
-              <Text style={[styles.specHeaderLabel, { flex: 2 }]}>Value</Text>
-              <View style={{ width: 28 }} />
-            </View>
-          )}
-          <View style={{ gap: space.sm }}>
-            {customRows.map((row) => (
-              <SpecificationEditRow
+        {!itemCode ? (
+          <Text style={styles.emptyNote}>Pick an item above to see what suppliers need to know.</Text>
+        ) : (
+          <View style={{ gap: space.md }}>
+            {requiredRows.map((row) => (
+              <TemplateSpecRow
                 key={row.id}
                 row={row}
-                invalid={attempted && row.label.trim() !== '' && row.value.trim() !== '' && !isSpecRowValid(row)}
-                partial={attempted && isSpecRowPartial(row)}
-                labelPlaceholder={(SPEC_EXAMPLE_BY_CATEGORY[category] ?? DEFAULT_SPEC_EXAMPLE).label}
-                valuePlaceholder={(SPEC_EXAMPLE_BY_CATEGORY[category] ?? DEFAULT_SPEC_EXAMPLE).value}
-                onChangeLabel={(v) => updateSpecRow(row.id, 'label', v)}
+                missing={attempted && !row.value.trim()}
                 onChangeValue={(v) => updateSpecRow(row.id, 'value', v)}
-                onRemove={() => removeSpecRow(row.id)}
-                onBlurLabel={() => void checkSpecSuggestion(row.id)}
-                onAcceptSuggestion={() => acceptSpecSuggestion(row.id)}
-                onDismissSuggestion={() => dismissSpecSuggestion(row.id)}
-              />
+              >
+                {row.attributeId === DESIGN_FILE_ID && row.value === DESIGN_FILE_READY && (
+                  <View style={styles.designFileBox}>
+                    <View style={[styles.pillGroupWrap, { marginTop: 0 }]}>
+                      {designFiles.map((f) => (
+                        <View key={f.id} style={styles.fileChip}>
+                          <View style={styles.fileGlyph}>
+                            <View style={styles.fileGlyphFold} />
+                          </View>
+                          <Text style={styles.fileChipName} numberOfLines={1}>{f.filename}</Text>
+                          <Pressable onPress={() => removeFile(f.id)} hitSlop={8}>
+                            <XGlyph tone={color.inkFaint} />
+                          </Pressable>
+                        </View>
+                      ))}
+                      <AddDashedButton label={designFiles.length ? 'Add another file' : 'Attach your design file'} onPress={() => void addFile(DESIGN_FILE_LABEL)} />
+                    </View>
+                    <Text style={styles.fieldCaption}>Optional — it goes into Reference files below, which every business browsing this requirement can open.</Text>
+                  </View>
+                )}
+              </TemplateSpecRow>
             ))}
+            {attempted && !!templateError && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>{templateError}</Text>}
+
+            <View style={styles.moreBox}>
+              <Pressable
+                onPress={() => setMoreOpen((v) => !v)}
+                disabled={moreShown && !moreOpen}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: moreShown }}
+                style={styles.moreHeader}
+              >
+                <Text style={styles.moreTitle}>{isOther ? 'Details about the item' : 'More details (optional)'}</Text>
+                {!(moreShown && !moreOpen) && <CaretGlyph open={moreShown} />}
+              </Pressable>
+              {isOther && (
+                <Text style={styles.fieldCaption}>Add at least one — e.g. Size: 2 x 3 in, or Material: 3mm clear acrylic.</Text>
+              )}
+              {moreShown && (
+                <View style={{ gap: space.md, marginTop: space.sm }}>
+                  {/* "Other": the buyer's own details come first — they're the required part there. */}
+                  {!isOther && optionalSpecRows}
+                  <View>
+                    <FieldHeader label="Your own details" optional={!isOther} example={COMMON_EXAMPLES.customSpec} />
+                    {customRows.length > 0 && (
+                      <View style={[styles.specHeaderRow, { marginTop: space.xs }]}>
+                        <Text style={[styles.specHeaderLabel, { flex: 1 }]}>What</Text>
+                        <Text style={[styles.specHeaderLabel, { flex: 2 }]}>Detail</Text>
+                        <View style={{ width: 28 }} />
+                      </View>
+                    )}
+                    <View style={{ gap: space.sm }}>
+                      {customRows.map((row) => (
+                        <SpecificationEditRow
+                          key={row.id}
+                          row={row}
+                          invalid={attempted && row.label.trim() !== '' && row.value.trim() !== '' && !isSpecRowValid(row)}
+                          partial={attempted && isSpecRowPartial(row)}
+                          labelPlaceholder={(SPEC_EXAMPLE_BY_CATEGORY[category] ?? DEFAULT_SPEC_EXAMPLE).label}
+                          valuePlaceholder={(SPEC_EXAMPLE_BY_CATEGORY[category] ?? DEFAULT_SPEC_EXAMPLE).value}
+                          onChangeLabel={(v) => updateSpecRow(row.id, 'label', v)}
+                          onChangeValue={(v) => updateSpecRow(row.id, 'value', v)}
+                          onRemove={() => removeSpecRow(row.id)}
+                          onBlurLabel={() => void checkSpecSuggestion(row.id)}
+                          onAcceptSuggestion={() => acceptSpecSuggestion(row.id)}
+                          onDismissSuggestion={() => dismissSpecSuggestion(row.id)}
+                        />
+                      ))}
+                    </View>
+                    {attempted && otherNeedsDetail && partialSpecRows.length === 0 && badSpecRows.length === 0 && (
+                      <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Add at least one detail — what it is and its value.</Text>
+                    )}
+                    <View style={{ marginTop: space.sm }}>
+                      <AddDashedButton label="Add your own detail" onPress={addSpecRow} />
+                    </View>
+                  </View>
+                  {isOther && optionalSpecRows}
+                </View>
+              )}
+            </View>
           </View>
-          {attempted && validSpecRows.length === 0 && partialSpecRows.length === 0 && badSpecRows.length === 0 && (
-            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Add at least one specification — a label and its value.</Text>
-          )}
-          <View style={{ marginTop: space.sm }}>
-            <AddDashedButton label="Add specification" onPress={addSpecRow} />
-          </View>
-        </View>
+        )}
       </SectionCard>
 
       <SectionCard index={3} title="Quantity and budget">
         <View style={styles.twoColRow}>
           <View style={styles.twoCol}>
-            <FieldLabel>Quantity</FieldLabel>
+            <FieldHeader label="Quantity" example={COMMON_EXAMPLES.quantity} />
             <FormInput
               value={qtyNumber}
               onChangeText={(v) => setQtyNumber(sanitizeWholeNumber(v))}
@@ -1581,7 +1813,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
             )}
           </View>
           <View style={styles.twoCol}>
-            <FieldLabel>Indicative budget</FieldLabel>
+            <FieldHeader label="Indicative budget" example={COMMON_EXAMPLES.budget} />
             <View style={styles.budgetRow}>
               <BudgetField
                 value={budgetMinText}
@@ -1638,6 +1870,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
         index={4}
         title="Required documents"
         caption="Qualifying documents each respondent should attach to their quotation. Add at least one."
+        example={COMMON_EXAMPLES.documents}
       >
         <View>
           <View style={[styles.pillGroupWrap, { marginTop: 0 }]}>
@@ -1679,6 +1912,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
         title="Reference files"
         optional
         caption="A floor plan, product photo or sample design. Visible to every business browsing this requirement, not just respondents."
+        example={COMMON_EXAMPLES.files}
       >
         <View style={[styles.pillGroupWrap, { marginTop: 0 }]}>
           {attachments.map((f) => (
@@ -1687,12 +1921,13 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
                 <View style={styles.fileGlyphFold} />
               </View>
               <Text style={styles.fileChipName} numberOfLines={1}>{f.filename}</Text>
+              {!!f.documentLabel && <Text style={styles.fileChipTag}>{f.documentLabel}</Text>}
               <Pressable onPress={() => removeFile(f.id)} hitSlop={8}>
                 <XGlyph tone={color.inkFaint} />
               </Pressable>
             </View>
           ))}
-          <AddDashedButton label="Add file" onPress={addFile} />
+          <AddDashedButton label="Add file" onPress={() => void addFile()} />
         </View>
       </SectionCard>
     </View>
@@ -2507,6 +2742,22 @@ const styles = StyleSheet.create({
   optionName: { flex: 1, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
   optionMeta: { fontFamily: font.mono, fontSize: fontSize.micro, color: color.inkFaint },
   labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, flexWrap: 'wrap' },
+  labelActions: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  exampleLink: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.primary },
+  exampleShot: { marginTop: space.xs, marginBottom: space.sm, gap: space.xs, borderWidth: 1, borderStyle: 'dashed', borderColor: color.primaryBorder, borderRadius: radius.md, backgroundColor: color.surfaceSunken, padding: space.md },
+  exampleEyebrow: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, color: color.primary },
+  exampleLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
+  exampleField: { minHeight: layout.minTouchTarget, flexDirection: 'row', alignItems: 'center', gap: space.sm, backgroundColor: color.canvas, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm },
+  exampleFieldTall: { alignItems: 'flex-start', minHeight: 96 },
+  exampleValue: { flex: 1, minWidth: 0, fontFamily: font.body, fontSize: fontSize.base, lineHeight: lineHeight.base, color: color.ink },
+  exampleTip: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
+  unitInputRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  unitSuffix: { marginTop: space.xs, fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
+  designFileBox: { marginTop: space.sm, borderLeftWidth: 2, borderLeftColor: color.primaryBorder, paddingLeft: space.md },
+  fileChipTag: { fontFamily: font.mono, fontSize: fontSize.micro, color: color.primary },
+  moreBox: { borderTopWidth: 1, borderTopColor: color.borderFaint, paddingTop: space.md },
+  moreHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, minHeight: 32 },
+  moreTitle: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
   aiButton: { flexDirection: 'row', alignItems: 'center', gap: space.xs, borderWidth: 1, borderColor: color.primaryBorder, backgroundColor: color.primaryFaint, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs },
   aiButtonLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
   sparkGlyph: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },

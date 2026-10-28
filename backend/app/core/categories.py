@@ -20,7 +20,11 @@
 #
 # DRAFTS: every attribute and item spec marked draft=True was guessed and is
 # pending review — only Tarpaulin's size / finish / eyelets came from the brief,
-# plus the general layer (quantity, unit, size, color, preferred brand, remarks).
+# plus the general layer (quantity, unit, preferred brand, remarks).
+#
+# Size and Color aren't in the general layer: an item that needs a size asks
+# for it in its own layer (with its unit), and anything else the buyer adds as
+# their own row — "Did you mean Size?" still matches it to the attribute.
 # The flag is exposed by the API so reviewers can list what's still a guess.
 #
 # A spec is stored on a requirement as a {attribute_id, label, value} row, the
@@ -31,6 +35,12 @@ from typing import Optional
 
 OTHER_ITEM_CODE = "other"
 OTHER_ITEM_NAME = "Other"
+
+# The value a buyer picks for a technical spec they don't know (paper weight,
+# thickness, …) — "Not sure — supplier to recommend". Accepted only on specs
+# marked can_recommend, whatever their type. Same constant as
+# SUPPLIER_TO_RECOMMEND in frontend/lib/data/categories.ts.
+SUPPLIER_TO_RECOMMEND = "Supplier to recommend"
 
 # General attributes that aren't spec rows: they're the requirement's own
 # quantity column, composed as "<quantity> <unit>" (e.g. "500 pcs").
@@ -59,8 +69,8 @@ _ATTRIBUTE_LIST = [
     _attr("preferred_brand", "Preferred brand", synonyms=["brand", "tatak", "gustong brand", "brand name", "make"], draft=False),
     _attr("remarks", "Remarks", synonyms=["notes", "note", "paalala", "iba pa", "tala", "comments", "additional notes"], draft=False),
     # ---- category layer ----
-    _attr("artwork", "Artwork", "select", options=["Print-ready file provided", "Needs layout / design"],
-          synonyms=["design", "layout", "artwork file", "design file", "print-ready file", "disenyo", "may design na", "file"]),
+    _attr("artwork", "Design file", "select", options=["Print-ready file provided", "Needs layout / design"],
+          synonyms=["design", "layout", "artwork", "artwork file", "print-ready file", "disenyo", "may design na", "file"]),
     _attr("food_grade", "Food-grade", "select", options=_YES_NO,
           synonyms=["food safe", "pang-pagkain", "food contact", "for food"]),
     # ---- item layer ----
@@ -132,8 +142,6 @@ def _use(attribute_id: str, *, required: Optional[bool] = None, **overrides) -> 
 GENERAL_SPECS: list[dict] = [
     _use("quantity", required=True),
     _use("unit", required=True),
-    _use("size"),
-    _use("color"),
     _use("preferred_brand"),
     _use("remarks"),
 ]
@@ -153,7 +161,7 @@ CATEGORY_TREE: list[dict] = [
                 _use("size", required=True, type="select", options=["A4", "A5", "Letter", "Legal", "Custom"]),
                 _use("fold", required=True),
                 _use("paper_type", required=True, options=["Matte", "Glossy"]),
-                _use("paper_weight"),
+                _use("paper_weight", required=True, can_recommend=True),
                 _use("printed_sides", required=True),
             ]},
             {"code": "tarpaulin", "name": "Tarpaulin", "specs": [
@@ -176,8 +184,8 @@ CATEGORY_TREE: list[dict] = [
                 _use("size", required=True, type="select", options=["A4", "A5", "Letter", "Custom"]),
                 _use("page_count", required=True),
                 _use("binding", required=True),
-                _use("cover_paper"),
-                _use("inside_paper"),
+                _use("cover_paper", required=True, can_recommend=True),
+                _use("inside_paper", required=True, can_recommend=True),
             ]},
             {"code": "invitations_certificates", "name": "Invitations / Certificates", "specs": [
                 _use("size", required=True, type="select", options=["A4", "5 x 7 in", "4 x 6 in", "Custom"]),
@@ -226,7 +234,7 @@ CATEGORY_TREE: list[dict] = [
                 _use("size", required=True, label="Size (W x H)", unit="cm"),
                 _use("material", required=True, options=["Kraft paper", "Clear PET/PE", "Metallized foil", "Matte PET"]),
                 _use("zipper", required=True),
-                _use("fill_capacity"),
+                _use("fill_capacity", required=True, can_recommend=True),
             ]},
             {"code": "paper_bags", "name": "Paper bags", "specs": [
                 _use("size", required=True, label="Size (W x H x gusset)", unit="in"),
@@ -237,7 +245,7 @@ CATEGORY_TREE: list[dict] = [
             {"code": "plastic_poly_bags", "name": "Plastic / Poly bags", "specs": [
                 _use("size", required=True, label="Size (W x H)", unit="in"),
                 _use("material", required=True, options=["LDPE", "HDPE", "PP", "Biodegradable"]),
-                _use("thickness"),
+                _use("thickness", required=True, can_recommend=True),
                 _use("closure", required=True),
                 _use("printing", required=True),
             ]},
@@ -285,9 +293,12 @@ def item_name(category: str, item_code: Optional[str]) -> Optional[str]:
 
 
 def get_item_specs(category: str, item_code: str) -> list[dict]:
-    """The item's full spec list: General → Category → Item, merged by
-    attribute id. A later layer overrides an earlier one's fields; a spec keeps
-    the position of the layer that first named it. Empty for an unknown item."""
+    """The item's full spec list, merged by attribute id: General → Category
+    → Item, a later layer overriding an earlier one's fields. Listed in the
+    order a buyer answers them — the item's own specs first, then the
+    category's, then the general ones (quantity, unit, brand, remarks); a spec
+    keeps the position of the first layer in that order that names it. Empty
+    for an unknown item."""
     c = _find_category(category)
     item = find_item(category, item_code) if c else None
     if not item:
@@ -296,8 +307,12 @@ def get_item_specs(category: str, item_code: str) -> list[dict]:
     for layer in (GENERAL_SPECS, c["specs"], item["specs"]):
         for use in layer:
             merged.setdefault(use["id"], {}).update(use)
+    order: list[str] = []
+    for layer in (item["specs"], c["specs"], GENERAL_SPECS):
+        order += [use["id"] for use in layer if use["id"] not in order]
     out = []
-    for attribute_id, use in merged.items():
+    for attribute_id in order:
+        use = merged[attribute_id]
         attr = ATTRIBUTES[attribute_id]
         out.append({
             "id": attribute_id,
@@ -306,6 +321,8 @@ def get_item_specs(category: str, item_code: str) -> list[dict]:
             "unit": use.get("unit", attr["unit"]),
             "options": use.get("options", attr["options"]),
             "required": use.get("required", False),
+            # Offers "Not sure — supplier to recommend" (SUPPLIER_TO_RECOMMEND).
+            "can_recommend": use.get("can_recommend", False),
             "draft": attr["draft"],
         })
     return out
@@ -370,6 +387,8 @@ def validate_item_specs(category: str, item_code: str, specs: list[dict], quanti
         if not value:
             if spec["required"]:
                 raise ValueError(f"Add a value for {label} — it's required for {item['name']}.")
+            continue
+        if value == SUPPLIER_TO_RECOMMEND and spec["can_recommend"]:
             continue
         if spec["type"] == "select" and value not in spec["options"]:
             raise ValueError(f"{label} must be one of: {', '.join(spec['options'])}.")

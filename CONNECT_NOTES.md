@@ -76,6 +76,23 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Post a requirement (1B): mas simpleng Specifications, "See example", Design file**
+- **Wala na ang Size at Color sa general layer.** Puwede pa rin itong idagdag sa "Add your own detail", at may "Did you mean Size?" pa rin. Mananatili ang size ng item mismo (hal. Tarpaulin Size (ft), Corrugated box dimensions) at ang Garment color ng apparel.
+- **"Artwork" → "Design file".** Kapag "Print-ready file provided" ang pinili, lalabas doon mismo ang **"Attach your design file"**. Napupunta ang file sa Reference files, may tag na "Design file", at optional ito.
+- **Mga technical spec na required na pero may "Not sure — supplier to recommend":** paper weight, cover/inside paper, thickness, fill capacity.
+  - Ang value nito ay `SUPPLIER_TO_RECOMMEND` ("Supplier to recommend"), at tinatanggap kahit number spec ito.
+  - Sa mga spec lang na may `can_recommend` ito tinatanggap: `validate_item_specs` sa backend at `itemSpecError` sa frontend. Lumalabas din ang flag sa `GET /meta/categories`.
+- **Bagong ayos ng Specifications card:**
+  - Bago pumili ng item: "Pick an item above to see what suppliers need to know."
+  - Required rows muna. Ang select ay pills, at ang number o text na may unit ay may unit sa kanan.
+  - Nakatiklop ang "More details (optional)" (Preferred brand, Remarks, "Your own details" at "Add your own detail"). Bukas ito kapag may laman.
+  - Ang "at least one specification" ay para na lang sa **Other**. Sa Other, "Details about the item" ang tawag, at nauuna ang "Your own details".
+- **Pagkakasunod ng specs:** item specs muna, sunod ang category (Design file, Food-grade), saka ang general. Ganoon pa rin ang override rules (`get_item_specs`).
+- **"See example" kada field** (Item, What item is it?, Title, Detail, bawat spec, Quantity, Indicative budget, Required documents, Reference files):
+  - Lumalabas ang "screenshot" ng field na may sample data, at isang linyang tip. Iginuguhit ito gamit ang parehong UI, kaya tama sa dark mode.
+  - Nakaayon ito sa category at item. Data: `FIELD_EXAMPLES`, `COMMON_EXAMPLES` at `SPEC_EXAMPLE_VALUES` sa `PostRequirement.tsx`.
+- Tests: `test_category_items` (Other na walang Size, Supplier to recommend sa number spec, `can_recommend` sa API, at bagong order). Napalitan din ang label sa payloads ng `test_match_alerts` at `test_delivery_address`.
+
 **Post a requirement (1A): item picker, "Other", Detail + Write with AI, reference files**
 - **Item picker:** isa na itong select field na "Choose an item" na nagbubukas ng 3×3 grid ng tiles. Mga ~3 rows ang kita, scrollable, at may search kapag lampas 9 ang items. Reusable sa file bilang `GridPicker`, at gagamitin din sa City sa Delivery.
 - **"Other":** may required na "What item is it?" (hal. "Acrylic keychains"). Naka-save ito bilang spec row na `{label: "Item", value}`, kaya walang bagong field. Ibinabalik din ito kapag kinopya ang requirement.

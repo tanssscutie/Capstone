@@ -78,7 +78,7 @@ class DeliveryAddressApiTests(unittest.TestCase):
             category="Printing", item_code="tarpaulin", title="Event tarpaulins", scope="Tarpaulins for a store opening.",
             specifications=[{"label": "Size (ft)", "value": "3 x 6"}, {"label": "Finish", "value": "Matte"},
                             {"label": "Eyelets", "value": "Corners only"},
-                            {"label": "Artwork", "value": "Print-ready file provided"}],
+                            {"label": "Design file", "value": "Print-ready file provided"}],
             quantity="10 pcs", price_min=1000, price_max=2000, city="Quezon City",
             site_address="Unit 4B, 12 Commonwealth Ave.", barangay="alicia", zip_code="1105",
             required_documents=["BIR 2303"], closes_at=(datetime.now() + timedelta(days=7)).isoformat(),

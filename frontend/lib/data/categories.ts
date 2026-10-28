@@ -21,6 +21,12 @@ export const OTHER_ITEM_CODE = 'other';
  *  spec rows. Same as QUANTITY_ATTRIBUTE_IDS in backend/app/core/categories.py. */
 export const QUANTITY_ATTRIBUTE_IDS = ['quantity', 'unit'];
 
+/** The value of "Not sure — supplier to recommend" on a technical spec the
+ *  buyer doesn't know (paper weight, thickness, …). Accepted only on specs with
+ *  can_recommend, whatever their type. Same as SUPPLIER_TO_RECOMMEND in
+ *  backend/app/core/categories.py. */
+export const SUPPLIER_TO_RECOMMEND = 'Supplier to recommend';
+
 /** Shown to sellers as "<brand> (or equivalent)"; never used for matching. */
 export const PREFERRED_BRAND_ID = 'preferred_brand';
 
@@ -111,6 +117,7 @@ export function itemSpecError(
       if (spec.required) return `Add a value for ${label} — it's required for ${item.name}.`;
       continue;
     }
+    if (value === SUPPLIER_TO_RECOMMEND && spec.can_recommend) continue;
     if (spec.type === 'select' && !spec.options.includes(value)) {
       return `${label} must be one of: ${spec.options.join(', ')}.`;
     }

@@ -12,6 +12,8 @@ class ItemSpecOut(BaseModel):
     unit: Optional[str] = None
     options: List[str] = []
     required: bool
+    # Offers "Not sure — supplier to recommend" (categories.SUPPLIER_TO_RECOMMEND).
+    can_recommend: bool = False
     # Guessed, pending review — see the DRAFTS note in app/core/categories.py.
     draft: bool = False
 

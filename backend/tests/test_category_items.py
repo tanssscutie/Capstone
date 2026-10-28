@@ -18,7 +18,7 @@ from sqlmodel import SQLModel, Session, create_engine
 from app.api.routes.business import router as business_router
 from app.api.routes.meta import router as meta_router
 from app.api.routes.requirements import router as requirements_router
-from app.core.categories import ATTRIBUTES, CATEGORIES, get_item_specs, items_for
+from app.core.categories import ATTRIBUTES, CATEGORIES, SUPPLIER_TO_RECOMMEND, get_item_specs, items_for
 from app.core.security import get_current_user, require_buyer
 from app.core.units import normalize as normalize_units
 from app.models.requirement import Requirement
@@ -121,15 +121,15 @@ class CategoryItemTests(unittest.TestCase):
             category="Printing", item_code="tarpaulin", title="Event tarpaulins", scope="Tarpaulins for a store opening.",
             specifications=[{"label": "Size (ft)", "value": "3 x 6"}, {"label": "Finish", "value": "Matte"},
                             {"label": "Eyelets", "value": "Corners only"},
-                            {"label": "Artwork", "value": "Print-ready file provided"}],
+                            {"label": "Design file", "value": "Print-ready file provided"}],
             quantity="10 pcs", price_min=1000, price_max=2000, city="Pasig", site_address="Unit 4B, Ortigas Ave.",
             required_documents=["BIR 2303"], closes_at=(datetime.now() + timedelta(days=7)).isoformat(),
         )
         payload.update(overrides)
         return self.client.post("/requirements", json=payload)
 
-    # Tarpaulin's required rows besides Size: Artwork (category), Finish, Eyelets.
-    TARP_REST = [{"attribute_id": "artwork", "label": "Artwork", "value": "Print-ready file provided"},
+    # Tarpaulin's required rows besides Size: Design file (category), Finish, Eyelets.
+    TARP_REST = [{"attribute_id": "artwork", "label": "Design file", "value": "Print-ready file provided"},
                  {"attribute_id": "finish", "label": "Finish", "value": "Matte"},
                  {"attribute_id": "eyelets", "label": "Eyelets", "value": "Corners only"}]
 
@@ -154,8 +154,25 @@ class CategoryItemTests(unittest.TestCase):
     def test_requirement_other_item_accepts_free_form_specs(self):
         response = self.post_requirement(item_code="other",
                                          specifications=[{"label": "Anything", "value": "Goes"},
-                                                         {"label": "Artwork", "value": "Needs layout / design"}])
+                                                         {"label": "Design file", "value": "Needs layout / design"}])
         self.assertEqual(response.status_code, 201, response.text)
+
+    def test_other_item_needs_no_size_or_color(self):
+        response = self.post_requirement(item_code="other",
+                                         specifications=[{"label": "Item", "value": "Acrylic keychains"},
+                                                         {"label": "Design file", "value": "Needs layout / design"}])
+        self.assertEqual(response.status_code, 201, response.text)
+
+    def test_technical_spec_is_required_but_takes_supplier_to_recommend(self):
+        specs = [s for s in self.flyer_specs() if s["attribute_id"] != "paper_weight"]
+        response = self.post_requirement(item_code="flyers_brochures", specifications=specs)
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Paper weight (gsm)", response.text)
+        # A number spec, yet "Supplier to recommend" passes — only where can_recommend is set.
+        specs = self.flyer_specs(paper_weight=("Paper weight (gsm)", SUPPLIER_TO_RECOMMEND))
+        self.assertEqual(self.post_requirement(item_code="flyers_brochures", specifications=specs).status_code, 201)
+        specs = self.flyer_specs(fold=("Fold", SUPPLIER_TO_RECOMMEND))
+        self.assertEqual(self.post_requirement(item_code="flyers_brochures", specifications=specs).status_code, 422)
 
     def test_existing_requirement_with_null_item_still_loads(self):
         legacy = self.save(Requirement(ref_code="REQ-OLD", title="Old", owner_id=self.buyer.id, category="Printing",
@@ -168,7 +185,8 @@ class CategoryItemTests(unittest.TestCase):
 
     def flyer_specs(self, **values):
         specs = {"size": ("Size", "A4"), "fold": ("Fold", "Tri-fold"), "paper_type": ("Paper", "Glossy"),
-                 "printed_sides": ("Printed sides", "2 sides"), "artwork": ("Artwork", "Print-ready file provided")}
+                 "printed_sides": ("Printed sides", "2 sides"), "artwork": ("Design file", "Print-ready file provided"),
+                 "paper_weight": ("Paper weight (gsm)", "120")}
         specs.update(values)
         return [{"attribute_id": k, "label": label, "value": v} for k, (label, v) in specs.items()]
 
@@ -232,6 +250,10 @@ class CategoryItemTests(unittest.TestCase):
         self.assertEqual([c["name"] for c in response.json()], CATEGORIES)
         for category in CATEGORIES:
             self.assertEqual(items_for(category)[-1]["code"], "other")
+        flyers = next(i for i in response.json()[0]["items"] if i["code"] == "flyers_brochures")
+        by_id = {s["id"]: s for s in flyers["specs"]}
+        self.assertTrue(by_id["paper_weight"]["can_recommend"])
+        self.assertFalse(by_id["fold"]["can_recommend"])
 
     def test_meta_attributes_lists_the_dictionary(self):
         response = self.client.get("/meta/attributes")
@@ -243,25 +265,24 @@ class CategoryItemTests(unittest.TestCase):
 
 
 class SpecLayerTests(unittest.TestCase):
-    GENERAL = ["quantity", "unit", "size", "color", "preferred_brand", "remarks"]
+    GENERAL = ["quantity", "unit", "preferred_brand", "remarks"]
 
     def test_layers_merge_general_then_category_then_item(self):
         ids = [s["id"] for s in get_item_specs("Printing", "tarpaulin")]
-        self.assertEqual(ids, self.GENERAL + ["artwork", "finish", "eyelets"])
+        self.assertEqual(ids, ["size", "finish", "eyelets", "artwork"] + self.GENERAL)
 
     def test_item_layer_overrides_required_and_unit(self):
-        general_size = next(s for s in get_item_specs("Printing", "other") if s["id"] == "size")
+        self.assertFalse(any(s["id"] in ("size", "color") for s in get_item_specs("Printing", "other")))
         tarp_size = next(s for s in get_item_specs("Printing", "tarpaulin") if s["id"] == "size")
-        self.assertFalse(general_size["required"])
         self.assertTrue(tarp_size["required"])
         self.assertEqual(tarp_size["unit"], "ft")
         quantity = next(s for s in get_item_specs("Printing", "tarpaulin") if s["id"] == "quantity")
         self.assertTrue(quantity["required"])
 
     def test_other_item_gets_general_and_category_specs_only(self):
-        self.assertEqual([s["id"] for s in get_item_specs("Printing", "other")], self.GENERAL + ["artwork"])
+        self.assertEqual([s["id"] for s in get_item_specs("Printing", "other")], ["artwork"] + self.GENERAL)
         self.assertEqual([s["id"] for s in get_item_specs("Packaging & Labeling", "other")],
-                         self.GENERAL + ["artwork", "food_grade"])
+                         ["artwork", "food_grade"] + self.GENERAL)
 
     def test_every_item_spec_is_a_dictionary_attribute(self):
         for category in CATEGORIES:

@@ -12,6 +12,8 @@ export interface ItemSpecOut {
   options: string[];
   unit: string | null;
   required: boolean;
+  /** Offers "Not sure — supplier to recommend" (SUPPLIER_TO_RECOMMEND). */
+  can_recommend: boolean;
   /** Guessed, pending review. */
   draft: boolean;
 }
