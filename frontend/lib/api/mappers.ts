@@ -38,6 +38,24 @@ import type { MessageThreadOut, MessageOut } from './messages';
 import type { BackendUser } from './auth';
 import type { Quotation, QuotationStatus, IntegrityResult, LedgerEntry, LedgerEntryType, QuotationLineItem, DocumentRequest, DocumentRequestStatus, TransactionCloseout, CloseoutProposal, CloseoutOutcome, CloseoutState } from '../types';
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "28 Oct – 30 Nov 2026" from the API's ISO datetimes (calendar dates; the
+ *  time part is ignored). Empty when there's no window — it's agreed after
+ *  the award now. Raw ISO strings used to show here, and with no spaces to
+ *  wrap on they pushed the phone layout wider than the screen. */
+function formatDeliveryWindow(start: string | null | undefined, end: string | null | undefined): string {
+  const day = (iso: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+    return m ? { y: m[1], d: `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]}` } : null;
+  };
+  const a = start ? day(start) : null;
+  const b = end ? day(end) : null;
+  if (a && b) return a.y === b.y ? `${a.d} – ${b.d} ${b.y}` : `${a.d} ${a.y} – ${b.d} ${b.y}`;
+  const one = a ?? b;
+  return one ? `${one.d} ${one.y}` : '';
+}
+
 function mapLineItems(items: LineItemOut[]): QuotationLineItem[] {
   return items.map((li) => ({ description: li.description, quantity: li.quantity, unitPrice: li.unit_price }));
 }
@@ -129,10 +147,7 @@ export function mapRequirement(r: RequirementOut): Requirement {
       accessHours: r.site_access_hours,
       accessNote: r.site_access_notes,
     },
-    deliveryWindow:
-      r.delivery_start && r.delivery_end
-        ? `${r.delivery_start} – ${r.delivery_end}`
-        : r.delivery_start ?? r.delivery_end ?? '',
+    deliveryWindow: formatDeliveryWindow(r.delivery_start, r.delivery_end),
     attachments: r.attachments.map((a) => ({
       id: String(a.id),
       filename: a.filename,

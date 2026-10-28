@@ -397,7 +397,9 @@ export default function AppHeader({ viewer: viewerOverride, alertCount = 0, onAl
             onPress={openAccountMenu}
           >
             <AvatarChip label={initials(name)} size={32} imageUri={avatarUri} round={!!avatarUri} />
-            <View style={{ minWidth: 0 }}>
+            {/* On a phone the name doesn't fit beside the menu and alerts — a long one
+                widened the whole page past the screen. The avatar alone opens the menu. */}
+            <View style={{ minWidth: 0, display: width >= 600 ? 'flex' : 'none' }}>
               <Text style={styles.profileChipName} numberOfLines={1}>{name}</Text>
               <Animated.Text style={[styles.profileChipTier, { opacity: profileTierOpacity }]} numberOfLines={1}>
                 Verified · {tierLabel(viewer.credibility.tier)}

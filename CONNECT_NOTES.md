@@ -76,6 +76,10 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Ayos sa phone: lapad ng page at petsa ng delivery window**
+- Raw ISO pa ang lumalabas na delivery window ("2026-10-28T08:00:00 – …"). Ngayon ay "28 Oct – 30 Nov 2026" na (`formatDeliveryWindow` sa `lib/api/mappers.ts`).
+- Sa phone, lumalapad ang buong page (462px sa 390px na screen) dahil sa pangalan at tier sa header. Avatar na lang ang ipinapakita sa ilalim ng 600px (`AppHeader.tsx`), at ang avatar pa rin ang nagbubukas ng account menu.
+
 **Withdrawal policy v3 (pinalitan ang dati): bawat withdraw ay may reason at bilang**
 - **Bilang ang bawat withdraw, sa mismong oras ng withdraw**, kahit mag-resubmit bago mag-closing. Ito ay para protektahan ang sealed pricing laban sa price fishing.
   - Wala na ang lumang "binibilang lang kapag walang kapalit sa closing" (`record_closing`).
