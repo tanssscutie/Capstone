@@ -76,6 +76,20 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Post a requirement (1D): Required documents — verified na ng TrustLink + job-specific**
+- **"Already verified by TrustLink"** (read-only, berde): DTI / SEC registration, BIR 2303, Mayor's Permit. May caption na "Every supplier who can quote has these on file — no need to ask again."
+- **Optional na ang extra documents.** Puwedeng "No extra documents needed".
+  - Backend: `RequirementCreate.required_documents: List[str] = []`.
+  - Kaya na ng QuotationSubmission at RequirementDetail ang walang laman.
+  - Sa Review, lumalabas na "No extra documents".
+- **Suggested chips kada category at kada item:**
+  - Printing: Sample or proof of a similar job, Portfolio. May dagdag kada item, hal. DENR Permit (large format) sa tarpaulin, DENR Permit (signage) at Installation method and safety plan sa signage, at Garment and print sample sa apparel.
+  - Packaging & Labeling: Material spec sheet, Sample of a similar job, DENR Permit. May dagdag kada item, hal. Box strength test sa corrugated boxes at Barrier and material spec sheet sa pouches.
+  - Kapag **Food-grade = Yes**, lalabas ang FDA License to Operate at Food-contact safety certificate.
+  - Data: `DOCS_BY_CATEGORY`, `DOCS_BY_ITEM` at `FOOD_GRADE_DOCS` sa `PostRequirement.tsx`.
+- Comma-joined ang storage ng `required_documents`, kaya ginagawang space ang comma sa custom na document.
+- Test: `test_requirement_without_extra_documents_is_accepted` (`test_category_items`).
+
 **Post a requirement (1C): bundled units at budget na Slide o Type**
 - **Quantity:** pcs ang default.
   - Kapag sets, boxes, packs, rolls o reams ang unit, may required na "How many pcs in each box?" (sheets kapag reams). Whole number ito na lampas sa 0.

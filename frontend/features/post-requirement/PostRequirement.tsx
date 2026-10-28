@@ -247,15 +247,38 @@ const COMMON_EXAMPLES: Record<string, FieldExample> = {
   customSpec: { value: 'Size  ·  2 x 3 in', tip: 'Anything else suppliers should know: write what it is on the left and the detail on the right.' },
 };
 
-/** Typical qualifying documents per category — a starting suggestion for
- *  the (optional, per the study's own Scope and Delimitation) Required
- *  documents field, not a mandate. Shown only as tappable "Suggested" chips —
- *  nothing is added to the field until the buyer picks one, same convention
- *  as every other suggestion feature in this app. */
-const REQUIRED_DOCS_BY_CATEGORY: Record<string, string[]> = {
-  'Printing': ['DENR Permit'],
-  'Packaging & Labeling': ['DENR Permit', 'FDA License to Operate'],
+/** Checked by TrustLink at onboarding for every business that can quote —
+ *  shown read-only, never asked for again on a requirement. */
+const VERIFIED_BY_TRUSTLINK = ['DTI / SEC registration', 'BIR 2303', "Mayor's Permit"];
+
+/** Job-specific documents a buyer might ask for — suggestions only (tappable
+ *  chips), nothing is added until the buyer picks one. Category first, then
+ *  the item's own; FDA only when the packaging is food-grade. No commas in
+ *  names: required_documents is stored comma-joined. */
+const DOCS_BY_CATEGORY: Record<string, string[]> = {
+  'Printing': ['Sample or proof of a similar job', 'Portfolio'],
+  'Packaging & Labeling': ['Material spec sheet', 'Sample of a similar job', 'DENR Permit'],
 };
+const DOCS_BY_ITEM: Record<string, string[]> = {
+  business_cards: ['Paper stock sample'],
+  flyers_brochures: ['Paper stock sample'],
+  tarpaulin: ['DENR Permit (large format)', 'Material spec sheet'],
+  stickers_decals: ['Material spec sheet (vinyl or paper)'],
+  posters: ['Paper stock sample'],
+  booklets_catalogs: ['Paper stock sample', 'Bound dummy or mock-up'],
+  invitations_certificates: ['Paper stock sample', 'Finishing sample (foil or emboss)'],
+  signage: ['DENR Permit (signage)', 'Installation method and safety plan'],
+  shirt_apparel_printing: ['Garment and print sample', 'Size chart'],
+  product_labels: ['Adhesive and face stock spec sheet'],
+  corrugated_boxes: ['Box strength test (ECT or bursting)'],
+  folding_cartons: ['Board spec sheet', 'Structural mock-up'],
+  stand_up_pouches: ['Barrier and material spec sheet'],
+  paper_bags: ['Paper spec sheet'],
+  plastic_poly_bags: ['Thickness and material spec sheet'],
+  hang_tags: ['Paper stock sample'],
+  shrink_sleeves: ['Shrink test on your container'],
+};
+const FOOD_GRADE_DOCS = ['FDA License to Operate', 'Food-contact safety certificate'];
 
 /** Same convention as SPEC_EXAMPLE_BY_CATEGORY, extended to Title, Scope,
  *  and Quantity — placeholder text only, never prefilled into the actual
@@ -1292,7 +1315,8 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   };
 
   function addRequiredDoc() {
-    const v = docInput.trim();
+    // Stored comma-joined — a comma would split one document into two.
+    const v = docInput.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
     if (!v) return;
     setRequiredDocuments((prev) => (prev.includes(v) ? prev : [...prev, v]));
     setDocInput('');
@@ -1307,9 +1331,12 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   // adding one is a single tap, not type-then-press-Add, and the input's
   // own placeholder mirrors the first of these instead of always showing
   // the same generic example regardless of category.
-  const suggestedRemainingDocs = (REQUIRED_DOCS_BY_CATEGORY[category] ?? []).filter(
-    (d) => !requiredDocuments.includes(d),
-  );
+  const foodGrade = specRows.some((r) => r.attributeId === 'food_grade' && r.value === 'Yes');
+  const suggestedRemainingDocs = [
+    ...(foodGrade ? FOOD_GRADE_DOCS : []),
+    ...(DOCS_BY_ITEM[itemCode] ?? []),
+    ...(DOCS_BY_CATEGORY[category] ?? []),
+  ].filter((d, i, all) => all.indexOf(d) === i && !requiredDocuments.includes(d));
   const detailsExample = DETAILS_EXAMPLE_BY_CATEGORY[category] ?? DEFAULT_DETAILS_EXAMPLE;
 
   function selectCategory(c: string) {
@@ -1497,7 +1524,6 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   else if (!qtyUnit) missing.push('a unit for the quantity');
   else if (perUnitBad) missing.push(`how many ${bundle!.piece} come in each ${bundle!.one}`);
   if (budgetMinMissing || budgetMaxMissing) missing.push('an indicative budget (from and to)');
-  if (requiredDocuments.length === 0) missing.push('at least one required document');
 
   const ready = missing.length === 0 && !budgetReversed && !budgetZero;
 
@@ -1955,10 +1981,28 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
       <SectionCard
         index={6}
         title="Required documents"
-        caption="Qualifying documents each respondent should attach to their quotation. Add at least one."
+        optional
+        caption="Only what this job needs — suppliers attach them to their quotation."
       >
-        <View>
-          <View style={[styles.pillGroupWrap, { marginTop: 0 }]}>
+        <View style={{ gap: space.md }}>
+          <View style={styles.verifiedBox}>
+            <View style={styles.verifiedHead}>
+              <View style={styles.verifiedTick}><CheckGlyph /></View>
+              <Text style={styles.verifiedTitle}>Already verified by TrustLink</Text>
+            </View>
+            <View style={[styles.pillGroupWrap, { marginTop: space.xs }]}>
+              {VERIFIED_BY_TRUSTLINK.map((d) => (
+                <View key={d} style={styles.verifiedChip}>
+                  <Text style={styles.verifiedChipLabel}>{d}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.fieldCaption}>Every supplier who can quote has these on file — no need to ask again.</Text>
+          </View>
+
+          <View>
+          <FieldLabel>Extra documents for this job</FieldLabel>
+          <View style={[styles.pillGroupWrap]}>
             {requiredDocuments.map((d) => (
               <Pressable key={d} onPress={() => removeRequiredDoc(d)} style={styles.docChip}>
                 <Text style={styles.docChipLabel}>{d}</Text>
@@ -1966,9 +2010,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
               </Pressable>
             ))}
             {requiredDocuments.length === 0 && (
-              <Text style={attempted ? styles.errorTextInline : styles.emptyNote} {...(attempted ? VALIDATION_ERROR_MARK : {})}>
-                {attempted ? 'Add at least one required document.' : 'No documents yet — pick a suggestion or type one below.'}
-              </Text>
+              <Text style={styles.emptyNote}>No extra documents needed — pick one below only if this job calls for it.</Text>
             )}
           </View>
           {suggestedRemainingDocs.length > 0 && (
@@ -1988,6 +2030,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
               style={[styles.input, { flex: 1, marginTop: 0 }]}
             />
             <ActionButton label="Add" variant="outline" onPress={addRequiredDoc} />
+          </View>
           </View>
         </View>
       </SectionCard>
@@ -2639,7 +2682,7 @@ function ReviewScreen({
           {!!specText && <SummaryBlock label="Specifications" value={specText} />}
           <SummaryLine label="Quantity" value={draft.quantity} />
           <SummaryLine label={draft.strictBudget ? "Budget (strict maximum)" : "Indicative budget"} value={formatBudget(draft.budgetMin, draft.budgetMax)} />
-          <SummaryLine label="Required documents" value={draft.requiredDocuments.length > 0 ? draft.requiredDocuments.join(', ') : 'None'} />
+          <SummaryLine label="Required documents" value={draft.requiredDocuments.length > 0 ? draft.requiredDocuments.join(', ') : 'No extra documents'} />
         </SummaryGroup>
 
         <SummaryGroup title="Where and when">
@@ -2932,6 +2975,12 @@ const styles = StyleSheet.create({
   aiProposalTitle: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
   aiProposalBody: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
   aiProposalActions: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' },
+  verifiedBox: { borderWidth: 1, borderColor: color.successBorder, backgroundColor: color.successFaint, borderRadius: radius.md, padding: space.md },
+  verifiedHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  verifiedTick: { width: 18, height: 18, borderRadius: 9, backgroundColor: color.success, alignItems: 'center', justifyContent: 'center' },
+  verifiedTitle: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
+  verifiedChip: { borderWidth: 1, borderColor: color.successBorder, backgroundColor: color.surface, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs },
+  verifiedChipLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
   qtyRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.md },
   qtyInput: { width: 160 },
   perUnitBox: { marginTop: space.md, borderLeftWidth: 2, borderLeftColor: color.primaryBorder, paddingLeft: space.md },

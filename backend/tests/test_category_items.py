@@ -139,6 +139,11 @@ class CategoryItemTests(unittest.TestCase):
         self.assertEqual(response.json()["item_code"], "tarpaulin")
         self.assertEqual(response.json()["item_name"], "Tarpaulin")
 
+    def test_requirement_without_extra_documents_is_accepted(self):
+        response = self.post_requirement(required_documents=[])
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(response.json()["required_documents"], [])
+
     def test_requirement_item_outside_its_category_is_rejected(self):
         self.assertEqual(self.post_requirement(item_code="paper_bags").status_code, 422)
 

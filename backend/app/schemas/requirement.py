@@ -99,7 +99,9 @@ class RequirementCreate(BaseModel):
     # Required (min 1) at the buyer's explicit choice — enforced here too,
     # not just in the frontend form, so it can't be bypassed by calling the
     # API directly.
-    required_documents: List[str] = Field(min_length=1)
+    # May be empty: registration papers (DTI/SEC, BIR 2303, Mayor's Permit) are
+    # already verified by TrustLink at onboarding, so a job may need nothing more.
+    required_documents: List[str] = []
 
     closes_at: datetime
 
