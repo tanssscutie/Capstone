@@ -197,7 +197,12 @@ export default function AdminReportsRoute() {
                     <Text style={styles.reason}>{r.reason_label}</Text>
                     <Text style={styles.title} numberOfLines={1}>{r.reported_name}</Text>
                     <Text style={styles.sub}>
-                      Reported by <Text style={styles.subStrong}>{r.reporter_name}</Text> · {timeAgo(r.created_at)}
+                      {r.reason === 'WITHDRAWALS' ? (
+                        <>Filed automatically by TrustLink</>
+                      ) : (
+                        <>Reported by <Text style={styles.subStrong}>{r.reporter_name}</Text></>
+                      )}{' '}
+                      · {timeAgo(r.created_at)}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: space.xs }}>
