@@ -1517,6 +1517,57 @@ function AwardedOrderStatus({ st, requirement }: { st: ReturnType<typeof useOwne
 
 /** State + business logic for OWNER_RELEASED, shared by the phone stack and the
  *  wide layout's rebuilt cards so both render the same underlying decisions. */
+/** Released quotations split against the buyer's own indicated budget — above,
+ *  within, below — each keeping the current sort order. Only ever called after
+ *  release (OWNER_RELEASED); the sealed state never receives quotation data.
+ *  No quotation price range is computed or shown — only the buyer's budget is
+ *  the yardstick. With no budget on the requirement, one ungrouped list. */
+type BudgetGroupKey = 'above' | 'within' | 'below' | 'all';
+interface BudgetGroup {
+  key: BudgetGroupKey;
+  label: string;
+  caption?: string;
+  quotations: Quotation[];
+}
+
+function groupByBudget(sorted: Quotation[], min: number | null, max: number | null): BudgetGroup[] {
+  if (max === null) return [{ key: 'all', label: 'All quotations', quotations: sorted }];
+  const groups: BudgetGroup[] = [
+    {
+      key: 'above',
+      label: 'Above indicated budget',
+      caption: "Each supplier's reason was sealed with their price.",
+      quotations: sorted.filter((q) => q.totalPrice > max),
+    },
+    {
+      key: 'within',
+      label: 'Within indicated budget range',
+      quotations: sorted.filter((q) => q.totalPrice <= max && (min === null || q.totalPrice >= min)),
+    },
+    {
+      key: 'below',
+      label: 'Below indicated budget',
+      caption: 'Check the specifications closely — a low price can mean something was left out.',
+      quotations: sorted.filter((q) => min !== null && q.totalPrice < min),
+    },
+  ];
+  return groups.filter((g) => g.quotations.length > 0);
+}
+
+function BudgetGroupHeader({ group }: { group: BudgetGroup }) {
+  return (
+    <View style={styles.budgetGroupHead}>
+      <View style={styles.budgetGroupTitleRow}>
+        <Text style={styles.budgetGroupTitle}>{group.label}</Text>
+        <View style={[styles.budgetGroupCount, group.key === 'above' && styles.budgetGroupCountAbove]}>
+          <Text style={[styles.budgetGroupCountLabel, group.key === 'above' && styles.budgetGroupCountLabelAbove]}>{group.quotations.length}</Text>
+        </View>
+      </View>
+      {!!group.caption && <Text style={styles.mutedSmall}>{group.caption}</Text>}
+    </View>
+  );
+}
+
 function useOwnerReleased({
   requirement,
   quotations: initialQuotations,
@@ -1598,6 +1649,7 @@ function useOwnerReleased({
   const visible = quotations.filter((q) => q.status !== 'WITHDRAWN');
   const withdrawn = quotations.filter((q) => q.status === 'WITHDRAWN');
   const sorted = [...visible].sort((a, b) => compareQuotations(a, b, sortKey, sortDir, respondents));
+  const groups = groupByBudget(sorted, requirement.budgetMin, requirement.budgetMax);
   const orphanWithdrawn = withdrawn.filter((w) => !visible.some((v) => v.id === w.replacedByQuotationId));
 
   const awardTarget = quotations.find((q) => q.id === awardTargetId) ?? null;
@@ -1614,6 +1666,7 @@ function useOwnerReleased({
     visible,
     withdrawn,
     sorted,
+    groups,
     orphanWithdrawn,
     sortKey,
     sortDir,
@@ -1651,25 +1704,28 @@ function OwnerReleasedPanel(props: OwnerReleasedProps) {
       <SectionLabel>{`${st.visible.length} quotation${st.visible.length === 1 ? '' : 's'} released`}</SectionLabel>
       <SortBar activeKey={st.sortKey} activeDir={st.sortDir} onPress={st.handleSortPress} />
       <SpecComparisonTable requirement={props.requirement} quotations={st.sorted} respondents={st.respondents} />
-      <View style={{ gap: space.md }}>
-        {st.sorted.map((q) => {
-          const predecessor = st.withdrawn.find((w) => w.replacedByQuotationId === q.id) ?? null;
-          return (
-            <QuotationCard
-              key={q.id}
-              requirement={props.requirement}
-              quotation={q}
-              respondent={st.respondents[q.respondentId]}
-              awardLocked={st.locked}
-              predecessor={predecessor}
-              onToggleShortlist={() => st.handleToggleShortlist(q.id)}
-              onRequestAward={() => st.setAwardTargetId(q.id)}
-              documentRequests={props.documentRequests?.[q.id] ?? []}
-              documentHandlers={props}
-            />
-          );
-        })}
-      </View>
+      {st.groups.map((g) => (
+        <View key={g.key} style={{ gap: space.md }}>
+          <BudgetGroupHeader group={g} />
+          {g.quotations.map((q) => {
+            const predecessor = st.withdrawn.find((w) => w.replacedByQuotationId === q.id) ?? null;
+            return (
+              <QuotationCard
+                key={q.id}
+                requirement={props.requirement}
+                quotation={q}
+                respondent={st.respondents[q.respondentId]}
+                awardLocked={st.locked}
+                predecessor={predecessor}
+                onToggleShortlist={() => st.handleToggleShortlist(q.id)}
+                onRequestAward={() => st.setAwardTargetId(q.id)}
+                documentRequests={props.documentRequests?.[q.id] ?? []}
+                documentHandlers={props}
+              />
+            );
+          })}
+        </View>
+      ))}
       {st.orphanWithdrawn.length > 0 && (
         <View style={{ gap: space.sm }}>
           <SectionLabel>Withdrawn</SectionLabel>
@@ -2600,27 +2656,30 @@ function WideOwnerReleasedScreen(props: OwnerReleasedProps) {
             <AwardedOrderStatus st={st} requirement={requirement} />
             <WideReleasedHeaderCard st={st} requirement={requirement} />
             <SpecComparisonTable requirement={requirement} quotations={st.sorted} respondents={st.respondents} />
-            <View style={{ gap: space.lg }}>
-              {st.sorted.map((q) => {
-                const predecessor = st.withdrawn.find((w) => w.replacedByQuotationId === q.id) ?? null;
-                return (
-                  <WideQuotationCard
-                    key={q.id}
-                    requirement={requirement}
-                    quotation={q}
-                    respondent={st.respondents[q.respondentId]}
-                    awardLocked={decided}
-                    predecessor={predecessor}
-                    onToggleShortlist={() => st.handleToggleShortlist(q.id)}
-                    onRequestAward={() => st.setAwardTargetId(q.id)}
-                    onViewProfile={() => props.onViewRespondentProfile?.(q.respondentId)}
-                    onMessage={st.chatClosed ? undefined : () => props.onMessageRespondent?.(q.respondentId)}
-                    documentRequests={props.documentRequests?.[q.id] ?? []}
-                    documentHandlers={props}
-                  />
-                );
-              })}
-            </View>
+            {st.groups.map((g) => (
+              <View key={g.key} style={{ gap: space.lg }}>
+                <BudgetGroupHeader group={g} />
+                {g.quotations.map((q) => {
+                  const predecessor = st.withdrawn.find((w) => w.replacedByQuotationId === q.id) ?? null;
+                  return (
+                    <WideQuotationCard
+                      key={q.id}
+                      requirement={requirement}
+                      quotation={q}
+                      respondent={st.respondents[q.respondentId]}
+                      awardLocked={decided}
+                      predecessor={predecessor}
+                      onToggleShortlist={() => st.handleToggleShortlist(q.id)}
+                      onRequestAward={() => st.setAwardTargetId(q.id)}
+                      onViewProfile={() => props.onViewRespondentProfile?.(q.respondentId)}
+                      onMessage={st.chatClosed ? undefined : () => props.onMessageRespondent?.(q.respondentId)}
+                      documentRequests={props.documentRequests?.[q.id] ?? []}
+                      documentHandlers={props}
+                    />
+                  );
+                })}
+              </View>
+            ))}
             <WideCloseoutCard
               awarded={st.awardedId !== null}
               pending={st.awardPendingId !== null}
@@ -3442,6 +3501,13 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: space.sm,
   },
+  budgetGroupHead: { gap: 2, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: color.borderFaint },
+  budgetGroupTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  budgetGroupTitle: { fontFamily: font.bodySemi, fontSize: fontSize.md, color: color.ink },
+  budgetGroupCount: { minWidth: 24, alignItems: 'center', borderRadius: radius.pill, backgroundColor: color.surfaceSunken, borderWidth: 1, borderColor: color.border, paddingHorizontal: space.sm },
+  budgetGroupCountAbove: { backgroundColor: color.warningFaint, borderColor: color.warningBorder },
+  budgetGroupCountLabel: { fontFamily: font.monoMedium, fontSize: fontSize.sm, color: color.inkMuted },
+  budgetGroupCountLabelAbove: { color: color.warning },
   docChecklist: { marginTop: space.sm, gap: space.xs },
   docChecklistRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   docChecklistTick: { width: 10, height: 6, marginTop: -3, borderLeftWidth: 2, borderBottomWidth: 2, borderColor: color.success, transform: [{ rotate: '-45deg' }] },

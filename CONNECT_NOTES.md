@@ -76,6 +76,16 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Buyer: released quotations, naka-group ayon sa budget**
+- Pagkatapos lang ng release (hindi kailanman sa sealed state), naka-group na ang listahan ng buyer:
+  - **Above indicated budget**: may caption na "Each supplier's reason was sealed with their price". Ipinapakita pa rin ng card ang over-budget reason.
+  - **Within indicated budget range**
+  - **Below indicated budget**: may paalala na suriin nang mabuti ang specs.
+- May count ang bawat group. Hindi ipinapakita ang group na walang laman. Kapag Strict, hindi magkakaroon ng Above, dahil tinatanggihan ng backend ang presyong lampas sa maximum.
+- Gumagana pa rin ang sort (Price, Lead time, Tier, Submitted) sa loob ng bawat group, pati ang shortlist, award at document requests. Hindi ginalaw ang spec comparison table.
+- Walang aggregate price range: ang budget lang ng buyer ang batayan.
+- Code: `groupByBudget` at `BudgetGroupHeader` sa `RequirementDetail.tsx`, gamit sa phone (`OwnerReleasedPanel`) at desktop (`WideOwnerReleasedScreen`).
+
 **Post a requirement (1F): bagong Review and publish**
 - **Hero card:** title, chip na "category · item", at tatlong stat tile:
   - Quantity (kasama ang "≈ N pcs total" kapag bundled)
