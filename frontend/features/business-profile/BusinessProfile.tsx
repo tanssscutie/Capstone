@@ -16,7 +16,10 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { View, Text, Pressable, TextInput, Image, Linking, Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import type { ViewStyle } from 'react-native';
-import { PORTFOLIO_MAX_ITEMS, type ReportReason, type PortfolioItemOut, type ProfileDetailsIn, type ProfileImageKind, type CompletedWorkOut } from '../../lib/api/business';
+import {
+  PORTFOLIO_MAX_ITEMS, type ReportReason, type PortfolioItemOut, type ProfileDetailsIn, type ProfileImageKind, type CompletedWorkOut,
+  type ProfileSection, type ProfileVisibility,
+} from '../../lib/api/business';
 import { ReportBusinessModal } from '../../components/ui/ReportBusinessModal';
 import { InfoHint } from '../../components/ui/InfoHint';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
@@ -66,6 +69,86 @@ export interface BusinessProfileProps {
   onCompleteVerification?: () => void;
   /** A buyer viewing a seller: Post a Requirement with this seller invited. */
   onRequestQuote?: () => void;
+  /** Own profile: "View as others" — the profile exactly as that audience gets
+   *  it from the API (what's hidden is really withheld, not just un-drawn). */
+  onLoadAsOthers?: (as: 'public' | 'verified') => Promise<PublicBusinessProfile>;
+  /** Own profile: who sees which section. Resolves to an error message, or null. */
+  onSaveVisibility?: (choices: Record<ProfileSection, ProfileVisibility>) => Promise<string | null>;
+}
+
+/* ─── Profile privacy (owner) ─────────────────────────── */
+
+const PRIVACY_SECTIONS: { key: ProfileSection; label: string; hint: string }[] = [
+  { key: 'about', label: 'About', hint: 'Your description' },
+  { key: 'links', label: 'Website and Facebook', hint: 'Your links' },
+  { key: 'highlights', label: 'Highlights', hint: 'The strip under your name' },
+  { key: 'offered_items', label: 'Items you offer', hint: 'And your capabilities' },
+  { key: 'service_areas', label: 'Service areas', hint: 'Where you deliver' },
+  { key: 'completed_orders', label: 'Completed on TrustLink', hint: 'Orders you chose to show' },
+  { key: 'contact', label: 'Contact person and number', hint: 'Never public — verified businesses at most' },
+];
+const LEVEL_LABELS: Record<ProfileVisibility, string> = { public: 'Public', verified: 'Verified only', only_me: 'Only me' };
+
+function PrivacyCard({ visibility, onSave }: {
+  visibility: Record<ProfileSection, ProfileVisibility>;
+  onSave: (choices: Record<ProfileSection, ProfileVisibility>) => Promise<string | null>;
+}) {
+  const [choices, setChoices] = useState(visibility);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
+  const changed = PRIVACY_SECTIONS.some((s) => choices[s.key] !== visibility[s.key]);
+
+  const save = async () => {
+    setSaving(true);
+    setMessage(null);
+    const err = await onSave(choices).catch(() => 'Could not save who sees your profile.');
+    setSaving(false);
+    setMessage(err ? { error: true, text: err } : { error: false, text: 'Saved.' });
+  };
+
+  return (
+    <View style={styles.card}>
+      <SectionLabel tone="primary" shape="ring">Who sees your profile</SectionLabel>
+      <View style={styles.alwaysPublic}>
+        <Text style={styles.alwaysPublicTitle}>Always public</Text>
+        <Text style={styles.mutedSmall}>
+          Your verification badge, tier and track record. They're how other businesses decide to trust you, so they can't be hidden.
+        </Text>
+      </View>
+      <View style={{ gap: space.md, marginTop: space.md }}>
+        {PRIVACY_SECTIONS.map((section) => (
+          <View key={section.key} style={{ gap: space.xs }}>
+            <Text style={styles.privacyLabel}>{section.label}</Text>
+            <Text style={styles.mutedSmall}>{section.hint}</Text>
+            <View style={styles.privacyOptions}>
+              {(['public', 'verified', 'only_me'] as ProfileVisibility[])
+                .filter((level) => !(section.key === 'contact' && level === 'public'))
+                .map((level) => {
+                  const on = choices[section.key] === level;
+                  return (
+                    <Pressable
+                      key={level}
+                      onPress={() => setChoices((prev) => ({ ...prev, [section.key]: level }))}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: on }}
+                      style={[styles.privacyOption, on && styles.privacyOptionOn]}
+                    >
+                      <Text style={[styles.privacyOptionLabel, on && styles.privacyOptionLabelOn]}>{LEVEL_LABELS[level]}</Text>
+                    </Pressable>
+                  );
+                })}
+            </View>
+          </View>
+        ))}
+      </View>
+      <View style={styles.privacyFooter}>
+        <Pressable onPress={save} disabled={!changed || saving} style={[styles.actionButton, styles.primaryButton, (!changed || saving) && { opacity: 0.5 }]}>
+          <Text style={[styles.actionButtonLabel, { color: color.onPrimary }]}>{saving ? 'Saving…' : 'Save'}</Text>
+        </Pressable>
+        {message && <Text style={message.error ? styles.reportError : styles.mutedSmall}>{message.text}</Text>}
+      </View>
+    </View>
+  );
 }
 
 /* ─── Past work (portfolio) ─────────────────────────── */
@@ -592,7 +675,11 @@ function TransparencySlides({ profile, verified }: { profile: PublicBusinessProf
         </View>
       ) : (
         <View style={styles.slideCenter}>
-          <Text style={styles.slideSub}>🔒 Visible once your account is verified</Text>
+          <Text style={styles.slideSub}>
+            {profile.hiddenSections.includes('contact') && profile.visibility === null
+              ? '🔒 Shared with verified businesses only, or kept private by this business'
+              : '🔒 Visible once your account is verified'}
+          </Text>
         </View>
       ),
     },
@@ -646,11 +733,25 @@ export default function BusinessProfile({
   onRequestQuote,
   onUpdateCapabilities,
   onCompleteVerification,
+  onLoadAsOthers,
+  onSaveVisibility,
 }: BusinessProfileProps) {
   const [reporting, setReporting] = useState(false);
   // Edit profile: the draft values, rendered live on the page behind the drawer.
   const [draft, setDraft] = useState<ProfileDetailsIn | null>(null);
   const [viewAsOthers, setViewAsOthers] = useState(false);
+  // "View as others": which audience, and the profile the API returns for it.
+  const [viewAs, setViewAs] = useState<'public' | 'verified'>('public');
+  const [asOthers, setAsOthers] = useState<PublicBusinessProfile | null>(null);
+  useEffect(() => {
+    if (!viewAsOthers || !onLoadAsOthers) {
+      setAsOthers(null);
+      return;
+    }
+    let alive = true;
+    onLoadAsOthers(viewAs).then((p) => { if (alive) setAsOthers(p); }).catch(() => {});
+    return () => { alive = false; };
+  }, [viewAsOthers, viewAs, onLoadAsOthers]);
   const [uploading, setUploading] = useState<ProfileImageKind | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
@@ -659,7 +760,9 @@ export default function BusinessProfile({
   const editing = isOwn && draft !== null;
   // Owner controls show only on your own profile, outside both previews.
   const owner = isOwn && !viewAsOthers && !editing;
-  const profile: PublicBusinessProfile = draft
+  const profile: PublicBusinessProfile = viewAsOthers && asOthers
+    ? asOthers
+    : draft
     ? {
         ...saved,
         headline: draft.headline.trim() || null,
@@ -669,6 +772,8 @@ export default function BusinessProfile({
       }
     : saved;
   const verified = profile.credibility.status === 'VERIFIED';
+  // Sections this viewer doesn't get (profile privacy) — the API already left them out.
+  const hidden = new Set(profile.hiddenSections);
   const c = profile.credibility;
   const isSeller = profile.role === 'seller';
   const avatarSize = isWide ? 112 : 88;
@@ -780,7 +885,9 @@ export default function BusinessProfile({
   const about = (
     <View style={styles.card}>
       <SectionLabel tone="accent" shape="dot">About</SectionLabel>
-      {profile.description ? (
+      {hidden.has('about') ? (
+        <Text style={[styles.mutedSmall, { marginTop: space.sm }]}>🔒 This business shares its description with fewer people.</Text>
+      ) : profile.description ? (
         <Text style={styles.heroBio}>{profile.description}</Text>
       ) : (
         <Text style={[styles.mutedSmall, { marginTop: space.sm }]}>
@@ -802,7 +909,7 @@ export default function BusinessProfile({
       onOpen={onOpenPortfolioImage}
       onAdd={owner ? onAddPortfolioItem : undefined}
       onRemove={owner ? onRemovePortfolioItem : undefined}
-      completedWork={completedWork}
+      completedWork={hidden.has('completed_orders') ? [] : completedWork}
       completedSuggestions={owner ? completedSuggestions : undefined}
       onShowcase={owner ? onShowcase : undefined}
     />
@@ -830,16 +937,25 @@ export default function BusinessProfile({
 
   const capabilities = (
     <View style={styles.card}>
-      <SectionLabel tone="success" shape="square">Capabilities and service areas</SectionLabel>
+      <SectionLabel tone="success" shape="square">What we offer and where</SectionLabel>
       <View style={{ marginTop: space.sm, gap: space.md }}>
-        <TagList items={profile.capabilities} emptyLabel="No capabilities listed." />
-        <TagList items={profile.serviceAreas} emptyLabel="No service areas listed." />
+        {hidden.has('offered_items') ? (
+          <Text style={styles.mutedSmall}>🔒 Items and capabilities aren't shared with you.</Text>
+        ) : (
+          <>
+            {profile.offeredItems.length > 0 && <TagList items={profile.offeredItems} emptyLabel="" />}
+            <TagList items={profile.capabilities} emptyLabel="No capabilities listed." />
+          </>
+        )}
+        {hidden.has('service_areas')
+          ? <Text style={styles.mutedSmall}>🔒 Service areas aren't shared with you.</Text>
+          : <TagList items={profile.serviceAreas} emptyLabel="No service areas listed." />}
       </View>
     </View>
   );
 
   const hasLinks = !!(profile.websiteUrl || profile.facebookUrl);
-  const links = (hasLinks || owner) && (
+  const links = !hidden.has('links') && (hasLinks || owner) && (
     <View style={styles.card}>
       <SectionLabel tone="accent" shape="ring">Links</SectionLabel>
       <View style={{ gap: space.sm, marginTop: space.sm }}>
@@ -859,6 +975,9 @@ export default function BusinessProfile({
   );
 
   const strength = owner && <CompletenessMeter parts={parts} />;
+  const privacy = owner && onSaveVisibility && saved.visibility && (
+    <PrivacyCard visibility={saved.visibility} onSave={onSaveVisibility} />
+  );
   const transparency = <TransparencySlides profile={profile} verified={verified} />;
 
   return (
@@ -875,8 +994,27 @@ export default function BusinessProfile({
         {isOwn && (viewAsOthers || editing) && (
           <View style={styles.previewBanner}>
             <Text style={styles.previewText}>
-              {editing ? 'Live preview — this is how others will see your profile once you save.' : '👁 This is how others see your profile.'}
+              {editing
+                ? 'Live preview — this is how others will see your profile once you save.'
+                : `👁 This is how ${viewAs === 'verified' ? 'a verified business sees' : 'any signed-in business sees'} your profile.`}
             </Text>
+            {viewAsOthers && onLoadAsOthers && (
+              <View style={styles.privacyOptions}>
+                {(['public', 'verified'] as const).map((a) => (
+                  <Pressable
+                    key={a}
+                    onPress={() => setViewAs(a)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: viewAs === a }}
+                    style={[styles.privacyOption, viewAs === a && styles.privacyOptionOn]}
+                  >
+                    <Text style={[styles.privacyOptionLabel, viewAs === a && styles.privacyOptionLabelOn]}>
+                      {a === 'public' ? 'Any business' : 'Verified business'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
             {viewAsOthers && (
               <Pressable onPress={() => setViewAsOthers(false)} hitSlop={6}>
                 <Text style={styles.previewExit}>Exit preview</Text>
@@ -886,7 +1024,7 @@ export default function BusinessProfile({
         )}
 
         {hero}
-        {highlights}
+        {!hidden.has('highlights') && highlights}
 
         {isWide ? (
           <View style={styles.columns}>
@@ -897,6 +1035,7 @@ export default function BusinessProfile({
             </View>
             <View style={[styles.sideColumn, STICKY]}>
               {strength}
+              {privacy}
               {transparency}
               {capabilities}
               {links}
@@ -905,6 +1044,7 @@ export default function BusinessProfile({
         ) : (
           <>
             {strength}
+            {privacy}
             {about}
             {pastWork}
             {capabilities}
@@ -946,6 +1086,15 @@ const styles = StyleSheet.create({
   sideColumn: { flex: 1, minWidth: 280, maxWidth: 400, gap: space.lg },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexShrink: 1, minWidth: 0 },
   iconChip: { width: 24, height: 24, borderRadius: radius.sm, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  alwaysPublic: { marginTop: space.sm, gap: 2, borderRadius: radius.md, backgroundColor: color.successFaint, borderWidth: 1, borderColor: color.successBorder, padding: space.md },
+  alwaysPublicTitle: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.success },
+  privacyLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
+  privacyOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+  privacyOption: { borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs, backgroundColor: color.canvas },
+  privacyOptionOn: { borderColor: color.primary, backgroundColor: color.primaryFaint },
+  privacyOptionLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
+  privacyOptionLabelOn: { color: color.primary },
+  privacyFooter: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginTop: space.lg, flexWrap: 'wrap' },
   previewBanner: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.md, borderWidth: 1, borderColor: color.accentBorder, backgroundColor: color.accentFaint, borderRadius: radius.lg, paddingHorizontal: space.lg, paddingVertical: space.md },
   previewText: { flex: 1, minWidth: 200, fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.accent },
   previewExit: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary, textDecorationLine: 'underline' },

@@ -32,7 +32,7 @@ import type {
   QuotationSpecResponse,
 } from '../types';
 import type { SpecRowOut, SpecResponseOut, RequirementOut, MyRequirementOut, PosterOut, MyQuotationOut, QuotationDetailOut, LedgerEntryOut, ClarificationQuestionOut, LineItemOut, DocumentRequestOut, CloseoutOut, CloseoutProposalOut } from './requirements';
-import type { VerificationStatusOut, DashboardStatsOut, PublicBusinessProfileOut } from './business';
+import type { VerificationStatusOut, DashboardStatsOut, PublicBusinessProfileOut, ProfileSection, ProfileVisibility } from './business';
 import type { NotificationOut } from './notifications';
 import type { MessageThreadOut, MessageOut } from './messages';
 import type { BackendUser } from './auth';
@@ -259,6 +259,11 @@ export interface PublicBusinessProfile {
   contactDetailsVisible: boolean;
   contactPerson: string | null;
   contactMobile: string | null;
+  offeredItems: string[];
+  /** Profile privacy — see PublicBusinessProfileOut. */
+  hiddenSections: ProfileSection[];
+  visibility: Record<ProfileSection, ProfileVisibility> | null;
+  viewingAs: 'public' | 'verified' | null;
 }
 
 export function mapPublicBusinessProfile(p: PublicBusinessProfileOut): PublicBusinessProfile {
@@ -302,6 +307,10 @@ export function mapPublicBusinessProfile(p: PublicBusinessProfileOut): PublicBus
     contactDetailsVisible: p.contact_details_visible,
     contactPerson: p.contact_person,
     contactMobile: p.contact_mobile,
+    offeredItems: p.offered_items ?? [],
+    hiddenSections: p.hidden_sections ?? [],
+    visibility: p.visibility ?? null,
+    viewingAs: p.viewing_as ?? null,
   };
 }
 

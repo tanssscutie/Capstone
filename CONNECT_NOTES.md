@@ -76,6 +76,28 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Profile privacy: ang owner ang pumipili kung sino ang nakakakita ng bawat section**
+- Sa sariling profile, may card na **"Who sees your profile"**. Bawat section ay may Public, Verified only o Only me:
+  - About
+  - Website at Facebook
+  - Highlights
+  - Items you offer (kasama ang capabilities)
+  - Service areas
+  - Completed on TrustLink
+  - Contact person at number. Hindi ito puwedeng gawing Public, dahil verified businesses lang ang may access dito, gaya ng dati.
+- **Laging public**, at nakasulat sa UI kung bakit (para sa tiwala): verification badge, tier at track record (activity counts).
+- **Ipinapatupad sa API, hindi lang sa UI:**
+  - Hindi isinasama ng `GET /business/{id}/profile` ang mga nakatagong section, at sinasabi nito sa `hidden_sections` kung alin ang mga iyon.
+  - Ang `GET /{id}/completed-work` ay `[]` kapag nakatago.
+  - Laging nakikita ng owner at ng admin ang lahat.
+- **"View as others"** ay totoong outsider view na: `?as=public|verified`, na ang owner lang ang puwedeng gumamit. Puwedeng piliin kung "Any business" o "Verified business". Dati, itinatago lang nito ang mga owner button, pero owner data pa rin ang ipinapakita (kasama ang sealed activity at contact).
+- Lumalabas na rin sa profile ang **Items you offer** ("What we offer and where").
+- Backend:
+  - `services/profile_privacy.py`
+  - `User.profile_visibility` (JSON, auto-migrate)
+  - `PUT /business/profile/visibility`
+- Tests: `backend/tests/test_profile_privacy.py`. Na-update din ang `test_completed_work` para sa privacy check.
+
 **Profile links: bawat pangalan o avatar ng business ay nagbubukas ng profile nito**
 - Bagong `components/ui/BusinessLink.tsx`:
   - `BusinessLink` para sa avatar

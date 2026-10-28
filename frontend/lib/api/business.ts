@@ -98,7 +98,18 @@ export interface PublicBusinessProfileOut {
   contact_details_visible: boolean;
   contact_person: string | null;
   contact_mobile: string | null;
+  /** Item names the business offers. */
+  offered_items?: string[];
+  /** Profile privacy: sections withheld from this viewer; the owner's own
+   *  choices (owner only); who the owner is previewing as. */
+  hidden_sections?: ProfileSection[];
+  visibility?: Record<ProfileSection, ProfileVisibility> | null;
+  viewing_as?: 'public' | 'verified' | null;
 }
+
+/** Profile sections the owner chooses an audience for (backend profile_privacy). */
+export type ProfileSection = 'about' | 'links' | 'highlights' | 'offered_items' | 'service_areas' | 'completed_orders' | 'contact';
+export type ProfileVisibility = 'public' | 'verified' | 'only_me';
 
 /** POST /business/onboarding — identity + operations, combined into the
  *  shape app/schemas/business.py::OnboardingSubmit expects. */
@@ -183,8 +194,14 @@ export async function getDashboardStats(): Promise<DashboardStatsOut> {
 /** GET /business/{id}/profile — any other business's public-facing profile,
  *  e.g. "View buyer profile" from a requirement, or a respondent's card once
  *  quotations release. Contact info is shown only to verified viewers, the owner and admin. */
-export async function getPublicProfile(businessId: number): Promise<PublicBusinessProfileOut> {
-  return api.get<PublicBusinessProfileOut>(`/business/${businessId}/profile`);
+/** viewAs: the owner previewing their own profile as others see it. */
+export async function getPublicProfile(businessId: number, viewAs?: 'public' | 'verified'): Promise<PublicBusinessProfileOut> {
+  return api.get<PublicBusinessProfileOut>(`/business/${businessId}/profile${viewAs ? `?as=${viewAs}` : ''}`);
+}
+
+/** PUT /business/profile/visibility — who sees which profile section. */
+export async function updateProfileVisibility(sections: Record<ProfileSection, ProfileVisibility>): Promise<Record<ProfileSection, ProfileVisibility>> {
+  return api.put<Record<ProfileSection, ProfileVisibility>>('/business/profile/visibility', { sections });
 }
 
 

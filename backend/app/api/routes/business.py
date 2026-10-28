@@ -31,6 +31,7 @@ from app.schemas.business import (
     AdminStatsOut,
     AdminBusinessOut,
     PublicBusinessProfileOut,
+    ProfileVisibilityIn,
     ChangeRequestIn,
     ChangeRequestOut,
     AdminChangeRequestOut,

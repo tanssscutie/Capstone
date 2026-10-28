@@ -15,6 +15,7 @@ import {
   profileImagePath,
   uploadProfileImage,
   updateProfileDetails,
+  updateProfileVisibility,
   listCompletedWork,
   listCompletedWorkSuggestions,
   setShowcase,
@@ -76,6 +77,14 @@ export default function BusinessProfileRoute() {
 
   const avatarUri = useAuthedImage(profile?.hasAvatar ? profileImagePath(profile.id, 'avatar') : null, imageVersion);
   const coverUri = useAuthedImage(profile?.hasCover ? profileImagePath(profile.id, 'cover') : null, imageVersion);
+
+  // Stable across renders, so the profile's "View as others" effect doesn't refetch in a loop.
+  // Declared before the early returns below (rules of hooks).
+  const profileId = profile ? Number(profile.id) : null;
+  const loadAsOthers = useCallback(
+    async (as: 'public' | 'verified') => mapPublicBusinessProfile(await getPublicProfile(profileId ?? 0, as)),
+    [profileId],
+  );
 
   if (loading) {
     return (
@@ -141,6 +150,16 @@ export default function BusinessProfileRoute() {
         }
       } : undefined}
       onUpdateCapabilities={isOwn ? () => router.push('/onboarding?mode=edit') : undefined}
+      onLoadAsOthers={isOwn ? loadAsOthers : undefined}
+      onSaveVisibility={isOwn ? async (choices) => {
+        try {
+          await updateProfileVisibility(choices);
+          setProfile(mapPublicBusinessProfile(await getPublicProfile(businessId)));
+          return null;
+        } catch (e: any) {
+          return errorMessage(e, 'Could not save who sees your profile.');
+        }
+      } : undefined}
       onCompleteVerification={isOwn ? () => router.push('/verification-status') : undefined}
       onRequestQuote={!isOwn && viewerRole === 'buyer' && profile.role === 'seller'
         ? () => router.push({ pathname: '/post-requirement', params: { invite: profile.id, inviteName: profile.registeredName } })

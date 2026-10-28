@@ -28,9 +28,11 @@ class CompletedWorkTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         SQLModel.metadata.create_all(self.engine)
-        p = patch("app.services.portfolio_service.engine", self.engine)
-        p.start()
-        self.addCleanup(p.stop)
+        # business_service too: the completed-work route checks profile privacy first.
+        for target in ("app.services.portfolio_service.engine", "app.services.business_service.engine"):
+            p = patch(target, self.engine)
+            p.start()
+            self.addCleanup(p.stop)
         self.addCleanup(self.engine.dispose)
         self.buyer = self.save(User(business_name="Acme Retail", role="buyer"))
         self.supplier = self.save(User(business_name="Print Co", role="seller"))
