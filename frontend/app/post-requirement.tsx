@@ -142,6 +142,7 @@ export default function PostRequirementRoute() {
         delivery={delivery}
         closing={closing}
         onBack={() => setStep('CLOSING')}
+        onEditStep={setStep}
         publishError={publishError}
         onPublish={async (input) => {
           setPublishing(true);

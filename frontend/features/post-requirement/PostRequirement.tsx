@@ -158,6 +158,9 @@ interface ReviewProps {
   closing: RequirementClosingDraft;
   onBack: () => void;
   onPublish: (draft: RequirementDraftInput) => void;
+  /** "Edit" on a Review section — the route jumps back to that step (its
+   *  drafts are kept, so nothing typed is lost). Hidden when not wired. */
+  onEditStep?: (step: Exclude<PostRequirementState, 'REVIEW'>) => void;
   /** Set by the route when the publish call itself fails (e.g. a 403 that slipped
    *  past the earlier verification gate) — surfaced here since REVIEW is the only
    *  screen still mounted when that response comes back. */
@@ -1163,6 +1166,7 @@ function BottomBar({
   primaryLabel: string;
   primaryDisabled?: boolean;
 }) {
+  const { width } = useWindowDimensions();
   return (
     <View style={styles.bottomBar}>
       <View style={styles.bottomBarInner}>
@@ -1173,9 +1177,12 @@ function BottomBar({
             </View>
           )}
         </View>
-        <View style={styles.bottomBarCenter}>
-          <SegmentedSteps step={step} />
-        </View>
+        {/* On a phone there's no room beside two buttons — the step shows in the page title instead. */}
+        {width >= 600 && (
+          <View style={styles.bottomBarCenter}>
+            <SegmentedSteps step={step} />
+          </View>
+        )}
         <View style={[styles.bottomBarSide, styles.bottomBarSideRight]}>
           <ActionButton label={primaryLabel} variant="primary" onPress={onPrimary} disabled={primaryDisabled} />
         </View>
@@ -2493,73 +2500,130 @@ function ClosingScreen({ initial, onContinue, reportContinue }: ClosingProps & {
  * A read-only summary grouped as What you need / Where and when / Closing, a sealed-
  * quotations explanation, and the existing lock list + acknowledgment. */
 
-function SummaryGroup({ title, children }: { title: string; children: ReactNode }) {
+/** One Review section: a card with its title and an "Edit" link back to the step. */
+function ReviewSection({ title, onEdit, children }: { title: string; onEdit?: () => void; children: ReactNode }) {
   return (
-    <SectionCard title={title}>
-      <View style={styles.summaryList}>{children}</View>
-    </SectionCard>
-  );
-}
-
-function SummaryLine({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.summaryLine}>
-      <Text style={styles.summaryLineLabel}>{label}</Text>
-      <Text style={styles.summaryLineValue}>{value || '—'}</Text>
+    <View style={styles.reviewCard}>
+      <View style={styles.reviewCardHead}>
+        <Text style={styles.reviewCardTitle}>{title}</Text>
+        {!!onEdit && (
+          <Pressable onPress={onEdit} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Edit ${title}`}>
+            <Text style={styles.reviewEdit}>Edit</Text>
+          </Pressable>
+        )}
+      </View>
+      {children}
     </View>
   );
 }
 
-function SummaryBlock({ label, value }: { label: string; value: string }) {
+function StatTile({ label, value, sub, tag, onEdit }: { label: string; value: string; sub?: string; tag?: string; onEdit?: () => void }) {
   return (
-    <View>
-      <Text style={styles.summaryLineLabel}>{label}</Text>
-      <Text style={styles.summaryBlockValue}>{value || '—'}</Text>
+    <View style={styles.statTile}>
+      <View style={styles.statTileHead}>
+        <Text style={styles.statTileLabel}>{label}</Text>
+        {!!tag && (
+          <View style={styles.statTag}>
+            <Text style={styles.statTagLabel}>{tag}</Text>
+          </View>
+        )}
+      </View>
+      <Text style={styles.statTileValue}>{value}</Text>
+      {!!sub && <Text style={styles.statTileSub}>{sub}</Text>}
+      {!!onEdit && (
+        <Pressable onPress={onEdit} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Change ${label.toLowerCase()}`}>
+          <Text style={[styles.reviewEdit, { marginTop: space.xs }]}>Change</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
 
-function SealedExplanationCard({ closingAt }: { closingAt: ISODateTime }) {
+/** Label/value pairs — two columns on a wide card, one on a phone. */
+function KeyValueGrid({ rows, wide }: { rows: { label: string; value: string }[]; wide: boolean }) {
   return (
-    <View style={styles.sealedCard}>
-      <SectionLabel tone={color.primary}>Sealed until closing</SectionLabel>
-      <Text style={styles.sealedHeading}>Quotations stay sealed until {formatDateTime(closingAt)}</Text>
-      <InfoHint
-        label="Why sealed?"
-        text="Every quotation stays hidden — from you, and from every other business quoting. At closing, every sealed quotation opens at once, so no business ever prices against one it was never allowed to see."
-      />
+    <View style={styles.kvGrid}>
+      {rows.map((r) => (
+        <View key={r.label} style={[styles.kvItem, wide && styles.kvItemHalf]}>
+          <Text style={styles.kvLabel}>{r.label}</Text>
+          <Text style={styles.kvValue}>{r.value || '—'}</Text>
+        </View>
+      ))}
     </View>
   );
 }
 
-function BeforePublishCard({ draft, ack, onToggleAck }: { draft: RequirementDraftInput; ack: boolean; onToggleAck: () => void }) {
+/** A small padlock from shapes: an arched shackle over a solid body. */
+function LockGlyph() {
   return (
-    <View style={styles.beforePublishCard}>
-      <SectionLabel tone={color.danger}>Before you publish</SectionLabel>
-      <Text style={styles.beforePublishHeading}>Four things stop being editable the moment you publish.</Text>
+    <View style={styles.lockGlyph}>
+      <View style={styles.lockGlyphShackle} />
+      <View style={styles.lockGlyphBody} />
+    </View>
+  );
+}
 
-      <View style={{ gap: space.md, marginTop: space.lg }}>
-        {LOCK_ITEMS.map((l) => (
-          <View key={l.name} style={styles.lockRow}>
-            <View style={styles.lockIcon} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.lockName}>{l.name}</Text>
-              <Text style={styles.lockBody}>{l.body}</Text>
+function NextStepsTimeline({ closingAt }: { closingAt: ISODateTime }) {
+  const steps = [
+    { title: 'You publish', body: 'Your requirement goes live now.' },
+    { title: 'Matching suppliers are alerted', body: 'Verified businesses in this category and your area get a notice.' },
+    { title: `Sealed until ${formatDateTime(closingAt)}`, body: 'No one sees a price before then — not you, not other suppliers.' },
+    { title: 'All open at once', body: 'Compare them side by side, shortlist and award.' },
+  ];
+  return (
+    <View style={styles.reviewCard}>
+      <Text style={styles.reviewCardTitle}>What happens next</Text>
+      <View style={{ marginTop: space.md }}>
+        {steps.map((st, i) => (
+          <View key={st.title} style={styles.timelineRow}>
+            <View style={styles.timelineRail}>
+              <View style={[styles.timelineDot, i === 0 && styles.timelineDotNow]}>
+                <Text style={[styles.timelineDotLabel, i === 0 && styles.timelineDotLabelNow]}>{i + 1}</Text>
+              </View>
+              {i < steps.length - 1 && <View style={styles.timelineLine} />}
+            </View>
+            <View style={styles.timelineText}>
+              <Text style={styles.timelineTitle}>{st.title}</Text>
+              <Text style={styles.timelineBody}>{st.body}</Text>
             </View>
           </View>
         ))}
       </View>
+    </View>
+  );
+}
 
-      <Pressable onPress={onToggleAck} style={styles.ackRow}>
+function PublishCard({ draft, ack, onToggleAck }: { draft: RequirementDraftInput; ack: boolean; onToggleAck: () => void }) {
+  return (
+    <View style={styles.reviewCard}>
+      <Text style={styles.reviewCardTitle}>Locked once you publish</Text>
+      <View style={{ gap: space.sm, marginTop: space.md }}>
+        {LOCK_ITEMS.map((l) => (
+          <View key={l.name} style={styles.lockLine}>
+            <LockGlyph />
+            <Text style={styles.lockLineName}>{l.name}</Text>
+          </View>
+        ))}
+      </View>
+      <InfoHint label="Why these lock" text={LOCK_ITEMS.map((l) => `${l.name}: ${l.body}`).join('\n\n')} />
+      <Pressable onPress={onToggleAck} style={styles.ackRow} accessibilityRole="checkbox" accessibilityState={{ checked: ack }}>
         <View style={[styles.checkbox, ack ? styles.checkboxOn : null]}>{ack && <CheckGlyph />}</View>
         <Text style={styles.ackText}>
-          I understand that verified businesses in my category and service area will be alerted, that quotations stay sealed until{' '}
-          <Text style={styles.ackBold}>{formatDateTime(draft.closingAt)}</Text>, and that the detail and specifications, quantity, indicative
-          budget, and the closing date and time cannot be changed once I publish.
+          I understand that matching suppliers will be alerted, that quotations stay sealed until{' '}
+          <Text style={styles.ackBold}>{formatDateTime(draft.closingAt)}</Text>, and that the items above can't be changed once I publish.
         </Text>
       </Pressable>
     </View>
   );
+}
+
+/** "Pcs per box: 50" and friends — the bundled-unit row, read back for the Quantity tile. */
+function perUnitTotal(draft: RequirementDraftInput): string | undefined {
+  const row = draft.specifications.find((r) => Object.values(PER_UNIT_LABEL).some((u) => u.label === r.label));
+  const unit = row && Object.values(PER_UNIT_LABEL).find((u) => u.label === row.label);
+  const count = Number(splitQuantity(draft.quantity).number.replace(/,/g, ''));
+  if (!row || !unit || !(count > 0) || !(Number(row.value) > 0)) return undefined;
+  return `${row.value} ${row.label.toLowerCase().replace(/ per /, ' per ')} · ≈ ${withCommas(count * Number(row.value))} ${unit.piece} total`;
 }
 
 function ReviewScreen({
@@ -2567,15 +2631,21 @@ function ReviewScreen({
   delivery,
   closing,
   onPublish,
+  onEditStep,
   publishError,
   reportContinue,
   reportPrimaryEnabled,
 }: ReviewProps & { reportContinue: (fn: () => void) => void; reportPrimaryEnabled?: (enabled: boolean) => void }) {
   const [ack, setAck] = useState(false);
   const [attempted, setAttempted] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const { width } = useWindowDimensions();
+  const wide = width >= 900;
   const draft = buildDraftInput(details, delivery, closing);
   const { tree } = useCategoryTree();
-  const itemName = findItem(tree, draft.category, draft.itemCode)?.name ?? '';
+  const otherName = draft.itemCode === OTHER_ITEM_CODE ? draft.specifications.find((r) => r.label === OTHER_ITEM_LABEL)?.value : undefined;
+  const itemName = otherName ?? findItem(tree, draft.category, draft.itemCode)?.name ?? '';
+  const edit = (step: Exclude<PostRequirementState, 'REVIEW'>) => (onEditStep ? () => onEditStep(step) : undefined);
 
   const handlePublish = () => {
     if (!ack) {
@@ -2596,47 +2666,104 @@ function ReviewScreen({
     reportPrimaryEnabled?.(ack);
   }, [ack, reportPrimaryEnabled]);
 
-  const specText = draft.specifications.length > 0
-    ? draft.specifications.map((s) => `${s.label}: ${specDisplayValue(s)}`).join('\n')
-    : '';
-  const attachmentsText = draft.attachments.length > 0 ? draft.attachments.map((a) => a.filename).join(', ') : 'None';
-  const locationText = [
+  // The item name and the bundled-unit count have their own places above.
+  const perUnitLabels = Object.values(PER_UNIT_LABEL).map((u) => u.label);
+  const specRows = draft.specifications
+    .filter((r) => r.label !== OTHER_ITEM_LABEL && !perUnitLabels.includes(r.label))
+    .map((r) => ({ label: r.label, value: specDisplayValue(r) }));
+  const locationLines = [
     draft.deliveryAddress,
-    draft.deliveryBarangay ? barangayLabel(draft.deliveryBarangay) : '',
-    `${draft.deliveryCity}${draft.deliveryZip ? ` ${draft.deliveryZip}` : ''}`,
-  ].filter(Boolean).join(', ');
+    [draft.deliveryBarangay ? barangayLabel(draft.deliveryBarangay) : '', `${draft.deliveryCity}${draft.deliveryZip ? ` ${draft.deliveryZip}` : ''}`]
+      .filter(Boolean).join(', '),
+  ].filter(Boolean);
+  const closesInMs = new Date(draft.closingAt).getTime() - Date.now();
+
+  const summary = (
+    <View style={{ gap: space.lg, flex: wide ? 1.6 : undefined, minWidth: 0 }}>
+      <View style={styles.reviewHero}>
+        <View style={styles.reviewChip}>
+          <Text style={styles.reviewChipLabel}>{[draft.category, itemName].filter(Boolean).join(' · ')}</Text>
+        </View>
+        <Text style={styles.reviewHeroTitle}>{draft.title}</Text>
+        <View style={styles.statRow}>
+          <StatTile label="Quantity" value={draft.quantity} sub={perUnitTotal(draft)} />
+          <StatTile
+            label="Budget"
+            value={formatBudget(draft.budgetMin, draft.budgetMax)}
+            tag={draft.strictBudget ? 'Strict' : undefined}
+            sub={draft.strictBudget ? 'No quotation can go above it' : 'Indicative'}
+          />
+          <StatTile
+            label="Closes in"
+            value={closesInMs > 0 ? formatDuration(closesInMs) : 'Already past'}
+            sub={formatDateTime(draft.closingAt)}
+            onEdit={edit('CLOSING')}
+          />
+        </View>
+      </View>
+
+      <ReviewSection title="What you need" onEdit={edit('DETAILS')}>
+        <Text style={styles.kvLabel}>Detail</Text>
+        <Text style={styles.reviewDetail} numberOfLines={detailOpen ? undefined : 4}>{draft.scope}</Text>
+        {draft.scope.length > 240 && (
+          <Pressable onPress={() => setDetailOpen((v) => !v)} hitSlop={6} accessibilityRole="button">
+            <Text style={styles.reviewEdit}>{detailOpen ? 'Show less' : 'Show more'}</Text>
+          </Pressable>
+        )}
+        {specRows.length > 0 && (
+          <View style={{ marginTop: space.md }}>
+            <KeyValueGrid rows={specRows} wide={wide} />
+          </View>
+        )}
+      </ReviewSection>
+
+      <ReviewSection title="Documents and files" onEdit={edit('DETAILS')}>
+        <Text style={styles.kvLabel}>Asked from suppliers</Text>
+        <Text style={styles.kvValue}>{draft.requiredDocuments.length > 0 ? draft.requiredDocuments.join(' · ') : 'No extra documents'}</Text>
+        <Text style={[styles.fieldCaption, { marginTop: 2 }]}>DTI / SEC, BIR 2303 and Mayor's Permit are already verified by TrustLink.</Text>
+        <Text style={[styles.kvLabel, { marginTop: space.md }]}>Reference files</Text>
+        {draft.attachments.length > 0 ? (
+          <View style={[styles.pillGroupWrap, { marginTop: space.xs }]}>
+            {draft.attachments.map((f) => (
+              <View key={f.id} style={styles.fileChip}>
+                <View style={styles.fileGlyph}>
+                  <View style={styles.fileGlyphFold} />
+                </View>
+                <Text style={styles.fileChipName} numberOfLines={1}>{f.filename}</Text>
+                {!!f.documentLabel && <Text style={styles.fileChipTag}>{f.documentLabel}</Text>}
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.kvValue}>None</Text>
+        )}
+      </ReviewSection>
+
+      <ReviewSection title="Delivery location" onEdit={edit('DELIVERY')}>
+        {locationLines.map((l) => (
+          <Text key={l} style={styles.kvValue}>{l}</Text>
+        ))}
+        <Text style={[styles.fieldCaption, { marginTop: space.xs }]}>The delivery date is agreed with the supplier you award.</Text>
+      </ReviewSection>
+    </View>
+  );
+
+  const side = (
+    <View style={[{ gap: space.lg, flex: wide ? 1 : undefined, minWidth: 0 }, wide && Platform.OS === 'web' ? ({ position: 'sticky', top: space.lg, alignSelf: 'flex-start' } as unknown as ViewStyle) : null]}>
+      <NextStepsTimeline closingAt={draft.closingAt} />
+      <PublishCard draft={draft} ack={ack} onToggleAck={() => setAck((v) => !v)} />
+      {attempted && !ack && <SummaryBanner message="Tick the box above to publish." />}
+      {!!publishError && <SummaryBanner message={publishError} />}
+    </View>
+  );
 
   return (
     <View style={styles.stepContent}>
-      <ScreenTitle step="REVIEW" title="Review and publish" subtitle="Check the details below, then publish." />
-
-      <View style={{ gap: space.lg }}>
-        <SummaryGroup title="What you need">
-          <SummaryLine label="Category" value={draft.category} />
-          {!!itemName && <SummaryLine label="Item" value={itemName} />}
-          <SummaryLine label="Title" value={draft.title} />
-          <SummaryBlock label="Detail" value={draft.scope} />
-          {!!specText && <SummaryBlock label="Specifications" value={specText} />}
-          <SummaryLine label="Quantity" value={draft.quantity} />
-          <SummaryLine label={draft.strictBudget ? "Budget (strict maximum)" : "Indicative budget"} value={formatBudget(draft.budgetMin, draft.budgetMax)} />
-          <SummaryLine label="Required documents" value={draft.requiredDocuments.length > 0 ? draft.requiredDocuments.join(', ') : 'No extra documents'} />
-        </SummaryGroup>
-
-        <SummaryGroup title="Where and when">
-          <SummaryLine label="Location" value={locationText} />
-          <SummaryLine label="Attachments" value={attachmentsText} />
-        </SummaryGroup>
-
-        <SummaryGroup title="Closing">
-          <SummaryLine label="Closes" value={formatDateTime(draft.closingAt)} />
-        </SummaryGroup>
+      <ScreenTitle step="REVIEW" title="Review and publish" subtitle="One last look — this is what suppliers will see." />
+      <View style={wide ? styles.reviewColumns : { gap: space.lg }}>
+        {summary}
+        {side}
       </View>
-
-      <SealedExplanationCard closingAt={draft.closingAt} />
-
-      <BeforePublishCard draft={draft} ack={ack} onToggleAck={() => setAck((v) => !v)} />
-      {attempted && !ack && <SummaryBanner message="Confirm the statement above to publish." />}
-      {!!publishError && <SummaryBanner message={publishError} />}
     </View>
   );
 }
@@ -2775,7 +2902,7 @@ export default function PostRequirement(props: PostRequirementProps) {
     <View style={styles.root}>
       <ShellHeader step={props.state} onExit={onExit} />
       <ScreenScroll style={styles.shellScroll} contentContainerStyle={styles.shellScrollContent}>
-        <View style={styles.shellInner}>
+        <View style={[styles.shellInner, props.state === 'REVIEW' && styles.shellInnerWide]}>
           <StepTransition step={props.state}>{content}</StepTransition>
         </View>
       </ScreenScroll>
@@ -2809,6 +2936,7 @@ const styles = StyleSheet.create({
 
   shellScroll: { flex: 1 },
   shellScrollContent: { alignItems: 'center' },
+  shellInnerWide: { maxWidth: 1120 },
   shellInner: { width: '100%', maxWidth: FORM_CONTENT_MAX_WIDTH, paddingHorizontal: layout.screenPadding, paddingTop: space.xxxl, paddingBottom: space.xxxl },
 
   bottomBar: { width: '100%', alignItems: 'center', backgroundColor: color.surface, borderTopWidth: 1, borderTopColor: color.border },
@@ -3055,6 +3183,41 @@ const styles = StyleSheet.create({
   closingNote: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm },
 
   /* review summary */
+  reviewColumns: { flexDirection: 'row', alignItems: 'flex-start', gap: space.xl },
+  reviewHero: { borderWidth: 1, borderColor: color.primaryBorder, backgroundColor: color.primaryFaint, borderRadius: radius.xl, padding: space.lg, gap: space.sm },
+  reviewChip: { alignSelf: 'flex-start', borderWidth: 1, borderColor: color.primaryBorder, backgroundColor: color.surface, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: 2 },
+  reviewChipLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.primary },
+  reviewHeroTitle: { fontFamily: font.display, fontSize: fontSize.xl, lineHeight: lineHeight.xl, letterSpacing: letterSpacing.tight, color: color.ink },
+  statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm },
+  statTile: { flexGrow: 1, flexBasis: 160, borderWidth: 1, borderColor: color.border, backgroundColor: color.surface, borderRadius: radius.lg, padding: space.md },
+  statTileHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  statTileLabel: { fontFamily: font.mono, fontSize: fontSize.micro, letterSpacing: letterSpacing.label, textTransform: 'uppercase', color: color.inkMuted },
+  statTag: { borderRadius: radius.pill, backgroundColor: color.dangerFaint, borderWidth: 1, borderColor: color.dangerBorder, paddingHorizontal: space.sm },
+  statTagLabel: { fontFamily: font.bodySemi, fontSize: fontSize.micro, color: color.danger },
+  statTileValue: { marginTop: space.xs, fontFamily: font.display, fontSize: fontSize.lg, lineHeight: lineHeight.lg, color: color.ink },
+  statTileSub: { marginTop: 2, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
+  reviewCard: { borderWidth: 1, borderColor: color.border, backgroundColor: color.surface, borderRadius: radius.xl, padding: space.lg },
+  reviewCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, marginBottom: space.md },
+  reviewCardTitle: { fontFamily: font.bodySemi, fontSize: fontSize.md, color: color.ink },
+  reviewEdit: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
+  reviewDetail: { marginTop: 2, marginBottom: space.xs, fontFamily: font.body, fontSize: fontSize.base, lineHeight: lineHeight.base, color: color.ink },
+  kvGrid: { flexDirection: 'row', flexWrap: 'wrap', borderTopWidth: 1, borderTopColor: color.borderFaint },
+  kvItem: { width: '100%', paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.borderFaint, paddingRight: space.md },
+  kvItemHalf: { width: '50%' },
+  kvLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
+  kvValue: { marginTop: 2, fontFamily: font.bodyMedium, fontSize: fontSize.base, lineHeight: lineHeight.base, color: color.ink },
+  timelineRow: { flexDirection: 'row', gap: space.md },
+  timelineRail: { width: 24, alignItems: 'center' },
+  timelineDot: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: color.primaryBorder, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' },
+  timelineDotNow: { backgroundColor: color.primary, borderColor: color.primary },
+  timelineDotLabel: { fontFamily: font.monoMedium, fontSize: fontSize.micro, color: color.primary },
+  timelineDotLabelNow: { color: color.onPrimary },
+  timelineLine: { flex: 1, width: 2, minHeight: 16, backgroundColor: color.primaryBorder, marginVertical: 2 },
+  timelineText: { flex: 1, minWidth: 0, paddingBottom: space.md },
+  timelineTitle: { fontFamily: font.bodySemi, fontSize: fontSize.base, color: color.ink },
+  timelineBody: { marginTop: 2, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.inkMuted },
+  lockLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  lockLineName: { flex: 1, minWidth: 0, fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
   summaryList: { gap: space.md },
   summaryLine: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, flexWrap: 'wrap', paddingBottom: space.md, borderBottomWidth: 1, borderBottomColor: color.borderFaint },
   summaryLineLabel: { width: 150, fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },

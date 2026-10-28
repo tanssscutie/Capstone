@@ -76,6 +76,19 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Post a requirement (1F): bagong Review and publish**
+- **Hero card:** title, chip na "category · item", at tatlong stat tile:
+  - Quantity (kasama ang "≈ N pcs total" kapag bundled)
+  - Budget (may "Strict" tag)
+  - Closes in (countdown + petsa, may "Change")
+- **Section cards na may "Edit":** What you need (Detail na may Show more, at specs bilang 2-column na key/value), Documents and files, Delivery location.
+  - Bumabalik ang Edit sa tamang step, at hindi nawawala ang mga na-type.
+  - Bagong optional prop na `onEditStep`, na naka-wire sa `app/post-requirement.tsx`.
+- **"What happens next" timeline:** You publish → Matching suppliers are alerted → Sealed until {petsa} → All open at once.
+- **Lock list:** isang linya kada item na may lock icon, nasa "Why these lock" ang detalye. Kasunod ang acknowledgement, saka ang Publish.
+- **Layout:** dalawang column sa ≥900px (sticky ang kanan sa web), naka-stack sa phone.
+- **Bottom bar sa phone (lahat ng step):** tinanggal ang step indicator sa makitid na screen, dahil natatabunan ito ng mga button. Nasa page title naman ang "Step N of 4".
+
 **Post a requirement (1E): Delivery step — address lines, city picker, walang delivery window**
 - **Wala nang delivery window sa pag-post.** Laging `null` ang ipinapadalang `delivery_start/end`. Ang petsa ng delivery ay pagkakasunduan pagkatapos ng award (hiwalay na part mamaya).
   - Sa mga requirement na walang window, "To agree after award" ang "Needed by" (Requirement Detail at Submit Quotation), sa halip na blangko.
