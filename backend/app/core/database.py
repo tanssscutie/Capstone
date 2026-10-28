@@ -43,6 +43,8 @@ def create_db_and_tables():
     _add_column_if_missing("user", "theme", "VARCHAR(10) NOT NULL DEFAULT 'system'")
     _add_column_if_missing("requirement", "strict_budget", "BOOLEAN NOT NULL DEFAULT 0")
     _add_column_if_missing("quotation", "over_budget_reason", "VARCHAR(300) NULL")
+    _migrate_withdrawal_strike_reasons()
+    _add_column_if_missing("businessreport", "recommended_action", "VARCHAR(20) NULL")
 
 
 def _migrate_user_role():
@@ -138,6 +140,27 @@ def _migrate_requirement_address_parts():
     """Adds Requirement.barangay and zip_code. Older requirements stay null."""
     _add_column_if_missing("requirement", "barangay", "VARCHAR(120) NULL")
     _add_column_if_missing("requirement", "zip_code", "VARCHAR(4) NULL")
+
+
+def _migrate_withdrawal_strike_reasons():
+    """Withdrawal strikes now count every withdrawal, with its reason: the
+    one-per-requirement unique key goes (a supplier can withdraw twice on the
+    same requirement) and the reason/proof columns come in. Older strikes keep
+    reason_code "unspecified"."""
+    insp = inspect(engine)
+    if "withdrawalstrike" not in insp.get_table_names():
+        return
+    _add_column_if_missing("withdrawalstrike", "quotation_id", "INTEGER NULL")
+    _add_column_if_missing("withdrawalstrike", "reason_code", "VARCHAR(30) NOT NULL DEFAULT 'unspecified'")
+    _add_column_if_missing("withdrawalstrike", "reason_details", "TEXT NULL")
+    _add_column_if_missing("withdrawalstrike", "proof_path", "VARCHAR(500) NULL")
+    _add_column_if_missing("withdrawalstrike", "proof_filename", "VARCHAR(255) NULL")
+    names = {u["name"] for u in insp.get_unique_constraints("withdrawalstrike")} | {
+        i["name"] for i in insp.get_indexes("withdrawalstrike") if i.get("unique")}
+    if "uq_strike_user_requirement" in names and engine.dialect.name == "mysql":
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE withdrawalstrike DROP INDEX uq_strike_user_requirement"))
+        logger.info("Dropped withdrawalstrike.uq_strike_user_requirement.")
 
 
 def _add_column_if_missing(table: str, column: str, ddl: str):

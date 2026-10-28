@@ -305,6 +305,17 @@ class ReportSuggestionOut(BusinessSearchOut):
     dealt_at: Optional[datetime]
 
 
+class WithdrawalStrikeOut(BaseModel):
+    """One withdrawal behind an automatic report — admins only."""
+    id: int
+    requirement_ref: Optional[str]
+    requirement_title: Optional[str]
+    created_at: datetime
+    reason_label: str
+    reason_details: Optional[str]
+    has_proof: bool
+
+
 class AdminReportOut(BaseModel):
     id: int
     reason: str
@@ -327,6 +338,10 @@ class AdminReportOut(BaseModel):
     reported_suspended_until: Optional[datetime] = None
     reported_banned: bool = False
     reported_history: List[ModerationActionOut] = []
+    # Automatic withdrawal-policy reports: the action pre-selected for the
+    # admin, and the withdrawals (with reasons) inside the 90-day window.
+    recommended_action: Optional[str] = None
+    withdrawals: List[WithdrawalStrikeOut] = []
 
 
 class AdminStatsOut(BaseModel):

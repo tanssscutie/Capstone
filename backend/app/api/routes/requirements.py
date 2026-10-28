@@ -121,7 +121,8 @@ def _handle_service_errors(exc: Exception):
 
 @router.get("/withdrawal-preview")
 def withdrawal_preview(current_user=Depends(require_seller)):
-    """What one more withdrawn quotation would do: warning, suspension or ban."""
+    """What one more withdrawal would do (warning, subject for suspension,
+    subject for ban — an admin decides), plus the suggested reasons."""
     return requirement_service.withdrawal_preview(current_user.id)
 
 
@@ -289,11 +290,30 @@ async def upload_quotation_attachment(
 
 
 @router.post("/{requirement_id}/quotations/withdraw", status_code=status.HTTP_204_NO_CONTENT)
-def withdraw_quotation(requirement_id: int, current_user=Depends(require_verified)):
+async def withdraw_quotation(
+    requirement_id: int,
+    reason_code: str = Form(default=""),
+    reason_details: Optional[str] = Form(default=None),
+    file: Optional[UploadFile] = File(default=None),
+    current_user=Depends(require_verified),
+):
+    """Multipart: a reason (withdrawal_policy.REASONS) is required; details and
+    a proof file are optional. Every withdrawal is a strike."""
     try:
-        requirement_service.withdraw_quotation(requirement_id, current_user.id)
+        proof = (await file.read(), file.filename) if file is not None and file.filename else None
+        requirement_service.withdraw_quotation(requirement_id, current_user.id, reason_code, reason_details, proof)
     except Exception as exc:
         _handle_service_errors(exc)
+
+
+@router.get("/admin/withdrawals/{strike_id}/proof")
+def withdrawal_proof(strike_id: int, _admin: User = Depends(require_admin)):
+    """The proof a supplier attached to a withdrawal — administrators only."""
+    try:
+        content, filename = requirement_service.withdrawal_proof_file(strike_id)
+    except Exception as exc:
+        _handle_service_errors(exc)
+    return _file_response(content, filename)
 
 
 @router.get("/{requirement_id}/quotations", response_model=RequirementQuotationsView)

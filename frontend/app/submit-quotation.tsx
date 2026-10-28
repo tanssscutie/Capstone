@@ -110,15 +110,12 @@ export default function QuotationRoute() {
         quotation={submission.quotation}
         ledgerEntry={submission.ledgerEntry}
         notice={receiptNotice}
-        onWithdraw={() => withdrawConfirm.confirm(async () => {
-          try {
-            await requirementsApi.withdrawQuotation(Number(id));
-            setSubmission(null);
-            setReceiptNotice(null);
-            setSubmitError(null);
-          } catch (e: any) {
-            setError(errorMessage(e, 'Could not withdraw this quotation.'));
-          }
+        onWithdraw={() => withdrawConfirm.confirm(async (reason) => {
+          // A failure throws into the dialog, which shows it and stays open.
+          await requirementsApi.withdrawQuotation(Number(id), reason);
+          setSubmission(null);
+          setReceiptNotice(null);
+          setSubmitError(null);
         })}
         onBack={() => router.back()}
         onTrack={() => router.push('/quotations')}
@@ -212,7 +209,7 @@ export default function QuotationRoute() {
         }
         setReceiptNotice(
           failed.length > 0
-            ? `Your quotation is sealed, but ${failed.length === 1 ? 'this attachment' : 'these attachments'} failed to upload: ${failed.join(', ')}. Withdraw and resubmit before closing to include ${failed.length === 1 ? 'it' : 'them'}.`
+            ? `Your quotation is sealed, but ${failed.length === 1 ? 'this attachment' : 'these attachments'} failed to upload: ${failed.join(', ')}. To include ${failed.length === 1 ? 'it' : 'them'}, withdraw and resubmit before closing — note that every withdrawal is recorded on your account.`
             : null,
         );
 

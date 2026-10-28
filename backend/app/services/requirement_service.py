@@ -893,7 +893,15 @@ class RequirementService:
 
     # ---------- withdraw ----------
 
-    def withdraw_quotation(self, requirement_id: int, business_id: int) -> None:
+    def withdraw_quotation(self, requirement_id: int, business_id: int, reason_code: str,
+                           reason_details: str | None = None, proof: tuple[bytes, str | None] | None = None) -> None:
+        """Withdraws the supplier's sealed quotation and records a strike with
+        its reason (withdrawal_policy) — every withdrawal counts, even one
+        resubmitted before closing. The reason never reaches the buyer."""
+        try:
+            details = withdrawal_policy.check_reason(reason_code, reason_details)
+        except withdrawal_policy.InvalidWithdrawalReason as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
         with Session(engine) as session:
             req = repo.get_requirement(session, requirement_id)
             if not req:
@@ -905,9 +913,21 @@ class RequirementService:
             if not existing:
                 raise NoActiveQuotation()
 
+            proof_path = proof_name = None
+            if proof is not None:
+                proof_path = withdrawal_policy.save_proof(business_id, proof[1], proof[0])
+                proof_name = proof[1]
+
             self._withdraw_row(session, existing, business_id)
-            # Not a strike yet: resubmitting before closing (fixing a mistake)
-            # doesn't count. withdrawal_policy.record_closing decides at closing.
+            withdrawal_policy.record(session, req, existing.id, business_id, reason_code, details, proof_path, proof_name)
+
+    def withdrawal_proof_file(self, strike_id: int) -> tuple[bytes, str]:
+        """Admin only (checked by the route): the proof a supplier attached."""
+        with Session(engine) as session:
+            strike = session.get(withdrawal_policy.WithdrawalStrike, strike_id)
+            if not strike or not strike.proof_path:
+                raise RequirementNotFound()
+            return self._read_attachment(strike.proof_path, strike.proof_filename or "proof")
 
     def withdrawal_preview(self, business_id: int) -> dict:
         """What withdrawing (and not resubmitting) one more would do — shown before confirming."""
@@ -1017,7 +1037,6 @@ class RequirementService:
                 # of the minimum, quotations are never opened — the closing
                 # is extended once, then the requirement is archived.
                 active = repo.list_active_quotations(session, req.id)
-                active_ids = [q.business_id for q in active]
                 if len(active) >= settings.MIN_QUOTATIONS_TO_RELEASE:
                     self._release_one(session, req)
                     released_count += 1
@@ -1026,8 +1045,6 @@ class RequirementService:
                     continue  # still open — a withdrawn supplier can resubmit
                 else:
                     self._archive_insufficient(session, req, active)
-                # Closed for good: withdrawn quotations nobody replaced are strikes.
-                withdrawal_policy.record_closing(session, req, active_ids)
         return released_count
 
     def _auto_extend(self, session: Session, req: Requirement, active: list) -> None:

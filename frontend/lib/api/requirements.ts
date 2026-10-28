@@ -345,9 +345,20 @@ export interface QuotationDraftOut {
 export interface WithdrawalPreviewOut {
   withdrawals_so_far: number;
   next_number: number;
-  next: 'recorded' | 'warning' | 'review';
+  /** 1st: warning · 2nd: subject for suspension · 3rd+: subject for a ban (an admin decides). */
+  next: 'warning' | 'suspension' | 'ban';
   message: string;
   window_days: number;
+  /** Suggested reasons to pick from (backend withdrawal_policy.REASONS). */
+  reasons: { code: string; label: string }[];
+}
+
+/** Why a supplier is withdrawing — required on every withdrawal. Seen only by
+ *  administrators, never the buyer. */
+export interface WithdrawReasonInput {
+  reasonCode: string;
+  reasonDetails: string | null;
+  proof: File | null;
 }
 
 export const requirementsApi = {
@@ -404,8 +415,13 @@ export const requirementsApi = {
     );
   },
 
-  withdrawQuotation: (requirementId: number) =>
-    api.post<void>(`/requirements/${requirementId}/quotations/withdraw`),
+  withdrawQuotation: (requirementId: number, reason: WithdrawReasonInput) => {
+    const form = new FormData();
+    form.append('reason_code', reason.reasonCode);
+    if (reason.reasonDetails) form.append('reason_details', reason.reasonDetails);
+    if (reason.proof) form.append('file', reason.proof, reason.proof.name);
+    return api.postForm<void>(`/requirements/${requirementId}/quotations/withdraw`, form);
+  },
 
   listQuotations: (requirementId: number) =>
     api.get<RequirementQuotationsView>(`/requirements/${requirementId}/quotations`),

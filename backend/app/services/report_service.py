@@ -26,8 +26,10 @@ from app.repositories import notification_repository as notif_repo
 from app.models.quotation import Quotation
 from app.schemas.business import (
     AdminReportOut, BusinessSearchOut, MyReportOut, ReportCreate, ReportReview, ReportSuggestionOut,
+    WithdrawalStrikeOut,
 )
 from app.services import moderation_service as moderation_module
+from app.services import withdrawal_policy
 from app.services.moderation_service import moderation_service
 
 REASONS = {
@@ -39,6 +41,8 @@ REASONS = {
     "MANIPULATION": "Bid manipulation or collusion",
     "ABUSIVE": "Abusive or harassing behavior",
     "OTHER": "Something else",
+    # Filed by the system only (withdrawal_policy), never from the report form.
+    "WITHDRAWALS": "Withdrawal policy",
 }
 MAX_REPORTS_PER_DAY = 5
 
@@ -132,8 +136,25 @@ class ReportService:
                     reported_suspended_until=reported.suspended_until if reported else None,
                     reported_banned=bool(reported and reported.banned_at),
                     reported_history=moderation_module.history(session, r.reported_id),
+                    recommended_action=r.recommended_action if r.status == "open" else None,
+                    withdrawals=self._withdrawals(session, r.reported_id) if r.reason == withdrawal_policy.REPORT_REASON else [],
                 ))
             return out
+
+    @staticmethod
+    def _withdrawals(session: Session, user_id: int) -> List[WithdrawalStrikeOut]:
+        strikes = withdrawal_policy.recent_strikes(session, user_id)
+        reqs = {r.id: r for r in session.exec(select(Requirement).where(
+            Requirement.id.in_({s.requirement_id for s in strikes}))).all()} if strikes else {}
+        return [WithdrawalStrikeOut(
+            id=s.id,
+            requirement_ref=reqs[s.requirement_id].ref_code if s.requirement_id in reqs else None,
+            requirement_title=reqs[s.requirement_id].title if s.requirement_id in reqs else None,
+            created_at=s.created_at,
+            reason_label=withdrawal_policy.reason_label(s.reason_code),
+            reason_details=s.reason_details,
+            has_proof=bool(s.proof_path),
+        ) for s in strikes]
 
     def list_mine(self, reporter_id: int) -> List[MyReportOut]:
         with Session(engine) as session:

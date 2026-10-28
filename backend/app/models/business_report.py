@@ -24,6 +24,10 @@ class BusinessReport(SQLModel, table=True):
     # Optional: the requirement it happened on, when there is one.
     related_requirement_id: Optional[int] = Field(default=None, foreign_key="requirement.id")
 
+    # Automatic reports only (withdrawal_policy): the action pre-selected for
+    # the admin — suspend_7 or ban. The admin still decides.
+    recommended_action: Optional[str] = Field(default=None, max_length=20)
+
     # open -> resolved (action taken) | dismissed (no violation found)
     status: str = Field(default="open", max_length=12, index=True)
     admin_notes: Optional[str] = Field(default=None, sa_type=Text)

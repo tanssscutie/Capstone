@@ -21,7 +21,7 @@ import {
   formatDate,
   useAdminAccess,
 } from '../components/ui/AdminKit';
-import { listReports, reviewReport, type AdminReportOut, type ModerationAction } from '../lib/api/admin';
+import { listReports, openWithdrawalProof, reviewReport, type AdminReportOut, type ModerationAction } from '../lib/api/admin';
 import { errorMessage } from '../lib/api/client';
 
 type StatusFilter = 'open' | 'resolved' | 'dismissed' | 'all';
@@ -34,8 +34,44 @@ const ACTIONS: { value: ModerationAction; label: string; primary?: boolean; dang
   { value: 'ban', label: 'Ban', danger: true },
 ];
 
+/** The withdrawals behind an automatic withdrawal-policy report, with the
+ *  reasons — administrators only; the buyer never sees these. */
+function WithdrawalList({ report }: { report: AdminReportOut }) {
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <View style={styles.withdrawals}>
+      <Text style={styles.withdrawalsTitle}>Withdrawals in the last 90 days ({report.withdrawals.length})</Text>
+      {report.withdrawals.map((w) => (
+        <View key={w.id} style={styles.withdrawalRow}>
+          <Text style={styles.subStrong}>
+            {w.requirement_ref ?? 'Requirement'} · {formatDate(w.created_at)}
+          </Text>
+          <Text style={styles.withdrawalReason}>{w.reason_label}</Text>
+          {!!w.reason_details && <Text style={styles.details}>“{w.reason_details}”</Text>}
+          {w.has_proof && (
+            <Pressable
+              onPress={() => openWithdrawalProof(w.id).catch((e) => setError(errorMessage(e, 'Could not open the proof.')))}
+              accessibilityRole="button"
+            >
+              <Text style={styles.link}>View proof</Text>
+            </Pressable>
+          )}
+        </View>
+      ))}
+      {error && <Text style={styles.error}>{error}</Text>}
+    </View>
+  );
+}
+
 function ReviewControls({ report, onDone }: { report: AdminReportOut; onDone: () => void }) {
-  const [notes, setNotes] = useState('');
+  // An automatic withdrawal report comes with its action pre-selected and a
+  // reason already written — the admin can change either, or dismiss.
+  const recommended = report.recommended_action;
+  const [notes, setNotes] = useState(
+    recommended && report.withdrawals.length > 0
+      ? `${report.withdrawals.length} sealed quotations withdrawn within 90 days.`
+      : '',
+  );
   const [busy, setBusy] = useState<ModerationAction | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,9 +114,16 @@ function ReviewControls({ report, onDone }: { report: AdminReportOut; onDone: ()
             key={a.value}
             onPress={() => decide(a.value)}
             disabled={busy !== null}
-            style={[styles.button, a.danger ? styles.buttonDanger : null, busy ? { opacity: 0.6 } : null]}
+            style={[
+              styles.button,
+              a.danger ? styles.buttonDanger : null,
+              recommended === a.value ? styles.buttonRecommended : null,
+              busy ? { opacity: 0.6 } : null,
+            ]}
           >
-            <Text style={[styles.buttonLabel, a.danger ? { color: color.danger } : null]}>{busy === a.value ? 'Saving…' : a.label}</Text>
+            <Text style={[styles.buttonLabel, a.danger ? { color: color.danger } : null, recommended === a.value ? { color: color.onPrimary } : null]}>
+              {busy === a.value ? 'Saving…' : recommended === a.value ? `${a.label} — recommended` : a.label}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -174,6 +217,7 @@ export default function AdminReportsRoute() {
                 </View>
 
                 <Text style={styles.details}>{r.details}</Text>
+                {r.withdrawals.length > 0 && <WithdrawalList report={r} />}
 
                 <InfoGrid
                   items={[
@@ -228,6 +272,12 @@ const styles = StyleSheet.create({
   button: { borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, paddingHorizontal: space.lg, paddingVertical: space.sm },
   buttonPrimary: { backgroundColor: color.primary, borderColor: color.primary },
   buttonDanger: { borderColor: color.dangerBorder },
+  buttonRecommended: { backgroundColor: color.danger, borderColor: color.danger },
+  withdrawals: { gap: space.sm, marginBottom: space.sm, borderLeftWidth: 2, borderLeftColor: color.warningBorder, paddingLeft: space.md },
+  withdrawalsTitle: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
+  withdrawalRow: { gap: 2 },
+  withdrawalReason: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.warning },
+  link: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
   buttonLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
   error: { fontFamily: font.body, fontSize: fontSize.sm, color: color.danger },
 });

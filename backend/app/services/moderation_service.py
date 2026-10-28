@@ -36,8 +36,9 @@ def history(session: Session, user_id: int) -> List[ModerationActionOut]:
 
 class ModerationService:
     def apply(self, session: Session, admin_id: int, user_id: int, action: str, reason: str,
-              report_id: Optional[int] = None) -> None:
-        """action: warn | suspend_7 | suspend_30 | ban | lift. Commits."""
+              report_id: Optional[int] = None, always_notify: bool = False) -> None:
+        """action: warn | suspend_7 | suspend_30 | ban | lift. Commits.
+        always_notify: alert and email even if the user turned those off."""
         user = session.get(User, user_id)
         if not user or user.is_admin:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Business not found")
@@ -73,7 +74,7 @@ class ModerationService:
         # Emailed too (VERIFICATION is in EMAIL_ALERT_TYPES) — a banned or
         # suspended user can't open the app to read an in-app alert.
         notif_repo.create_if_allowed(session, user_id=user_id, type_="VERIFICATION", category="activity",
-                                     title=title, detail=detail, urgent=action != "lift")
+                                     title=title, detail=detail, urgent=action != "lift", always=always_notify)
         if action == "ban":
             self._wind_down(user_id)
 

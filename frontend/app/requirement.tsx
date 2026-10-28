@@ -403,13 +403,10 @@ export default function RequirementRoute() {
         ledgerEntry={ledgerEntry}
         questions={questions}
         onAskQuestion={onAskQuestion}
-        onWithdraw={() => withdrawConfirm.confirm(async () => {
-          try {
-            await requirementsApi.withdrawQuotation(Number(id));
-            await load(true);
-          } catch (e: any) {
-            setActionError(errorMessage(e, 'Could not withdraw this quotation.'));
-          }
+        onWithdraw={() => withdrawConfirm.confirm(async (reason) => {
+          // A failure throws into the dialog, which shows it and stays open.
+          await requirementsApi.withdrawQuotation(Number(id), reason);
+          await load(true);
         })}
         onAcceptAward={async () => {
           try {

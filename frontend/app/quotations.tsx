@@ -95,19 +95,20 @@ export default function MyQuotationsRoute() {
         }
       }}
       onOpenChat={(threadId) => router.push({ pathname: '/home', params: { openThread: threadId } })}
-      onWithdraw={(quotationId) => withdrawConfirm.confirm(async () => {
+      onWithdraw={(quotationId) => withdrawConfirm.confirm(async (reason) => {
         const quotation = quotations.find((q) => q.id === quotationId);
         if (!quotation) return;
-        // Optimistic update, then reload from the server so outcome/status stay accurate
+        // A failure throws into the dialog, which shows it and stays open.
+        await requirementsApi.withdrawQuotation(Number(quotation.requirementId), reason);
+        // Shown at once, then reloaded so outcome/status stay accurate
         // (the backend, not the client, decides what "withdrawn" means going forward).
         setQuotations((prev) =>
           prev.map((q) => (q.id === quotationId ? { ...q, status: 'WITHDRAWN', withdrawnAt: new Date().toISOString() } : q)),
         );
         try {
-          await requirementsApi.withdrawQuotation(Number(quotation.requirementId));
           await load();
         } catch (e: any) {
-          setError(errorMessage(e, 'Could not withdraw this quotation.'));
+          setError(errorMessage(e, 'Could not refresh your quotations.'));
         }
       })}
     />

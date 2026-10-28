@@ -28,21 +28,25 @@ def create_if_allowed(
     detail: str,
     urgent: bool = False,
     related_requirement_id: Optional[int] = None,
+    always: bool = False,
 ) -> Optional[Notification]:
     """Same as create(), but checks the recipient's notification preferences
     first and silently skips creation if they've turned that category off.
     category is "messages" (direct messages) or "activity" (everything else).
 
     An alert in EMAIL_ALERT_TYPES is also emailed — after it's saved, in the
-    background — when the recipient has an email address and email alerts on."""
+    background — when the recipient has an email address and email alerts on.
+
+    always=True skips the preferences, in-app and email alike: notices about
+    the account's own standing (withdrawal strikes) must reach the user."""
     user = session.get(User, user_id)
-    if user is not None:
+    if user is not None and not always:
         if category == "messages" and not user.notify_messages:
             return None
         if category == "activity" and not user.notify_activity:
             return None
     notification = create(session, user_id, type_, title, detail, urgent, related_requirement_id)
-    if user is not None and user.email and user.notify_email and type_ in EMAIL_ALERT_TYPES:
+    if user is not None and user.email and (user.notify_email or always) and type_ in EMAIL_ALERT_TYPES:
         from app.services import email_service  # local: keeps the repository layer import-light
 
         email_service.send_alert_email(user.email, title, detail, related_requirement_id)

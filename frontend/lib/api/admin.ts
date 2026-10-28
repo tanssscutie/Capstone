@@ -166,6 +166,35 @@ export interface AdminReportOut {
   reported_suspended_until: string | null;
   reported_banned: boolean;
   reported_history: { action: string; reason: string; until: string | null; created_at: string }[];
+  /** Automatic withdrawal-policy reports: the action pre-selected for the admin. */
+  recommended_action: ModerationAction | null;
+  /** The withdrawals behind it (last 90 days), with the reasons suppliers gave. */
+  withdrawals: AdminWithdrawalOut[];
+}
+
+export interface AdminWithdrawalOut {
+  id: number;
+  requirement_ref: string | null;
+  requirement_title: string | null;
+  created_at: string;
+  reason_label: string;
+  reason_details: string | null;
+  has_proof: boolean;
+}
+
+/** GET /requirements/admin/withdrawals/{id}/proof — opened in a new tab, like a document. */
+export async function openWithdrawalProof(strikeId: number): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const token = tokenStore.get();
+  const res = await fetch(`${API_BASE_URL}/requirements/admin/withdrawals/${strikeId}/proof`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    throw new Error(`Could not load that file (${res.status})`);
+  }
+  const url = URL.createObjectURL(await res.blob());
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export type ModerationAction = 'dismiss' | 'warn' | 'suspend_7' | 'suspend_30' | 'ban';

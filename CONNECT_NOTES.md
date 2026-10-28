@@ -76,6 +76,33 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Withdrawal policy v3 (pinalitan ang dati): bawat withdraw ay may reason at bilang**
+- **Bilang ang bawat withdraw, sa mismong oras ng withdraw**, kahit mag-resubmit bago mag-closing. Ito ay para protektahan ang sealed pricing laban sa price fishing.
+  - Wala na ang lumang "binibilang lang kapag walang kapalit sa closing" (`record_closing`).
+  - 90 araw pa rin ang window.
+- **Required ang reason:** may suggested chips (Pricing or computation error, Supplier or material cost changed, Stock or material no longer available, Can't meet the quantity or timeline, Wrong details or attachment submitted, Other).
+  - Optional ang paliwanag (hanggang 500), pero required (10+ characters) kapag "Other".
+  - Optional ang proof file (pdf/jpg/png, 10 MB). Naka-encrypt ito gaya ng ibang upload.
+- **Mga consequence:**
+  - 1st: formal warning (moderation action na `warn`)
+  - 2nd: **subject for suspension**, isang automatic na report sa admin Reports na naka-preselect ang "Suspend 7 days"
+  - 3rd at pataas: **subject for ban**, ang parehong report na Ban na ang naka-preselect
+  - **Admin ang nagdedesisyon.** Walang automatic suspend o ban.
+- **Bawat strike ay may in-app alert at email**, kahit naka-off ang alerts o email ng supplier (`create_if_allowed(..., always=True)`).
+- **Admin lang ang nakakakita ng reason, paliwanag at proof.** Sa Reports, may listahan ng withdrawals sa huling 90 araw (ref, petsa, reason, paliwanag, "View proof"), at naka-highlight ang recommended action na may nakasulat nang reason. Hindi ito ipinapakita sa buyer, sa ledger o sa ibang supplier.
+- **Withdraw modal (`WithdrawConfirm`):**
+  - Ipinapakita kung pang-ilang withdrawal ito at kung ano ang mangyayari.
+  - Kapag pumalya ang request, nananatiling bukas ang modal at ipinapakita ang error, kaya hindi nawawala ang na-type.
+  - Kapag hindi ma-load ang preview, may fallback na. Dati, forever spinner ito at hindi makapag-withdraw.
+- **Backend:**
+  - `WithdrawalStrike` (`reason_code`, `reason_details`, `proof_path`, `quotation_id`; tinanggal ang unique per requirement)
+  - `BusinessReport.recommended_action`
+  - multipart na `POST /requirements/{id}/quotations/withdraw`
+  - `GET /requirements/admin/withdrawals/{id}/proof` (admin)
+  - Kusang tumatakbo ang migration sa startup (`_migrate_withdrawal_strike_reasons`).
+- **Dev DB cleanup:** na-delete ang lumang automatic na `warn` (moderation action #1) ni user 2, na galing sa lumang rule.
+- Tests: `backend/tests/test_withdrawal_strikes.py` (reason required, binibilang ang resubmit, escalation, walang auto suspend/ban, email kahit naka-off, 90 araw, proof para sa admin lang, at hindi nakakarating ang reason sa buyer).
+
 **Buyer: released quotations, naka-group ayon sa budget**
 - Pagkatapos lang ng release (hindi kailanman sa sealed state), naka-group na ang listahan ng buyer:
   - **Above indicated budget**: may caption na "Each supplier's reason was sealed with their price". Ipinapakita pa rin ng card ang over-budget reason.
