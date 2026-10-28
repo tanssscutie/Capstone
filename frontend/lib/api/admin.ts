@@ -90,6 +90,21 @@ export async function checkAdminAccess(): Promise<boolean> {
   }
 }
 
+/** GET /business/admin/system-status — admin Settings: rules in force and
+ *  which services are on. Read-only; set in the server's .env. */
+export interface AdminSystemStatus {
+  min_quotations_to_release: number;
+  auto_extend_days: number;
+  withdrawal_window_days: number;
+  ai_enabled: boolean;
+  email_enabled: boolean;
+  files_encrypted: boolean;
+}
+
+export async function getSystemStatus(): Promise<AdminSystemStatus> {
+  return api.get<AdminSystemStatus>('/business/admin/system-status');
+}
+
 /** GET /business/admin/flagged — businesses currently waiting on review. */
 export async function listFlagged(): Promise<AdminFlaggedBusinessOut[]> {
   return api.get<AdminFlaggedBusinessOut[]>('/business/admin/flagged');

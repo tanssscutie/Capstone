@@ -306,7 +306,8 @@ function EmailCard({ email, availableAt, onRequestEmailOtp, onConfirmEmailChange
   );
 }
 
-function PasswordCard({
+/** Exported for the admin Settings page (app/admin-settings.tsx). */
+export function PasswordCard({
   email,
   onRequestPasswordOtp,
   onChangePassword,
@@ -468,7 +469,8 @@ const THEME_OPTIONS: { value: ThemePreference; label: string; hint: string }[] =
   { value: 'dark', label: 'Dark', hint: 'Always dark' },
 ];
 
-function AppearanceCard({ theme, onChangeTheme }: { theme: ThemePreference; onChangeTheme: (t: ThemePreference) => Promise<void> }) {
+/** Exported for the admin Settings page (app/admin-settings.tsx). */
+export function AppearanceCard({ theme, onChangeTheme }: { theme: ThemePreference; onChangeTheme: (t: ThemePreference) => Promise<void> }) {
   const [value, setValue] = useState<ThemePreference>(theme);
   const [error, setError] = useState<string | null>(null);
   // What the browser reports for the device — "System" follows exactly this.

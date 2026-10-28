@@ -8,11 +8,11 @@ import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { color, font, fontSize, letterSpacing, space, radius } from './tokens';
 
-type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes';
+type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes' | 'settings';
 
 export const ADMIN_NAV_ITEMS: {
   label: string;
-  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests';
+  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests' | '/admin-settings';
   glyph: NavGlyphKind;
 }[] = [
   { label: 'Dashboard', href: '/admin', glyph: 'dashboard' },
@@ -20,6 +20,7 @@ export const ADMIN_NAV_ITEMS: {
   { label: 'Requirements', href: '/admin-requirements', glyph: 'requirements' },
   { label: 'Reports', href: '/admin-reports', glyph: 'reports' },
   { label: 'Change requests', href: '/admin-change-requests', glyph: 'changes' },
+  { label: 'Settings', href: '/admin-settings', glyph: 'settings' },
 ];
 
 /** No icon library in this project — each glyph is a few plain Views. */
@@ -40,6 +41,16 @@ function NavGlyph({ kind, tone }: { kind: NavGlyphKind; tone: string }) {
       <View style={glyph.box}>
         <View style={[glyph.head, { borderColor: tone }]} />
         <View style={[glyph.shoulders, { borderColor: tone }]} />
+      </View>
+    );
+  }
+  if (kind === 'settings') {
+    // A cog: a ring with four short teeth.
+    return (
+      <View style={glyph.box}>
+        <View style={[glyph.cogTooth, { backgroundColor: tone }]} />
+        <View style={[glyph.cogTooth, { backgroundColor: tone, transform: [{ rotate: '90deg' }] }]} />
+        <View style={[glyph.cogRing, { borderColor: tone }]} />
       </View>
     );
   }
@@ -161,6 +172,8 @@ const glyph = StyleSheet.create({
   flagRow: { flexDirection: 'row', alignItems: 'flex-start', height: 15 },
   flagPole: { width: 1.5, height: 15, borderRadius: 1 },
   flag: { width: 10, height: 7, borderWidth: 1.5, borderLeftWidth: 0, borderTopRightRadius: 2, borderBottomRightRadius: 2 },
+  cogTooth: { position: 'absolute', width: 15, height: 3, borderRadius: 1 },
+  cogRing: { width: 11, height: 11, borderRadius: 6, borderWidth: 2.5, backgroundColor: color.primary },
 });
 
 const styles = StyleSheet.create({

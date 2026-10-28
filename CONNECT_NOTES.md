@@ -76,6 +76,15 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Admin: bagong Settings page (`/admin-settings`)**
+- May bagong **Settings** sa admin sidebar, na may cog icon na gawa sa shapes.
+- **Appearance:** System, Light o Dark, naka-save sa admin account. Dati, hindi naa-apply ang theme sa mga admin page dahil nilalaktawan ng app layout ang admin routes. Ina-apply na ito ngayon sa `useAdminAccess`.
+- **Admin account:** pangalan, email, access, at Log out.
+- **Password:** pareho ng sa user Settings (may email code at cooldown). Ginamit ulit ang `PasswordCard`.
+- **Platform rules (read-only):** quotations na kailangan bago magbukas, extension kapag kulang, withdrawal window at steps. Nasa `.env` ang mga ito, kaya ipinapakita lang, hindi ine-edit.
+- **Services:** kung naka-on ang AI (Gemini), email delivery (o dev mode) at file encryption. Booleans lang ang ipinapakita, walang key o password na lumalabas.
+- Backend: `GET /business/admin/system-status` (admin lang). Tests: `backend/tests/test_admin_settings.py`.
+
 **AI document check: dapat totoong document ang ina-upload (walang selfie o random na litrato)**
 - Sa **iisang Gemini call** (`document_extraction_service`), binabasa ang ID number at tinitingnan kung ang upload ay:
   - `expected`: ang tamang document (scan, PDF o malinaw na litrato)

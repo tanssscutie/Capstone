@@ -16,11 +16,11 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { color, font, fontSize, lineHeight, letterSpacing, space, radius, layout, breakpoint } from './tokens';
+import { color, font, fontSize, lineHeight, letterSpacing, space, radius, layout, breakpoint, applyTheme } from './tokens';
 import { AdminSidebar, AdminMobileNav } from './AdminSidebar';
 import { checkAdminAccess, openAdminDocumentFile } from '../../lib/api/admin';
 import type { DocumentUploadOut } from '../../lib/api/business';
-import { logout } from '../../lib/api/auth';
+import { logout, me } from '../../lib/api/auth';
 
 /* ─── Access gate ───────────────────────────────────── */
 
@@ -36,6 +36,9 @@ export function useAdminAccess(): AdminAccess {
       if (cancelled) return;
       setAccess(ok ? 'GRANTED' : 'DENIED');
       if (!ok) router.replace('/admin-login');
+      // The app layout skips admin routes, so the admin's own Light/Dark
+      // choice (admin Settings) is applied here.
+      if (ok) me().then((u) => !cancelled && applyTheme(u.theme)).catch(() => {});
     });
     return () => {
       cancelled = true;
