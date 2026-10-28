@@ -160,6 +160,19 @@ class PublicBusinessProfileOut(BaseModel):
     contact_details_visible: bool = False
     contact_person: Optional[str] = None
     contact_mobile: Optional[str] = None
+    # Item names the business offers (onboarding) — the "offered_items" section.
+    offered_items: List[str] = []
+    # Profile privacy (services/profile_privacy.py): the sections withheld from
+    # this viewer, the owner's own choices (owner only), and who the owner is
+    # previewing as ("View as others").
+    hidden_sections: List[str] = []
+    visibility: Optional[Dict[str, str]] = None
+    viewing_as: Optional[str] = None
+
+
+class ProfileVisibilityIn(BaseModel):
+    """The owner's choices: {section: public | verified | only_me}."""
+    sections: Dict[str, str]
 
 
 class ProfileDetailsIn(BaseModel):

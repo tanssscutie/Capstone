@@ -58,6 +58,9 @@ class User(SQLModel, table=True):
     # Short public-facing bio shown on the business's profile — optional,
     # written by the business itself.
     business_description: Optional[str] = None
+    # Who sees which profile section — JSON {section: public|verified|only_me}
+    # (services/profile_privacy.py). Null = the defaults.
+    profile_visibility: Optional[str] = Field(default=None, sa_type=Text)
     # Facebook/LinkedIn-style profile (profile_media_service): encrypted
     # avatar and cover photo paths, a one-line headline, and two links.
     avatar_path: Optional[str] = Field(default=None, max_length=500)

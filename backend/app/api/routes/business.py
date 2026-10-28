@@ -2,7 +2,7 @@ import mimetypes
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlmodel import Session
 
@@ -112,8 +112,20 @@ def get_dashboard_stats(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/{business_id}/profile", response_model=PublicBusinessProfileOut)
-def get_public_profile(business_id: int, current_user: User = Depends(get_current_user)):
-    return business_service.get_public_profile(business_id, current_user.id)
+def get_public_profile(
+    business_id: int,
+    view_as: Optional[str] = Query(default=None, alias="as"),
+    current_user: User = Depends(get_current_user),
+):
+    """?as=public|verified: the owner previewing their profile as others see
+    it ("View as others"). Ignored for anyone else."""
+    return business_service.get_public_profile(business_id, current_user.id, view_as)
+
+
+@router.put("/profile/visibility")
+def update_profile_visibility(payload: ProfileVisibilityIn, current_user: User = Depends(get_current_user)):
+    """Who sees which profile section. Badge, tier and track record stay public."""
+    return business_service.update_profile_visibility(current_user.id, payload.sections)
 
 
 # ---------- admin ----------
@@ -161,7 +173,10 @@ def set_showcase(requirement_id: int, payload: ShowcaseIn, current_user: User = 
 
 @router.get("/{business_id}/completed-work", response_model=List[CompletedWorkOut])
 def completed_work(business_id: int, current_user: User = Depends(get_current_user)):
-    """Completed orders this supplier chose to show in Past work. No prices."""
+    """Completed orders this supplier chose to show in Past work. No prices.
+    Empty when the owner limited who sees them (profile privacy)."""
+    if not business_service.section_visible(business_id, current_user.id, "completed_orders"):
+        return []
     return portfolio_service.completed_work(business_id, showcased=True)
 
 

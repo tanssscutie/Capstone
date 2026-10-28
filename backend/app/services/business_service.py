@@ -19,7 +19,7 @@ from app.models.user import User
 from app.repositories import business_repository as repo
 from app.repositories import notification_repository as notif_repo
 from app.schemas.business import OfferedItem, OnboardingSubmit, VerificationStatusOut, DocumentUploadOut, DocumentExtractionOut, DashboardStatsOut, AdminFlaggedBusinessOut, AdminStatsOut, AdminBusinessOut, PublicBusinessProfileOut
-from app.services import document_extraction_service
+from app.services import document_extraction_service, profile_privacy
 from app.services import matching_service
 
 UPLOAD_ROOT = os.path.join("uploads", "documents")
@@ -60,6 +60,25 @@ def _mime(file: UploadFile) -> str:
     if sent and sent != "application/octet-stream":
         return sent
     return (mimetypes.guess_type(file.filename or "")[0] or "").lower()
+
+
+def _offered_item_names(user: User) -> list[str]:
+    """offered_items is JSON [{code, other_text}] — the item names, for the profile."""
+    from app.core.categories import CATEGORY_TREE
+
+    names = {i["code"]: i["name"] for c in CATEGORY_TREE for i in c["items"]}
+    try:
+        rows = json.loads(user.offered_items or "[]")
+    except (TypeError, ValueError):
+        return []
+    out = []
+    for r in rows if isinstance(rows, list) else []:
+        if not isinstance(r, dict):
+            continue
+        name = (r.get("other_text") or "").strip() or names.get(r.get("code") or "", "")
+        if name and name != "Other" and name not in out:
+            out.append(name)
+    return out
 
 
 def _ai_check_note(check) -> str | None:
@@ -543,7 +562,7 @@ class BusinessService:
                 offered_items=self._offered_items_out(user),
             )
 
-    def get_public_profile(self, business_id: int, viewer_id: int) -> PublicBusinessProfileOut:
+    def get_public_profile(self, business_id: int, viewer_id: int, view_as: str | None = None) -> PublicBusinessProfileOut:
         with Session(engine) as session:
             viewer = session.get(User, viewer_id)
             if not viewer or not viewer.is_active:
@@ -551,11 +570,15 @@ class BusinessService:
             user = session.get(User, business_id)
             if not user or user.is_admin or not user.is_active:
                 raise HTTPException(status_code=404, detail="Business not found")
-            privileged = viewer.id == user.id or viewer.is_admin
+            # Who's looking — the owner previewing "View as others" counts as that audience.
+            who = profile_privacy.audience(viewer, user, view_as)
+            privileged = who in ("owner", "admin")
+            hidden = profile_privacy.hidden_sections(user, who)
             # Panel Suggestion #7.6: contact person + mobile are shown so
             # businesses can trust who they deal with. Limited to verified
-            # viewers so unverified sign-ups can't harvest numbers.
-            contacts_visible = privileged or (viewer.is_verified and viewer.verification_status == "verified")
+            # viewers so unverified sign-ups can't harvest numbers — and to
+            # whatever the owner allows on top of that.
+            contacts_visible = (privileged or who == "verified") and "contact" not in hidden
             verified = user.is_verified and user.verification_status == "verified"
             documents = repo.list_documents_for_user(session, business_id)
             registration_types = sorted({
@@ -571,9 +594,13 @@ class BusinessService:
                 industry_category=user.industry_category,
                 city=user.city,
                 province=user.province,
-                business_description=user.business_description,
-                capabilities=[c for c in (user.capabilities or "").split(",") if c],
-                service_areas=[a for a in (user.service_areas or "").split(",") if a],
+                business_description=None if "about" in hidden else user.business_description,
+                capabilities=[] if "offered_items" in hidden else [c for c in (user.capabilities or "").split(",") if c],
+                service_areas=[] if "service_areas" in hidden else [a for a in (user.service_areas or "").split(",") if a],
+                offered_items=[] if "offered_items" in hidden else _offered_item_names(user),
+                hidden_sections=hidden,
+                visibility=profile_privacy.load(user) if who == "owner" else None,
+                viewing_as=who if viewer.id == user.id and who != "owner" else None,
                 is_verified=verified,
                 tier=user.tier,
                 verification_date=user.verification_date if verified else None,
@@ -588,11 +615,34 @@ class BusinessService:
                 has_avatar=bool(user.avatar_path),
                 has_cover=bool(user.cover_path),
                 headline=user.headline,
-                website_url=user.website_url,
-                facebook_url=user.facebook_url,
+                website_url=None if "links" in hidden else user.website_url,
+                facebook_url=None if "links" in hidden else user.facebook_url,
                 years_in_business=user.years_in_business if user.role == "seller" else None,
                 **repo.profile_activity_counts(session, user.id, include_sealed=privileged, now=now_ph()),
             )
+
+    def section_visible(self, business_id: int, viewer_id: int, section: str) -> bool:
+        """Profile privacy for the pieces served by their own endpoints (completed work)."""
+        with Session(engine) as session:
+            viewer = session.get(User, viewer_id)
+            owner = session.get(User, business_id)
+            if not viewer or not owner:
+                return False
+            return section not in profile_privacy.hidden_sections(owner, profile_privacy.audience(viewer, owner))
+
+    def update_profile_visibility(self, user_id: int, choices: dict) -> dict:
+        try:
+            full = profile_privacy.check(choices)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        with Session(engine) as session:
+            user = session.get(User, user_id)
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            user.profile_visibility = json.dumps(full)
+            session.add(user)
+            session.commit()
+            return full
 
     def list_flagged(self, session: Session) -> List[AdminFlaggedBusinessOut]:
         users = repo.list_flagged_users(session)

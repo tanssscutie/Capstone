@@ -46,6 +46,7 @@ def create_db_and_tables():
     _migrate_withdrawal_strike_reasons()
     _add_column_if_missing("businessreport", "recommended_action", "VARCHAR(20) NULL")
     _add_column_if_missing("businessdocument", "ai_check", "VARCHAR(20) NOT NULL DEFAULT 'not_checked'")
+    _add_column_if_missing("user", "profile_visibility", "TEXT NULL")
     _add_column_if_missing("businessdocument", "ai_check_note", "VARCHAR(400) NULL")
 
 
