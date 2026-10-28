@@ -399,16 +399,26 @@ export const requirementsApi = {
   submitQuotation: (requirementId: number, data: QuotationCreateInput) =>
     api.post<QuotationSealedReceipt>(`/requirements/${requirementId}/quotations`, data),
 
+  /** AI document check before attaching under a required document — advisory, nothing stored. */
+  checkDocument: (documentLabel: string, file: File | Blob, fileName: string) => {
+    const form = new FormData();
+    form.append('document_label', documentLabel);
+    form.append('file', file, fileName);
+    return api.postForm<{ verdict: string; message: string | null }>('/requirements/document-check', form);
+  },
+
   uploadQuotationAttachment: (
     requirementId: number,
     quotationId: number,
     file: File | Blob,
     fileName: string,
     documentLabel?: string,
+    confirmMismatch?: boolean,
   ) => {
     const form = new FormData();
     form.append('file', file, fileName);
     if (documentLabel) form.append('document_label', documentLabel);
+    if (confirmMismatch) form.append('confirm_mismatch', 'true');
     return api.postForm<AttachmentOut>(
       `/requirements/${requirementId}/quotations/${quotationId}/attachments`,
       form,

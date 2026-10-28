@@ -48,6 +48,31 @@ def _normalize(text: str) -> str:
     return " ".join(text.strip().upper().split())
 
 
+# Scans and photos of permits/IDs (the picker allows images and PDF).
+DOCUMENT_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
+
+
+def _mime(file: UploadFile) -> str:
+    """The upload's type, from its name when the browser sent a generic one."""
+    import mimetypes
+
+    sent = (file.content_type or "").lower()
+    if sent and sent != "application/octet-stream":
+        return sent
+    return (mimetypes.guess_type(file.filename or "")[0] or "").lower()
+
+
+def _ai_check_note(check) -> str | None:
+    """What the reviewing administrator sees next to the AI check."""
+    if check.verdict == "other_document":
+        note = f"The business confirmed it's the right document. AI saw: {check.detected_type or 'a different document'}. {check.reason}"
+    elif check.verdict == "expected":
+        note = check.reason
+    else:
+        note = "Not auto-checked — the AI check wasn't available for this file."
+    return (note or "").strip()[:400] or None
+
+
 class BusinessService:
     # ---------- onboarding ----------
 
@@ -161,10 +186,10 @@ class BusinessService:
         # thread: called directly inside this async handler it froze the whole
         # server — every other request, including the other documents' own
         # extractions, queued behind it.
-        id_number = await run_in_threadpool(
-            document_extraction_service.extract_id_number, doc_type, contents, file.content_type or ""
+        check = await run_in_threadpool(
+            document_extraction_service.check_business_document, doc_type, contents, _mime(file)
         )
-        return DocumentExtractionOut(id_number=id_number)
+        return DocumentExtractionOut(id_number=check.id_number, verdict=check.verdict, message=check.message)
 
     async def upload_document(
         self,
@@ -175,6 +200,7 @@ class BusinessService:
         declared_id_number: str,
         declared_expiry_date: date | None,
         file: UploadFile,
+        confirm_mismatch: bool = False,
     ) -> DocumentUploadOut:
         doc_type = doc_type.strip().upper()
         if doc_type not in VALID_DOC_TYPES:
@@ -193,7 +219,19 @@ class BusinessService:
                     detail="Complete business onboarding before uploading documents",
                 )
 
-            saved_path = await self._save_file(user_id, doc_type, file)
+            contents = await file.read()
+            ext = validate_upload(file.filename, contents, DOCUMENT_EXTENSIONS, 10 * 1024 * 1024)
+            # The AI document check, enforced here and not only in the form: a
+            # clear non-document is refused, a different document needs the
+            # business to confirm. Usually a cache hit from the pick-time check.
+            check = await run_in_threadpool(
+                document_extraction_service.check_business_document, doc_type, contents, _mime(file)
+            )
+            if check.verdict == "not_a_document":
+                raise HTTPException(status_code=422, detail=check.message)
+            if check.verdict == "other_document" and not confirm_mismatch:
+                raise HTTPException(status_code=409, detail=check.message)
+            saved_path = self._save_bytes(user_id, doc_type, contents, ext)
 
             document = BusinessDocument(
                 user_id=user_id,
@@ -203,6 +241,8 @@ class BusinessService:
                 declared_business_name=declared_business_name.strip(),
                 declared_id_number=declared_id_number.strip(),
                 declared_expiry_date=declared_expiry_date,
+                ai_check=check.verdict if check.verdict in ("expected", "other_document") else "not_checked",
+                ai_check_note=_ai_check_note(check),
             )
 
             status_result, notes = self._validate_document(session, user, document)
@@ -230,10 +270,7 @@ class BusinessService:
 
             return result
 
-    async def _save_file(self, user_id: int, doc_type: str, file: UploadFile) -> str:
-        contents = await file.read()
-        # Scans and photos of permits/IDs (the picker allows images and PDF).
-        ext = validate_upload(file.filename, contents, {".pdf", ".jpg", ".jpeg", ".png", ".webp"}, 10 * 1024 * 1024)
+    def _save_bytes(self, user_id: int, doc_type: str, contents: bytes, ext: str) -> str:
         user_dir = os.path.join(UPLOAD_ROOT, str(user_id))
         os.makedirs(user_dir, exist_ok=True)
         filename = f"{doc_type}_{uuid.uuid4().hex}{ext}"

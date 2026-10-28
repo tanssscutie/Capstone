@@ -249,6 +249,14 @@ class QuotationCreate(BaseModel):
     spec_responses: List[SpecResponseIn] = []
 
 
+class DocumentCheckOut(BaseModel):
+    """AI document check of a file a supplier is about to attach under one of
+    the buyer's required documents. Advisory: not_a_document is refused on
+    upload; other_document needs the supplier to confirm."""
+    verdict: str  # expected | other_document | not_a_document | not_checked
+    message: Optional[str] = None
+
+
 class QuotationDraftLine(BaseModel):
     description: str
     quantity: float

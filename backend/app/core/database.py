@@ -45,6 +45,8 @@ def create_db_and_tables():
     _add_column_if_missing("quotation", "over_budget_reason", "VARCHAR(300) NULL")
     _migrate_withdrawal_strike_reasons()
     _add_column_if_missing("businessreport", "recommended_action", "VARCHAR(20) NULL")
+    _add_column_if_missing("businessdocument", "ai_check", "VARCHAR(20) NOT NULL DEFAULT 'not_checked'")
+    _add_column_if_missing("businessdocument", "ai_check_note", "VARCHAR(400) NULL")
 
 
 def _migrate_user_role():

@@ -19,6 +19,7 @@ from app.schemas.requirement import (
     CategorySuggestionOut,
     DetailDraftRequest,
     DetailDraftOut,
+    DocumentCheckOut,
     RequirementCreate,
     RequirementOut,
     QuotationCreate,
@@ -186,6 +187,20 @@ def suggest_category(payload: CategorySuggestionRequest, current_user: User = De
     return CategorySuggestionOut(category=category)
 
 
+@router.post("/document-check", response_model=DocumentCheckOut)
+async def document_check(
+    document_label: str = Form(...),
+    file: UploadFile = File(...),
+    current_user=Depends(require_seller),
+):
+    """Checks a file before it's attached under a required document, so the
+    supplier hears "this looks like a selfie" before sealing — not after.
+    Nothing is stored."""
+    contents = await file.read()
+    check = await requirement_service.check_attachment(document_label, contents, file.filename, file.content_type)
+    return DocumentCheckOut(verdict=check.verdict, message=check.message)
+
+
 @router.post("/detail-draft", response_model=DetailDraftOut)
 def detail_draft(payload: DetailDraftRequest, current_user=Depends(require_buyer)):
     """"Write with AI" on Post a requirement: a Detail text from Step 1.
@@ -279,11 +294,13 @@ async def upload_quotation_attachment(
     quotation_id: int,
     file: UploadFile = File(...),
     document_label: Optional[str] = Form(default=None),
+    # The AI check said it looks like a different document and the supplier confirmed it (409 otherwise).
+    confirm_mismatch: bool = Form(default=False),
     current_user=Depends(require_seller),
 ):
     try:
         return await requirement_service.upload_quotation_attachment(
-            requirement_id, quotation_id, current_user.id, file, document_label,
+            requirement_id, quotation_id, current_user.id, file, document_label, confirm_mismatch,
         )
     except Exception as exc:
         _handle_service_errors(exc)

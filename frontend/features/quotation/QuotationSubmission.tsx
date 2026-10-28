@@ -99,6 +99,10 @@ interface FormProps {
   onOpenBuyer?: (businessId: BusinessId) => void;
   /** Fills the form with a draft. Rejects with a message on failure. */
   onDraftWithAI?: () => Promise<AiQuotationDraft>;
+  /** AI document check for a file attached under a required document
+   *  (POST /requirements/document-check). Optional: without it, files attach
+   *  unchecked and the upload's own check still applies. */
+  onCheckDocument?: (documentLabel: string, file: File) => Promise<{ verdict: string; message: string | null }>;
 }
 
 interface SealedReceiptProps {
@@ -552,8 +556,18 @@ const PAYMENT_TERM_OPTIONS = ['50 / 50', '30 / 60 / 10', '20 / 70 / 10', '100% o
  *  separate steps — same reasoning as PostRequirement.tsx's pickedRequirementFiles).
  *  Native builds fall back to placeholder metadata further down. */
 export const pickedQuotationFiles = new Map<string, File>();
+/** Attachment ids whose AI-check mismatch the supplier confirmed ("yes, this
+ *  is the right document") — uploaded with confirm_mismatch. */
+export const confirmedQuotationFiles = new Set<string>();
 
-function useQuotationForm(requirement: Requirement, onSubmit?: (input: QuotationDraftInput) => void) {
+function useQuotationForm(
+  requirement: Requirement,
+  onSubmit?: (input: QuotationDraftInput) => void,
+  onCheckDocument?: FormProps['onCheckDocument'],
+) {
+  // AI document check per required-document label: a refused file's message,
+  // or a mismatch on the attached file waiting for the supplier's yes.
+  const [docIssues, setDocIssues] = useState<Record<string, { kind: 'rejected' | 'mismatch' | 'checking'; message: string; fileId?: string; confirmed?: boolean }>>({});
   const [priceMode, setPriceMode] = useState<PriceMode>('LINES');
   const [items, setItems] = useState<LineItemDraft[]>([]);
   const [totalOnly, setTotalOnly] = useState('');
@@ -651,6 +665,28 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
       const picked = await pickWebFile('.pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,image/*');
       if (!picked) return; // dialog closed without picking — do nothing, same as before
       const id = `att-${Date.now()}`;
+      if (documentLabel && onCheckDocument) {
+        setDocIssues((prev) => ({ ...prev, [documentLabel]: { kind: 'checking', message: 'Checking the document…' } }));
+        let check: { verdict: string; message: string | null } | null = null;
+        try {
+          check = await onCheckDocument(documentLabel, picked);
+        } catch {
+          check = null; // the check is advisory — the upload's own check still runs
+        }
+        if (check?.verdict === 'not_a_document') {
+          setDocIssues((prev) => ({ ...prev, [documentLabel]: { kind: 'rejected', message: check!.message ?? 'That doesn\'t look like the right document.' } }));
+          return;
+        }
+        setDocIssues((prev) => {
+          const next = { ...prev };
+          if (check?.verdict === 'other_document') {
+            next[documentLabel] = { kind: 'mismatch', message: check.message ?? 'This looks like a different document.', fileId: id };
+          } else {
+            delete next[documentLabel];
+          }
+          return next;
+        });
+      }
       pickedQuotationFiles.set(id, picked);
       setFiles((prev) => [
         // A required-document slot holds at most one file — picking a
@@ -671,10 +707,20 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
   const removeFile = (id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
     pickedQuotationFiles.delete(id);
+    confirmedQuotationFiles.delete(id);
+    setDocIssues((prev) => Object.fromEntries(Object.entries(prev).filter(([, v]) => v.fileId !== id)));
   };
+  const confirmDocument = (label: string) => {
+    const issue = docIssues[label];
+    if (!issue?.fileId) return;
+    confirmedQuotationFiles.add(issue.fileId);
+    setDocIssues((prev) => ({ ...prev, [label]: { ...issue, confirmed: true } }));
+  };
+  // A file the AI thinks is a different document is held until the supplier says yes.
+  const docsUnconfirmed = Object.values(docIssues).some((v) => v.kind === 'mismatch' && !v.confirmed);
 
   const validUntilDate = new Date(Date.now() + validity * 86_400_000).toISOString();
-  const ready = ack1 && ack2 && total > 0 && specsDone && budgetOk;
+  const ready = ack1 && ack2 && total > 0 && specsDone && budgetOk && !docsUnconfirmed;
 
   const handleSeal = () => {
     if (!ready) return;
@@ -707,7 +753,7 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
     validity, setValidity,
     term, setTerm,
     note, setNote,
-    files, addFile, removeFile,
+    files, addFile, removeFile, docIssues, confirmDocument, docsUnconfirmed,
     ack1, setAck1, ack2, setAck2,
     specAnswer, setSpecComplies, setSpecOffered, specAnsweredCount, specsDone,
     aiDraft, applyDraft, undoDraft,
@@ -1046,19 +1092,35 @@ function RequiredDocumentsSection({ requirement, st }: { requirement: Requiremen
       <View style={{ gap: space.sm, marginTop: space.sm }}>
         {requirement.requiredDocuments.map((label) => {
           const file = st.files.find((f) => f.documentLabel === label);
+          const issue = st.docIssues[label];
           return (
-            <View key={label} style={[styles.requiredDocRow, file ? styles.requiredDocRowDone : null]}>
-              <View style={[styles.docStatus, file ? styles.docStatusDone : null]}>{file && <CheckGlyph />}</View>
-              <Text style={styles.requiredDocLabel} numberOfLines={1}>{label}</Text>
-              {file ? (
-                <View style={styles.fileChip}>
-                  <Text style={styles.fileChipName} numberOfLines={1}>{file.filename}</Text>
-                  <Pressable onPress={() => st.removeFile(file.id)} hitSlop={8}>
-                    <XGlyph tone={color.inkFaint} />
-                  </Pressable>
+            <View key={label}>
+              <View style={[styles.requiredDocRow, file ? styles.requiredDocRowDone : null]}>
+                <View style={[styles.docStatus, file ? styles.docStatusDone : null]}>{file && <CheckGlyph />}</View>
+                <Text style={styles.requiredDocLabel} numberOfLines={1}>{label}</Text>
+                {file ? (
+                  <View style={styles.fileChip}>
+                    <Text style={styles.fileChipName} numberOfLines={1}>{file.filename}</Text>
+                    <Pressable onPress={() => st.removeFile(file.id)} hitSlop={8}>
+                      <XGlyph tone={color.inkFaint} />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <AddDashedButton label={issue?.kind === 'checking' ? 'Checking…' : 'Attach'} onPress={() => st.addFile(label)} />
+                )}
+              </View>
+              {issue?.kind === 'rejected' && !file && <Text style={styles.docIssueError}>{issue.message}</Text>}
+              {issue?.kind === 'mismatch' && !!file && (
+                <View style={styles.docIssueBox}>
+                  <Text style={styles.docIssueText}>{issue.message}</Text>
+                  {issue.confirmed ? (
+                    <Text style={styles.fieldCaption}>Confirmed — attached as your {label}.</Text>
+                  ) : (
+                    <Pressable onPress={() => st.confirmDocument(label)} accessibilityRole="button" style={styles.docIssueButton}>
+                      <Text style={styles.docIssueButtonLabel}>Yes, this is my {label}</Text>
+                    </Pressable>
+                  )}
                 </View>
-              ) : (
-                <AddDashedButton label="Attach" onPress={() => st.addFile(label)} />
               )}
             </View>
           );
@@ -1171,6 +1233,8 @@ function SealSection({
             ? 'Enter your price above to submit.'
             : !st.budgetOk
             ? (st.strict ? 'Lower your price to the buyer\'s strict maximum to submit.' : 'Say why your price is above the budget to submit.')
+            : st.docsUnconfirmed
+            ? 'Confirm or replace the flagged required document to submit.'
             : 'Confirm both statements above to submit.'}
         </Text>
         <ActionButton
@@ -1198,7 +1262,7 @@ const buyerRowHoverTransitionOnWeb: ViewStyle =
 
 function FormScreen(props: FormProps) {
   const { requirement, buyer } = props;
-  const st = useQuotationForm(requirement, props.onSubmit);
+  const st = useQuotationForm(requirement, props.onSubmit, props.onCheckDocument);
   const { width } = useWindowDimensions();
   const isWide = width >= breakpoint.desktop;
 
@@ -1638,6 +1702,11 @@ const styles = StyleSheet.create({
   filesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm },
   fileChip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: color.primaryBorder, backgroundColor: color.primaryFaint, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs, maxWidth: 240 },
   fileChipName: { flexShrink: 1, fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
+  docIssueError: { marginTop: space.xs, fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.danger },
+  docIssueBox: { marginTop: space.xs, gap: space.xs, borderWidth: 1, borderColor: color.warningBorder, backgroundColor: color.warningFaint, borderRadius: radius.md, padding: space.sm },
+  docIssueText: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.ink },
+  docIssueButton: { alignSelf: 'flex-start', borderWidth: 1, borderColor: color.warningBorder, backgroundColor: color.surface, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs },
+  docIssueButtonLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
   requiredDocRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap', borderWidth: 1, borderColor: color.borderFaint, backgroundColor: color.canvas, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm },
   requiredDocRowDone: { borderColor: color.primaryBorder },
   docStatus: { width: 18, height: 18, borderRadius: radius.pill, borderWidth: 1.4, borderColor: color.border, alignItems: 'center', justifyContent: 'center' },

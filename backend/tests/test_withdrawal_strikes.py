@@ -33,7 +33,7 @@ from app.models.requirement import Requirement
 from app.models.user import User
 from app.models.withdrawal_strike import WithdrawalStrike
 from app.services.report_service import report_service
-from tests.pdf_fixtures import make_png
+from pdf_fixtures import make_png
 
 SECRET = "our resin supplier raised prices by 18 percent"
 

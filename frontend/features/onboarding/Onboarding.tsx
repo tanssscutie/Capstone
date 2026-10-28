@@ -87,6 +87,20 @@ export interface DocumentsDraft {
   /** Optional — not needed to get verified, relevant only for reaching Tier 3 sooner. */
   mayorsPermit: Attachment | null;
   mayorsPermitIdNumber: string;
+  /** Slots where the AI check said "a different document" and the business
+   *  confirmed it's right anyway — sent as confirm_mismatch on upload. */
+  confirmedMismatch?: DocKind[];
+}
+
+/** The three document slots on the DOCUMENTS step. */
+export type DocKind = 'registration' | 'bir' | 'permit';
+
+/** What the AI read from a picked document: the ID number suggestion, and
+ *  whether it's the document it should be (document_extraction_service). */
+export interface DocumentReading {
+  idNumber: string | null;
+  verdict: 'expected' | 'other_document' | 'not_a_document' | 'not_checked';
+  message: string | null;
 }
 
 interface IdentityProps {
@@ -132,7 +146,7 @@ interface DocumentsProps {
    *  the returned value only ever pre-fills an ordinary editable field,
    *  never submitted without the business seeing it first. Optional so this
    *  screen still works exactly as before if the route doesn't wire it up. */
-  onExtractDocument?: (docType: string, file: File) => Promise<string | null>;
+  onExtractDocument?: (docType: string, file: File) => Promise<DocumentReading | null>;
 }
 
 interface ArrivalProps {
@@ -1069,6 +1083,10 @@ function DocumentUploadRow({
   idNumberBad,
   attempted,
   extractionStatus,
+  rejectedMessage,
+  mismatchMessage,
+  mismatchConfirmed,
+  onConfirmMismatch,
 }: {
   name: string;
   help: string;
@@ -1086,6 +1104,12 @@ function DocumentUploadRow({
    *  purely informational, the field itself is always a normal editable
    *  TextInput regardless of what this says. */
   extractionStatus?: 'reading' | 'found' | 'not_found';
+  /** The AI check refused the last file (a selfie, a random photo) — why. */
+  rejectedMessage?: string | null;
+  /** The AI check thinks this is a different document — needs a yes. */
+  mismatchMessage?: string | null;
+  mismatchConfirmed?: boolean;
+  onConfirmMismatch?: () => void;
 }) {
   return (
     <View>
@@ -1112,6 +1136,21 @@ function DocumentUploadRow({
         <Pressable onPress={onCapture} style={styles.docAddButton}>
           <Text style={styles.docAddButtonLabel}>+ Add a photo or file</Text>
         </Pressable>
+      )}
+      {!file && !!rejectedMessage && (
+        <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>{rejectedMessage}</Text>
+      )}
+      {!!file && !!mismatchMessage && (
+        <View style={styles.mismatchBox}>
+          <Text style={styles.mismatchText}>{mismatchMessage}</Text>
+          {mismatchConfirmed ? (
+            <Text style={styles.fieldCaption}>Confirmed — a TrustLink administrator checks it during review.</Text>
+          ) : (
+            <Pressable onPress={onConfirmMismatch} accessibilityRole="button" style={styles.mismatchButton}>
+              <Text style={styles.mismatchButtonLabel}>Yes, this is my {name}</Text>
+            </Pressable>
+          )}
+        </View>
       )}
 
       {file && (
@@ -1154,21 +1193,59 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
   // Assistive Document Extraction UI state — what happened the last time each
   // slot was read, purely for the caption under that field; doesn't gate
   // anything, the fields stay normal editable TextInputs regardless.
-  type DocKind = 'registration' | 'bir' | 'permit';
   type ExtractionStatus = 'reading' | 'found' | 'not_found';
   const [extractionStatus, setExtractionStatus] = useState<Partial<Record<DocKind, ExtractionStatus>>>({});
+  // AI document check, per slot: a refused file's message, a mismatch waiting
+  // for a yes, and the slots the business said yes to.
+  const [rejected, setRejected] = useState<Partial<Record<DocKind, string>>>({});
+  const [mismatch, setMismatch] = useState<Partial<Record<DocKind, string>>>({});
+  const [confirmedMismatch, setConfirmedMismatch] = useState<DocKind[]>([]);
+  // The file each slot holds now — a slow check for a file that's since been
+  // replaced or removed must not act on the new one.
+  const currentFile = useRef<Partial<Record<DocKind, string>>>({});
+
+  function resetCheck(kind: DocKind) {
+    setRejected((prev) => ({ ...prev, [kind]: undefined }));
+    setMismatch((prev) => ({ ...prev, [kind]: undefined }));
+    setConfirmedMismatch((prev) => prev.filter((k) => k !== kind));
+  }
+  function removeDoc(kind: DocKind) {
+    const id = currentFile.current[kind];
+    if (id) pickedDocumentFiles.delete(id);
+    currentFile.current[kind] = undefined;
+    if (kind === 'registration') setRegistrationDoc(null);
+    else if (kind === 'bir') setBirDoc(null);
+    else setMayorsPermit(null);
+    resetCheck(kind);
+    setExtractionStatus((prev) => ({ ...prev, [kind]: undefined }));
+  }
 
   function applyPicked(kind: 'registration' | 'bir' | 'permit', file: Attachment) {
+    currentFile.current[kind] = file.id;
+    resetCheck(kind);
     if (kind === 'registration') setRegistrationDoc(file);
     else if (kind === 'bir') setBirDoc(file);
     else setMayorsPermit(file);
   }
 
-  async function runExtraction(kind: DocKind, docType: string, picked: File) {
+  async function runExtraction(kind: DocKind, docType: string, picked: File, fileId: string) {
     if (!onExtractDocument) return;
     setExtractionStatus((prev) => ({ ...prev, [kind]: 'reading' }));
     try {
-      const suggestion = await onExtractDocument(docType, picked);
+      const reading = await onExtractDocument(docType, picked);
+      if (currentFile.current[kind] !== fileId) return; // replaced or removed meanwhile
+      if (reading?.verdict === 'not_a_document') {
+        // Clearly not a document — the file goes, the reason stays on screen.
+        removeDoc(kind);
+        setRejected((prev) => ({ ...prev, [kind]: reading.message ?? 'That doesn\'t look like the right document. Upload a scan or clear photo of it.' }));
+        return;
+      }
+      if (reading?.verdict === 'other_document') {
+        setMismatch((prev) => ({ ...prev, [kind]: reading.message ?? 'This looks like a different document.' }));
+        setExtractionStatus((prev) => ({ ...prev, [kind]: undefined }));
+        return;
+      }
+      const suggestion = reading?.idNumber ?? null;
       if (!suggestion) {
         setExtractionStatus((prev) => ({ ...prev, [kind]: 'not_found' }));
         return;
@@ -1220,7 +1297,7 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
         uri: '',
         documentLabel: null,
       });
-      void runExtraction(kind, docType, picked);
+      void runExtraction(kind, docType, picked, id);
       return;
     }
 
@@ -1246,6 +1323,10 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
   if (!birDoc) missing.push('your BIR registration');
   else if (birIdBad) missing.push('a valid BIR TIN');
   if (mayorsPermitIdBad) missing.push("a valid Mayor's permit number");
+  const docNames: Record<DocKind, string> = { registration: `${regSpec.key} certificate`, bir: 'BIR registration', permit: "Mayor's permit" };
+  (Object.keys(mismatch) as DocKind[])
+    .filter((k) => mismatch[k] && !confirmedMismatch.includes(k))
+    .forEach((k) => missing.push(`a confirmation (or a new file) for your ${docNames[k]}`));
   const ready = missing.length === 0;
 
   const handleSubmit = () => {
@@ -1254,7 +1335,7 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
       scrollToFirstError();
       return;
     }
-    onSubmit({ registrationDoc, registrationIdNumber, birDoc, birIdNumber, mayorsPermit, mayorsPermitIdNumber });
+    onSubmit({ registrationDoc, registrationIdNumber, birDoc, birIdNumber, mayorsPermit, mayorsPermitIdNumber, confirmedMismatch });
   };
 
   reportContinue(handleSubmit);
@@ -1271,7 +1352,7 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
             required
             file={registrationDoc}
             onCapture={() => capture('registration')}
-            onRemove={() => setRegistrationDoc(null)}
+            onRemove={() => removeDoc('registration')}
             idNumberLabel={`${regSpec.key} certificate number`}
             idNumberPlaceholder={regSpec.key === 'DTI' ? '1234567890' : 'CS201912345'}
             idNumber={registrationIdNumber}
@@ -1279,6 +1360,10 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
             idNumberBad={registrationIdBad}
             attempted={attempted}
             extractionStatus={extractionStatus.registration}
+            rejectedMessage={rejected.registration}
+            mismatchMessage={mismatch.registration}
+            mismatchConfirmed={confirmedMismatch.includes('registration')}
+            onConfirmMismatch={() => setConfirmedMismatch((prev) => [...prev, 'registration'])}
           />
           <FormDivider />
           <DocumentUploadRow
@@ -1287,7 +1372,7 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
             required
             file={birDoc}
             onCapture={() => capture('bir')}
-            onRemove={() => setBirDoc(null)}
+            onRemove={() => removeDoc('bir')}
             idNumberLabel="TIN"
             idNumberPlaceholder="123-456-789"
             idNumber={birIdNumber}
@@ -1295,6 +1380,10 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
             idNumberBad={birIdBad}
             attempted={attempted}
             extractionStatus={extractionStatus.bir}
+            rejectedMessage={rejected.bir}
+            mismatchMessage={mismatch.bir}
+            mismatchConfirmed={confirmedMismatch.includes('bir')}
+            onConfirmMismatch={() => setConfirmedMismatch((prev) => [...prev, 'bir'])}
           />
           <FormDivider />
           <DocumentUploadRow
@@ -1303,7 +1392,7 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
             required={false}
             file={mayorsPermit}
             onCapture={() => capture('permit')}
-            onRemove={() => setMayorsPermit(null)}
+            onRemove={() => removeDoc('permit')}
             idNumberLabel="Permit number"
             idNumberPlaceholder="BP-2024-001234"
             idNumber={mayorsPermitIdNumber}
@@ -1311,6 +1400,10 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
             idNumberBad={mayorsPermitIdBad}
             attempted={attempted}
             extractionStatus={extractionStatus.permit}
+            rejectedMessage={rejected.permit}
+            mismatchMessage={mismatch.permit}
+            mismatchConfirmed={confirmedMismatch.includes('permit')}
+            onConfirmMismatch={() => setConfirmedMismatch((prev) => [...prev, 'permit'])}
           />
         </View>
       </FormSection>
@@ -1779,6 +1872,10 @@ const styles = StyleSheet.create({
   tagLabel: { fontFamily: font.mono, fontSize: 9, letterSpacing: letterSpacing.label, textTransform: 'uppercase' },
   tagLabelRequired: { color: color.primary },
   tagLabelOptional: { color: color.inkFaint },
+  mismatchBox: { marginTop: space.sm, gap: space.sm, borderWidth: 1, borderColor: color.warningBorder, backgroundColor: color.warningFaint, borderRadius: radius.md, padding: space.md },
+  mismatchText: { fontFamily: font.body, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.ink },
+  mismatchButton: { alignSelf: 'flex-start', borderWidth: 1, borderColor: color.warningBorder, backgroundColor: color.surface, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs + 2 },
+  mismatchButtonLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.ink },
   docAddButton: { marginTop: space.sm, alignSelf: 'flex-start', borderWidth: 1, borderStyle: 'dashed', borderColor: color.primaryBorder, backgroundColor: color.primaryFaint, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.sm },
   docAddButtonLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.primary },
   docFileCard: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.sm, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, padding: space.sm },

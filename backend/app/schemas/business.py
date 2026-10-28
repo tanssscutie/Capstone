@@ -60,6 +60,9 @@ class DocumentUploadOut(BaseModel):
     declared_expiry_date: Optional[date]
     validation_status: str
     validation_notes: str
+    # AI document check — see BusinessDocument.ai_check.
+    ai_check: str = "not_checked"
+    ai_check_note: Optional[str] = None
     uploaded_at: datetime
 
 
@@ -67,8 +70,14 @@ class DocumentExtractionOut(BaseModel):
     """Assistive Document Extraction's result — a suggestion only. None means
     nothing was confidently found (no key configured, unreadable image, or
     the model genuinely couldn't find it); the frontend leaves the field as
-    the business typed it either way. See document_extraction_service.py."""
+    the business typed it either way. See document_extraction_service.py.
+
+    verdict/message: the document check from the same call — expected,
+    other_document (show message, ask to confirm), not_a_document (show
+    message, ask for another file) or not_checked."""
     id_number: Optional[str] = None
+    verdict: str = "not_checked"
+    message: Optional[str] = None
 
 
 class VerificationStatusOut(BaseModel):

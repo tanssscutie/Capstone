@@ -33,4 +33,9 @@ class BusinessDocument(SQLModel, table=True):
     validation_status: str = "pending"  # pending | pass | flagged
     validation_notes: str = ""  # human-readable reasons when flagged
 
+    # AI document check (document_extraction_service): expected | other_document
+    # (the business confirmed a mismatch) | not_checked (Gemini unavailable).
+    # Advisory for the reviewing administrator — never verifies on its own.
+    ai_check: str = Field(default="not_checked", max_length=20)
+    ai_check_note: Optional[str] = Field(default=None, max_length=400)
     uploaded_at: datetime = Field(default_factory=now_ph)

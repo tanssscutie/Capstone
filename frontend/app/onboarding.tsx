@@ -103,12 +103,12 @@ export default function OnboardingRoute() {
       // same per-doc-type format the backend checks (see Onboarding.tsx's
       // ID_FORMAT_PATTERNS), so what lands here always passes that check.
       const regKind = identityDraft.businessType === 'SOLE_PROP' ? 'DTI' : 'SEC';
-      const uploads: Array<[typeof draft.registrationDoc, string, string]> = [
-        [draft.registrationDoc, regKind, draft.registrationIdNumber],
-        [draft.birDoc, 'BIR', draft.birIdNumber],
-        [draft.mayorsPermit, 'MAYORS_PERMIT', draft.mayorsPermitIdNumber],
+      const uploads: Array<[typeof draft.registrationDoc, string, string, 'registration' | 'bir' | 'permit']> = [
+        [draft.registrationDoc, regKind, draft.registrationIdNumber, 'registration'],
+        [draft.birDoc, 'BIR', draft.birIdNumber, 'bir'],
+        [draft.mayorsPermit, 'MAYORS_PERMIT', draft.mayorsPermitIdNumber, 'permit'],
       ];
-      for (const [doc, docType, idNumber] of uploads) {
+      for (const [doc, docType, idNumber, kind] of uploads) {
         if (!doc) continue;
         const file = pickedDocumentFiles.get(doc.id);
         if (!file) continue; // native fallback path — no real bytes captured yet
@@ -119,6 +119,7 @@ export default function OnboardingRoute() {
           declaredIdNumber: idNumber,
           file,
           fileName: doc.filename,
+          confirmMismatch: draft.confirmedMismatch?.includes(kind) ?? false,
         });
       }
 
@@ -200,7 +201,7 @@ export default function OnboardingRoute() {
           onExtractDocument={async (docType, file) => {
             try {
               const result = await extractDocumentFields(docType, file, file.name);
-              return result.id_number;
+              return { idNumber: result.id_number, verdict: result.verdict, message: result.message };
             } catch {
               // Assistive extraction is a convenience only — a failed call
               // (no key configured, network hiccup, etc.) just means no

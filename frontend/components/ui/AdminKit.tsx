@@ -327,9 +327,16 @@ export function DocumentRow({ doc, onError }: { doc: DocumentUploadOut; onError:
         <Text style={styles.docType}>{DOC_TYPE_LABELS[doc.doc_type] ?? doc.doc_type}</Text>
         <Text style={styles.docMeta}>Uploaded {formatDate(doc.uploaded_at)}</Text>
         {!passed && !!doc.validation_notes && <Text style={styles.docNotes}>{doc.validation_notes}</Text>}
+        {doc.ai_check !== 'expected' && (
+          <Text style={[styles.docNotes, { color: doc.ai_check === 'other_document' ? color.warning : color.inkMuted }]}>
+            {doc.ai_check === 'other_document' ? 'AI check: may be a different document' : 'AI check: not auto-checked'}
+            {doc.ai_check_note ? ` — ${doc.ai_check_note}` : ''}
+          </Text>
+        )}
       </View>
       <View style={styles.docRight}>
         <Pill label={passed ? 'Passed' : 'Flagged'} tone={passed ? 'primary' : 'danger'} />
+        {doc.ai_check === 'expected' && <Pill label="AI: looks right" tone="neutral" />}
         <Pressable onPress={handleView} disabled={opening} hitSlop={6} style={styles.viewButton}>
           {opening ? (
             <ActivityIndicator size="small" color={color.primary} />

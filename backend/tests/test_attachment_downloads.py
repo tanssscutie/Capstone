@@ -41,6 +41,10 @@ class AttachmentDownloadTests(unittest.TestCase):
         p = patch.object(settings, "FILE_ENCRYPTION_KEY", Fernet.generate_key().decode())
         p.start()
         self.addCleanup(p.stop)
+        # Never the live AI document check in tests (see test_document_check.py).
+        p = patch.object(settings, "GEMINI_API_KEY", "")
+        p.start()
+        self.addCleanup(p.stop)
         self.addCleanup(self.engine.dispose)
         # Uploads go to a relative "uploads/" — keep them out of the real one.
         tmp = tempfile.TemporaryDirectory()

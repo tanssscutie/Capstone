@@ -14,6 +14,7 @@ os.environ["DATABASE_URL"] = "sqlite://"
 from PIL import Image
 
 from app.services import document_extraction_service as extraction
+from app.services.document_extraction_service import DocumentCheck
 from app.services.business_service import business_service
 
 
@@ -50,7 +51,7 @@ class ExtractionDoesNotBlockTests(unittest.TestCase):
 
         def slow(*_):
             time.sleep(0.5)
-            return "123456"
+            return DocumentCheck(verdict="expected", id_number="123456")
 
         async def both():
             return await asyncio.gather(
@@ -58,7 +59,7 @@ class ExtractionDoesNotBlockTests(unittest.TestCase):
                 business_service.extract_document_fields("BIR", Upload()),
             )
 
-        with patch("app.services.business_service.document_extraction_service.extract_id_number", side_effect=slow):
+        with patch("app.services.business_service.document_extraction_service.check_business_document", side_effect=slow):
             start = time.time()
             results = asyncio.run(both())
             elapsed = time.time() - start

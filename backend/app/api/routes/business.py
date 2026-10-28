@@ -79,6 +79,9 @@ async def upload_document(
     declared_id_number: str = Form(...),
     declared_expiry_date: Optional[date] = Form(default=None),
     file: UploadFile = File(...),
+    # The AI check said it looks like a different document and the business
+    # confirmed it's right anyway (409 otherwise).
+    confirm_mismatch: bool = Form(default=False),
     current_user: User = Depends(get_current_user),
 ):
     return await business_service.upload_document(
@@ -89,6 +92,7 @@ async def upload_document(
         declared_id_number=declared_id_number,
         declared_expiry_date=declared_expiry_date,
         file=file,
+        confirm_mismatch=confirm_mismatch,
     )
 
 

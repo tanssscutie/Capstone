@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useWithdrawConfirm } from '../components/ui/WithdrawConfirm';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import QuotationSubmission, { pickedQuotationFiles } from '../features/quotation/QuotationSubmission';
+import QuotationSubmission, { confirmedQuotationFiles, pickedQuotationFiles } from '../features/quotation/QuotationSubmission';
 import type { QuotationDraftInput } from '../features/quotation/QuotationSubmission';
 import { requirementsApi } from '../lib/api/requirements';
 import { requirementsCache } from '../lib/api/requirementsCache';
@@ -132,6 +132,7 @@ export default function QuotationRoute() {
       buyer={buyer}
       onBack={() => router.back()}
       onOpenBuyer={(businessId) => router.push({ pathname: '/business-profile', params: { id: businessId } })}
+      onCheckDocument={(label, file) => requirementsApi.checkDocument(label, file, file.name)}
       onDraftWithAI={async () => {
         try {
           const d = await requirementsApi.quotationDraft(Number(id));
@@ -199,12 +200,14 @@ export default function QuotationRoute() {
               file,
               att.filename,
               att.documentLabel ?? undefined,
+              confirmedQuotationFiles.has(att.id),
             );
             uploaded.push(att);
           } catch {
             failed.push(att.filename);
           } finally {
             pickedQuotationFiles.delete(att.id);
+            confirmedQuotationFiles.delete(att.id);
           }
         }
         setReceiptNotice(

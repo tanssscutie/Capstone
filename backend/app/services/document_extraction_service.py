@@ -24,10 +24,25 @@ while generate_content answered the same request in a couple of seconds.
 Verified end-to-end with a real key: a synthetic test certificate image
 with "Registration Number: 8837215690" printed on it came back with
 exactly that string.
+
+Document check (same Gemini call): the model also says whether the upload is
+the document it's meant to be — "expected", "other_document" (a real
+document, but a different one: a DTI uploaded as the BIR 2303) or
+"not_a_document" (a selfie, a random photo, a screenshot of something else)
+— with a short reason. A clear non-document is refused; a mismatch needs the
+business to confirm. The AI never verifies anything on its own: an
+administrator still approves every document, and when Gemini isn't
+available the upload is accepted and marked "not auto-checked" for them.
+The same check runs on quotation attachments labelled as a required
+document (check_labelled_document).
 """
+import hashlib
 import io
 import logging
 import time
+from collections import OrderedDict
+from dataclasses import dataclass
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -71,6 +86,41 @@ MAX_IMAGE_EDGE_PX = 1600
 
 class _DocumentExtraction(BaseModel):
     id_number: str | None = None
+
+
+class _DocumentCheck(BaseModel):
+    verdict: str = ""  # expected | other_document | not_a_document
+    detected_type: str = ""
+    reason: str = ""
+    id_number: str | None = None
+
+
+VERDICTS = ("expected", "other_document", "not_a_document")
+NOT_CHECKED = "not_checked"
+
+# (what the business says it is, short name, what the file shows) per doc_type.
+DOC_TYPE_NAMES = {
+    "DTI": ("a DTI Certificate of Business Name Registration", "DTI certificate", "certificate"),
+    "SEC": ("an SEC Certificate of Registration or Incorporation", "SEC certificate", "certificate"),
+    "BIR": ("a BIR Certificate of Registration (Form 2303)", "BIR 2303", "certificate"),
+    "MAYORS_PERMIT": ("a Mayor's Permit or Business Permit from a Philippine city or municipality", "Mayor's Permit", "permit"),
+}
+CHECKABLE_MIME = ("image/jpeg", "image/png", "image/webp", "application/pdf")
+
+
+@dataclass
+class DocumentCheck:
+    verdict: str  # expected | other_document | not_a_document | not_checked
+    detected_type: str = ""
+    reason: str = ""
+    id_number: Optional[str] = None
+    message: Optional[str] = None  # what the uploader is told (None when fine)
+
+
+# The pick-time check and the upload's own check see the same bytes — don't
+# ask Gemini twice. Small and in-process; a miss just means one more call.
+_CACHE: "OrderedDict[tuple, DocumentCheck]" = OrderedDict()
+_CACHE_MAX = 64
 
 
 def _shrink_image(file_bytes: bytes, mime_type: str) -> tuple[bytes, str]:
@@ -159,3 +209,104 @@ def extract_id_number(doc_type: str, file_bytes: bytes, mime_type: str) -> str |
             if attempt < MAX_ATTEMPTS:
                 time.sleep(RETRY_DELAY_SECONDS)
     return None
+
+
+def _ask_gemini(prompt: str, file_bytes: bytes, mime_type: str) -> Optional[_DocumentCheck]:
+    """One vision call: verdict + reason + (for business documents) the ID
+    number. None on any failure — the caller then accepts the upload as
+    "not auto-checked"."""
+    try:
+        from google import genai
+        from google.genai import types
+    except Exception:
+        logger.exception("Document check: google-genai import failed")
+        return None
+    try:
+        client = genai.Client(api_key=settings.GEMINI_API_KEY, http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_MS))
+    except Exception:
+        logger.exception("Document check: client construction failed")
+        return None
+    file_bytes, mime_type = _shrink_image(file_bytes, mime_type)
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            response = client.models.generate_content(
+                model=EXTRACTION_MODEL,
+                contents=[types.Part.from_bytes(data=file_bytes, mime_type=mime_type), prompt],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=_DocumentCheck,
+                    thinking_config=types.ThinkingConfig(thinking_level=THINKING_LEVEL),
+                ),
+            )
+            return _DocumentCheck.model_validate_json(response.text)
+        except Exception:
+            logger.exception("Document check failed (attempt %d/%d)", attempt, MAX_ATTEMPTS)
+            if attempt < MAX_ATTEMPTS:
+                time.sleep(RETRY_DELAY_SECONDS)
+    return None
+
+
+def _check(expected: str, short: str, noun: str, id_hint: Optional[str], file_bytes: bytes, mime_type: str) -> DocumentCheck:
+    mime_type = (mime_type or "").lower()
+    if not settings.GEMINI_API_KEY or mime_type not in CHECKABLE_MIME:
+        return DocumentCheck(verdict=NOT_CHECKED)
+    key = (hashlib.sha256(file_bytes).hexdigest(), expected, id_hint)
+    if key in _CACHE:
+        _CACHE.move_to_end(key)
+        return _CACHE[key]
+
+    prompt = (
+        "You check files uploaded to a Philippine B2B procurement platform. "
+        f"The uploader says this file is {expected}. Classify it:\n"
+        "- \"expected\": it is that document — a scan, a PDF, or a legible photo of it (be lenient with "
+        "angle, lighting and light blur).\n"
+        "- \"other_document\": it is a real document, but a different one.\n"
+        "- \"not_a_document\": it is not a document at all — a selfie, a photo of a person, place or object, "
+        "a meme, or a screenshot of something unrelated.\n"
+        "detected_type: a short name for what it looks like, e.g. \"a selfie\", \"a DTI certificate\", "
+        "\"a screenshot of a chat\". reason: one short sentence. "
+        + (f"If the verdict is \"expected\", also find {id_hint} and return it in id_number exactly as printed; "
+           "otherwise leave id_number empty. Never guess or invent a number that isn't legible."
+           if id_hint else "Leave id_number empty.")
+    )
+    ai = _ask_gemini(prompt, file_bytes, mime_type)
+    if ai is None or ai.verdict not in VERDICTS:
+        return DocumentCheck(verdict=NOT_CHECKED)  # not cached: a later try may work
+
+    detected = (ai.detected_type or "").strip().rstrip(".")[:80]
+    # "This looks like BIR Certificate…" reads wrong — the model sometimes drops the article.
+    if detected and detected.split(" ", 1)[0].lower() not in ("a", "an", "the"):
+        detected = f"{'an' if detected[0].lower() in 'aeiou' else 'a'} {detected}"
+    result = DocumentCheck(
+        verdict=ai.verdict, detected_type=detected, reason=(ai.reason or "").strip()[:300],
+        id_number=((ai.id_number or "").strip() or None) if ai.verdict == "expected" else None,
+    )
+    if ai.verdict == "not_a_document":
+        result.message = (f"This looks like {detected or 'a photo'}, not a {short}. "
+                          f"Upload a scan or clear photo of the {noun}.")
+    elif ai.verdict == "other_document":
+        result.message = (f"This looks like {detected or 'a different document'}, not a {short}. "
+                          f"Upload the right one — or confirm if it really is your {short}.")
+    _CACHE[key] = result
+    if len(_CACHE) > _CACHE_MAX:
+        _CACHE.popitem(last=False)
+    return result
+
+
+def check_business_document(doc_type: str, file_bytes: bytes, mime_type: str) -> DocumentCheck:
+    """Onboarding / permit uploads: is this the DTI/SEC/BIR/Mayor's Permit it
+    says it is? Also reads the ID number (the old extract_id_number)."""
+    names = DOC_TYPE_NAMES.get(doc_type)
+    if not names:
+        return DocumentCheck(verdict=NOT_CHECKED)
+    expected, short, noun = names
+    return _check(expected, short, noun, DOC_TYPE_ID_HINT.get(doc_type), file_bytes, mime_type)
+
+
+def check_labelled_document(label: str, file_bytes: bytes, mime_type: str) -> DocumentCheck:
+    """A quotation attachment filed under one of the buyer's required
+    documents ("DENR Permit", "Material spec sheet")."""
+    label = (label or "").strip()[:100]
+    if not label:
+        return DocumentCheck(verdict=NOT_CHECKED)
+    return _check(f"a \"{label}\" document", label, "document", None, file_bytes, mime_type)

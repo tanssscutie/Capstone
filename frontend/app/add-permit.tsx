@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import AddPermit from '../features/add-permit/AddPermit';
 import { getVerificationStatus, uploadDocument } from '../lib/api/business';
 import { color, font, fontSize, space } from '../components/ui/tokens';
-import { errorMessage } from '../lib/api/client';
+import { ApiError, errorMessage } from '../lib/api/client';
 
 export default function AddPermitRoute() {
   const router = useRouter();
@@ -54,14 +54,27 @@ export default function AddPermitRoute() {
     <AddPermit
       onBack={() => router.push('/home')}
       onSubmit={async (file, fileName, permitNumber) => {
-        await uploadDocument({
+        const upload = (confirmMismatch: boolean) => uploadDocument({
           docType: 'MAYORS_PERMIT',
           declaredOwnerName: ownerName,
           declaredBusinessName: businessName,
           declaredIdNumber: permitNumber,
           file,
           fileName,
+          confirmMismatch,
         });
+        try {
+          await upload(false);
+        } catch (e) {
+          // 409: the AI check thinks it's a different document — the business
+          // decides. A clear non-document (422) just shows its message.
+          if (e instanceof ApiError && e.status === 409 && typeof window !== 'undefined'
+              && window.confirm(`${e.message}\n\nUpload it as your Mayor's Permit anyway? An administrator still reviews it.`)) {
+            await upload(true);
+            return;
+          }
+          throw e;
+        }
       }}
     />
   );

@@ -76,6 +76,31 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**AI document check: dapat totoong document ang ina-upload (walang selfie o random na litrato)**
+- Sa **iisang Gemini call** (`document_extraction_service`), binabasa ang ID number at tinitingnan kung ang upload ay:
+  - `expected`: ang tamang document (scan, PDF o malinaw na litrato)
+  - `other_document`: totoong document pero iba, hal. DTI na in-upload bilang BIR
+  - `not_a_document`: selfie, random na litrato, o screenshot ng iba
+- **Saan ito tumatakbo:**
+  - Onboarding documents (DTI/SEC, BIR 2303, Mayor's Permit), pati ang "Add Mayor's permit" sa ibang pagkakataon
+  - Quotation attachments na naka-file sa ilalim ng required document ng buyer
+- **Ano ang nangyayari:**
+  - `not_a_document`: tinatanggihan, may friendly message hal. *"This looks like a selfie, not a BIR 2303. Upload a scan or clear photo of the certificate."* Tinatanggal ang file sa form.
+  - `other_document`: may babala at button na **"Yes, this is my …"**. Hindi makaka-submit hangga't walang kumpirmasyon o bagong file. Sa Add permit, `window.confirm` ang gamit.
+  - **Walang Gemini (walang key, down o timeout):** tanggap ang upload pero minamarkahang **"not auto-checked"** para sa admin.
+  - **Hindi kailanman nagve-verify ang AI nang mag-isa.** Admin pa rin ang nag-a-approve. Sa admin document list, may "AI: looks right", "AI check: may be a different document" o "not auto-checked".
+- **Ipinapatupad sa backend, hindi lang sa UI:** 422 kapag not_a_document, at 409 kapag other_document na walang `confirm_mismatch`.
+  - May in-process cache (sha256 ng file), kaya hindi nauulit ang Gemini call mula pick hanggang upload.
+  - Hindi sinusuri ang .doc/.docx.
+- **Backend:**
+  - `check_business_document` at `check_labelled_document`
+  - `POST /requirements/document-check` (seller, walang sine-save)
+  - `confirm_mismatch` sa `POST /business/documents` at sa quotation attachments
+  - `BusinessDocument.ai_check` at `ai_check_note` (auto-migrate)
+- Nasubukan sa totoong Gemini: tama ang tatlong verdict sa synthetic na BIR 2303 at sa isang drawing, at nabasa ang TIN.
+- Tests: `backend/tests/test_document_check.py` (naka-mock ang Gemini). Hindi na tumatawag sa live Gemini ang `test_attachment_downloads`.
+- Kasama rin: sa admin Reports, ang automatic withdrawal report ay "Filed automatically by TrustLink" na, hindi "Reported by Trustlink Admin".
+
 **Ayos sa phone: lapad ng page at petsa ng delivery window**
 - Raw ISO pa ang lumalabas na delivery window ("2026-10-28T08:00:00 – …"). Ngayon ay "28 Oct – 30 Nov 2026" na (`formatDeliveryWindow` sa `lib/api/mappers.ts`).
 - Sa phone, lumalapad ang buong page (462px sa 390px na screen) dahil sa pangalan at tier sa header. Avatar na lang ang ipinapakita sa ilalim ng 600px (`AppHeader.tsx`), at ang avatar pa rin ang nagbubukas ng account menu.

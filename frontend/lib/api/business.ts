@@ -13,8 +13,15 @@ export interface DocumentUploadOut {
   declared_expiry_date: string | null;
   validation_status: string;
   validation_notes: string;
+  /** AI document check — expected | other_document (the business confirmed a
+   *  mismatch) | not_checked. Advisory for the admin; never verifies on its own. */
+  ai_check: 'expected' | 'other_document' | 'not_checked';
+  ai_check_note: string | null;
   uploaded_at: string;
 }
+
+/** The AI document check's verdict on a file before it's uploaded. */
+export type DocumentVerdict = 'expected' | 'other_document' | 'not_a_document' | 'not_checked';
 
 export interface VerificationStatusOut {
   verification_status: string;
@@ -121,6 +128,8 @@ export interface UploadDocumentInput {
   declaredExpiryDate?: string; // YYYY-MM-DD
   file: File | Blob;
   fileName: string;
+  /** The AI check said it's a different document and the business confirmed it. */
+  confirmMismatch?: boolean;
 }
 
 /** POST /business/documents — multipart/form-data. */
@@ -132,11 +141,16 @@ export async function uploadDocument(input: UploadDocumentInput): Promise<Docume
   form.append('declared_id_number', input.declaredIdNumber);
   if (input.declaredExpiryDate) form.append('declared_expiry_date', input.declaredExpiryDate);
   form.append('file', input.file, input.fileName);
+  if (input.confirmMismatch) form.append('confirm_mismatch', 'true');
   return api.postForm<DocumentUploadOut>('/business/documents', form);
 }
 
 export interface DocumentExtractionOut {
   id_number: string | null;
+  /** Same Gemini call: is it the document it should be? */
+  verdict: DocumentVerdict;
+  /** What to tell the business when it isn't (null when fine). */
+  message: string | null;
 }
 
 /** POST /business/documents/extract — Assistive Document Extraction. A

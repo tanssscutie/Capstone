@@ -804,6 +804,7 @@ class RequirementService:
 
     async def upload_quotation_attachment(
         self, requirement_id: int, quotation_id: int, business_id: int, file: UploadFile, document_label: str | None = None,
+        confirm_mismatch: bool = False,
     ) -> AttachmentOut:
         with Session(engine) as session:
             req = repo.get_requirement(session, requirement_id)
@@ -825,6 +826,15 @@ class RequirementService:
 
             contents = await file.read()
             ext = validate_upload(file.filename, contents, ATTACHMENT_EXTENSIONS, MAX_ATTACHMENT_BYTES)
+            # Filed under a required document: the same AI check as onboarding
+            # documents — a selfie or random photo is refused, a different
+            # document needs the supplier's confirmation.
+            if document_label and document_label.strip():
+                check = await self.check_attachment(document_label, contents, file.filename, file.content_type)
+                if check.verdict == "not_a_document":
+                    raise HTTPException(status_code=422, detail=check.message)
+                if check.verdict == "other_document" and not confirm_mismatch:
+                    raise HTTPException(status_code=409, detail=check.message)
             upload_dir = os.path.join("uploads", "quotations", str(quotation_id))
             os.makedirs(upload_dir, exist_ok=True)
             saved_name = f"{uuid.uuid4().hex}{ext}"
@@ -848,6 +858,20 @@ class RequirementService:
                 document_label=created.document_label,
                 uploaded_at=created.uploaded_at,
             )
+
+    @staticmethod
+    async def check_attachment(document_label: str, contents: bytes, filename: str | None, content_type: str | None):
+        """AI document check for a required-document attachment (blocking
+        Gemini call, so on a worker thread). .doc/.docx aren't checked."""
+        import mimetypes
+
+        from fastapi.concurrency import run_in_threadpool
+        from app.services import document_extraction_service
+
+        mime = (content_type or "").lower()
+        if not mime or mime == "application/octet-stream":
+            mime = (mimetypes.guess_type(filename or "")[0] or "").lower()
+        return await run_in_threadpool(document_extraction_service.check_labelled_document, document_label, contents, mime)
 
     # ---------- attachment downloads ----------
 
