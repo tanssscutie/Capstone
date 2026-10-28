@@ -756,6 +756,45 @@ function AttachmentsBlock({ requirement }: { requirement: Requirement }) {
   );
 }
 
+/** What respondents are asked to attach — a plain checklist (nothing to tap),
+ *  after the papers TrustLink already verified for every supplier. */
+function RequiredDocumentsChecklist({ requirement }: { requirement: Requirement }) {
+  const docs = requirement.requiredDocuments;
+  return (
+    <View>
+      <SectionLabel>Required documents from respondents</SectionLabel>
+      {docs.length > 0 ? (
+        <>
+          <Text style={[styles.mutedSmall, { marginTop: space.xs }]}>
+            Respondents are asked to attach these to their quotation — not a hard block on submitting.
+          </Text>
+          <View style={styles.docChecklist}>
+            {docs.map((d) => (
+              <View key={d} style={styles.docChecklistRow}>
+                <View style={styles.docChecklistTick} />
+                <Text style={styles.docChecklistLabel}>{d}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : (
+        <Text style={[styles.mutedSmall, { marginTop: space.xs }]}>No extra documents for this job.</Text>
+      )}
+      <Text style={[styles.mutedSmall, { marginTop: space.sm }]}>
+        DTI / SEC registration, BIR 2303 and Mayor's Permit are already verified by TrustLink for every supplier.
+      </Text>
+    </View>
+  );
+}
+
+function RequiredDocumentsBlock({ requirement }: { requirement: Requirement }) {
+  return (
+    <View style={styles.block}>
+      <RequiredDocumentsChecklist requirement={requirement} />
+    </View>
+  );
+}
+
 function RequirementOverview({ requirement }: { requirement: Requirement }) {
   return (
     <View style={{ gap: space.xxl }}>
@@ -765,6 +804,7 @@ function RequirementOverview({ requirement }: { requirement: Requirement }) {
       <DeliveryWindowBlock requirement={requirement} />
       <DeliverySiteBlock requirement={requirement} />
       <AttachmentsBlock requirement={requirement} />
+      <RequiredDocumentsBlock requirement={requirement} />
     </View>
   );
 }
@@ -1756,21 +1796,9 @@ function WideScopeCard({ requirement }: { requirement: Requirement }) {
         </View>
       </View>
 
-      {requirement.requiredDocuments.length > 0 && (
-        <View style={styles.wideDividedSection}>
-          <SectionLabel>Required documents from respondents</SectionLabel>
-          <Text style={[styles.mutedSmall, { marginTop: space.xs }]}>
-            Respondents are asked to attach these to their quotation — not a hard block on submitting.
-          </Text>
-          <View style={[styles.wideChipsRow, { marginTop: space.sm }]}>
-            {requirement.requiredDocuments.map((d) => (
-              <View key={d} style={styles.fileChip}>
-                <Text style={styles.fileChipLabel} numberOfLines={1}>{d}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
+      <View style={styles.wideDividedSection}>
+        <RequiredDocumentsChecklist requirement={requirement} />
+      </View>
     </View>
   );
 }
@@ -3414,6 +3442,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: space.sm,
   },
+  docChecklist: { marginTop: space.sm, gap: space.xs },
+  docChecklistRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  docChecklistTick: { width: 10, height: 6, marginTop: -3, borderLeftWidth: 2, borderBottomWidth: 2, borderColor: color.success, transform: [{ rotate: '-45deg' }] },
+  docChecklistLabel: { flex: 1, minWidth: 0, fontFamily: font.body, fontSize: fontSize.base, color: color.ink },
   fileChip: {
     borderWidth: 1,
     borderColor: color.border,

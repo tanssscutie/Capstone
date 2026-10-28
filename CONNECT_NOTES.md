@@ -76,6 +76,12 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Requirement Detail: required documents bilang checklist**
+- Hindi na mukhang button ang mga required document. Simpleng listahan na ito na may check mark (walang mapipindot).
+- Kasama na rin ito sa **phone layout**, na wala nito dati.
+- Laging may linya na "DTI / SEC registration, BIR 2303 and Mayor's Permit are already verified by TrustLink for every supplier". Kapag walang extra, "No extra documents for this job" ang lumalabas.
+- Code: `RequiredDocumentsChecklist` sa `RequirementDetail.tsx`.
+
 **Post a requirement (1D): Required documents — verified na ng TrustLink + job-specific**
 - **"Already verified by TrustLink"** (read-only, berde): DTI / SEC registration, BIR 2303, Mayor's Permit. May caption na "Every supplier who can quote has these on file — no need to ask again."
 - **Optional na ang extra documents.** Puwedeng "No extra documents needed".
