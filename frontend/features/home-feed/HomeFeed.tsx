@@ -241,12 +241,12 @@ function computeSignal(requirement: Requirement, hoursLeft: number, closed: bool
   return null;
 }
 
-function matchReason(buyerCity: string, viewer: Business): string {
+function matchReason(siteCity: string, viewer: Business): string {
   const capability = (viewer.capabilities[0] ?? viewer.category).toLowerCase();
-  if (buyerCity === viewer.city) {
+  if (siteCity === viewer.city) {
     return `Same category as your business, and the site is in ${viewer.city} — your service area. Your profile lists ${capability}.`;
   }
-  return `Same category as your business. ${buyerCity} is within your listed delivery range, and the detail fits your ${capability} capability.`;
+  return `Same category as your business. ${siteCity} is within your listed delivery range, and the detail fits your ${capability} capability.`;
 }
 
 /* ─── Small building blocks ─────────────────────────── */
@@ -1342,7 +1342,7 @@ function RequirementCard({
         </View>
         <View style={styles.factItem}>
           <Text style={styles.microLabel}>Location</Text>
-          <Text style={styles.factValue}>{buyer.city}</Text>
+          <Text style={styles.factValue}>{requirement.deliverySite.name}</Text>
         </View>
         <View style={styles.factItem}>
           <Text style={styles.microLabel}>Quotations received</Text>
@@ -1356,7 +1356,7 @@ function RequirementCard({
       {matched && (
         <View style={styles.matchBox}>
           <Text style={styles.microLabel}>Why this matches</Text>
-          <Text style={styles.matchReasonText}>{matchReason(buyer.city, viewer)}</Text>
+          <Text style={styles.matchReasonText}>{matchReason(requirement.deliverySite.name, viewer)}</Text>
         </View>
       )}
 

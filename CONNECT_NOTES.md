@@ -64,6 +64,10 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Home feed: tamang Location sa bawat post**
+- Bug: ang "Location" sa feed card ay `buyer.city` (city ng account ng nag-post), kaya lahat ng post ni Artz Works ay "Muntinlupa". Ngayon, `requirement.deliverySite.name` na (ang city ng post mismo). Pati ang "Why this matches" ay gumagamit na ng city ng post.
+- Code: `features/home-feed/HomeFeed.tsx` (`matchReason` at ang facts row ng card).
+
 **Alert sa lahat pagka-release ng quotations**
 - Dati, ang buyer lang ang may alert. Ngayon, may `REQUIREMENT_RELEASED` alert din ("Quotations opened") ang **bawat respondent** pagka-release. Hindi nito sinasabi kung nanalo sila. May email din ito, at nabubuksan ang requirement mula sa alert.
 - Code: `requirement_service._release_one`. Tests: `backend/tests/test_release_alerts.py`.
