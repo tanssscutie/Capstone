@@ -1919,9 +1919,9 @@ function WideInfoBand({
             <View style={styles.factsGridItem}>
               <SectionLabel>Location</SectionLabel>
               <Text style={styles.factValue}>
-                {buyer.city}, {buyer.province}
+                {requirement.deliverySite.name}
                 {'\n'}
-                <Text style={styles.factValueMuted}>{requirement.deliverySite.name}</Text>
+                <Text style={styles.factValueMuted}>Metro Manila</Text>
               </Text>
             </View>
             <View style={styles.factsGridItem}>
