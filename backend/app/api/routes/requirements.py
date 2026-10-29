@@ -13,6 +13,7 @@ from app.services import quotation_draft_service
 from app.services import requirement_detail_draft_service
 from app.services.document_request_service import document_request_service
 from app.services.closeout_service import closeout_service
+from app.services.delivery_schedule_service import delivery_schedule_service
 from app.services.fulfillment_service import fulfillment_service
 from app.schemas.requirement import (
     CategorySuggestionRequest,
@@ -45,6 +46,9 @@ from app.schemas.requirement import (
     FulfillmentUpdateIn,
     CloseoutProposeIn,
     CloseoutRespondIn,
+    DeliveryOut,
+    DeliveryProposeIn,
+    DeliveryRespondIn,
 )
 
 router = APIRouter()
@@ -504,6 +508,34 @@ def respond_closeout(requirement_id: int, payload: CloseoutRespondIn, current_us
 def withdraw_closeout(requirement_id: int, current_user=Depends(require_verified)):
     try:
         return closeout_service.withdraw(requirement_id, current_user.id)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/delivery", response_model=DeliveryOut)
+def propose_delivery(requirement_id: int, payload: DeliveryProposeIn, current_user=Depends(require_verified)):
+    """Buyer: set the delivery date of an awarded order — the supplier confirms
+    or declines it. See delivery_schedule_service."""
+    try:
+        return delivery_schedule_service.propose(requirement_id, current_user.id, payload.delivery_date, payload.note)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/delivery/respond", response_model=DeliveryOut)
+def respond_delivery(requirement_id: int, payload: DeliveryRespondIn, current_user=Depends(require_verified)):
+    """Awarded supplier: confirm the date, or decline with a reason (and maybe another date)."""
+    try:
+        return delivery_schedule_service.respond(requirement_id, current_user.id, payload.confirm, payload.reason,
+                                                 payload.suggested_date)
+    except Exception as exc:
+        _handle_service_errors(exc)
+
+
+@router.post("/{requirement_id}/delivery/withdraw", response_model=DeliveryOut)
+def withdraw_delivery(requirement_id: int, current_user=Depends(require_verified)):
+    try:
+        return delivery_schedule_service.withdraw(requirement_id, current_user.id)
     except Exception as exc:
         _handle_service_errors(exc)
 

@@ -40,7 +40,7 @@ import type {
 import { PREFERRED_BRAND_ID, specDisplayValue } from '../../lib/data/categories';
 import { useMarketRules } from '../../lib/data/marketRules';
 import { ReportLink } from '../../components/ui/ReportBusinessModal';
-import { OrderStatusPanel, isChatClosed } from '../../components/ui/OrderStatusPanel';
+import { OrderStatusPanel, isChatClosed, useAgreedDeliveryDate, formatDeliveryDate } from '../../components/ui/OrderStatusPanel';
 import { CaptionOrHint, InfoHint } from '../../components/ui/InfoHint';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 import { BusinessLink, BusinessNameLink } from '../../components/ui/BusinessLink';
@@ -1906,6 +1906,8 @@ function WideInfoBand({
   const [saved, setSaved] = useState(false);
   const { label: countdownLabel, closed, urgent } = useCountdown(requirement.closingAt);
   const clockColor = closed ? color.inkMuted : urgent ? color.danger : color.ink;
+  // Buyer and awarded supplier only: the date agreed after the award.
+  const agreedDelivery = useAgreedDeliveryDate(requirement.id, requirement.status === 'AWARDED');
 
   return (
     <View style={[styles.wideCard, sealTinted ? styles.wideCardSealedTint : null]}>
@@ -1935,9 +1937,11 @@ function WideInfoBand({
             <View style={styles.factsGridItem}>
               <SectionLabel>Needed by</SectionLabel>
               <Text style={styles.factValue}>
-                {requirement.deliveryWindow || 'To agree after award'}
+                {agreedDelivery ? formatDeliveryDate(agreedDelivery) : requirement.deliveryWindow || 'To agree after award'}
                 {'\n'}
-                <Text style={styles.factValueMuted}>{requirement.deliveryWindow ? 'Installation window' : 'Set with the awarded supplier'}</Text>
+                <Text style={styles.factValueMuted}>
+                  {agreedDelivery ? 'Agreed after the award' : requirement.deliveryWindow ? 'Delivery window' : 'Set with the awarded supplier'}
+                </Text>
               </Text>
             </View>
           </View>

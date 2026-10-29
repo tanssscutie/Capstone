@@ -113,7 +113,31 @@ export interface CloseoutOut {
 
 export type OrderStatus =
   | 'awarded' | 'in_production' | 'out_for_delivery' | 'delivered'
-  | 'completed' | 'not_pushed_through' | 'unconfirmed';
+  | 'completed' | 'not_pushed_through' | 'unconfirmed'
+  // Timeline only: the supplier confirmed the delivery date.
+  | 'delivery_scheduled';
+
+export interface DeliveryProposalOut {
+  id: number;
+  delivery_date: string; // YYYY-MM-DD
+  note: string | null;
+  status: 'pending' | 'confirmed' | 'declined' | 'withdrawn';
+  decline_reason: string | null;
+  suggested_date: string | null; // YYYY-MM-DD
+  created_at: string;
+  responded_at: string | null;
+}
+
+/** Delivery date agreed after the award (backend delivery_schedule_service). */
+export interface DeliveryOut {
+  requirement_id: number;
+  viewer_role: 'buyer' | 'supplier' | 'admin';
+  agreed_date: string | null; // YYYY-MM-DD
+  pending: DeliveryProposalOut | null;
+  awaiting_viewer: boolean;
+  last_declined: DeliveryProposalOut | null;
+  history: DeliveryProposalOut[];
+}
 
 export interface OrderUpdateOut {
   status: OrderStatus;
@@ -134,6 +158,7 @@ export interface FulfillmentOut {
   auto_confirmed: boolean;
   timeline: OrderUpdateOut[];
   closeout: CloseoutOut | null;
+  delivery: DeliveryOut | null;
 }
 
 export interface MyRequirementOut {
@@ -482,6 +507,24 @@ export const requirementsApi = {
     api.post<FulfillmentOut>(`/requirements/${requirementId}/fulfillment/confirm`, {
       note: note && note.trim().length > 0 ? note.trim() : null,
     }),
+
+  // ---- delivery date (awarded requirements: buyer sets, supplier confirms) ----
+
+  proposeDelivery: (requirementId: number, deliveryDate: string, note?: string) =>
+    api.post<DeliveryOut>(`/requirements/${requirementId}/delivery`, {
+      delivery_date: deliveryDate,
+      note: note && note.trim().length > 0 ? note.trim() : null,
+    }),
+
+  respondDelivery: (requirementId: number, confirm: boolean, reason?: string, suggestedDate?: string) =>
+    api.post<DeliveryOut>(`/requirements/${requirementId}/delivery/respond`, {
+      confirm,
+      reason: reason && reason.trim().length > 0 ? reason.trim() : null,
+      suggested_date: suggestedDate || null,
+    }),
+
+  withdrawDelivery: (requirementId: number) =>
+    api.post<DeliveryOut>(`/requirements/${requirementId}/delivery/withdraw`, {}),
 
   // ---- transaction close-out (awarded requirements, both parties confirm) ----
 

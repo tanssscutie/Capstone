@@ -12,14 +12,15 @@ When nobody updates (run_due, from the scheduler):
 - a reminder at 3 and at 7 days without a step, to whoever acts next;
 - marked completed and the buyer silent for 14 days → auto-confirmed
   (the buyer can still say it did not push through, or report, until then);
-- no step for 14 days and 14 days past the delivery window → "unconfirmed":
+- no step for 14 days and 14 days past the delivery date (the one agreed
+  after the award, else the posted delivery window) → "unconfirmed":
   counted as neither completed nor failed.
 
 Every step goes on the ledger, into the award chat as a TrustLink notice,
 and out as an alert.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from typing import List, Optional, Tuple
 
 from fastapi import HTTPException, status
@@ -36,6 +37,7 @@ from app.repositories import notification_repository as notif_repo
 from app.repositories import requirement_repository as repo
 from app.schemas.requirement import FulfillmentOut, OrderUpdateOut
 from app.services.closeout_service import closeout_service
+from app.services import delivery_schedule_service as delivery
 from app.services.requirement_service import RequirementNotFound, _log
 
 logger = logging.getLogger("trustlink.fulfillment")
@@ -140,6 +142,7 @@ class FulfillmentService:
             timeline=[OrderUpdateOut(status=u.status, actor_role=u.actor_role, note=u.note, created_at=u.created_at)
                       for u in timeline],
             closeout=closeout_service._view(session, req, quotation, role),
+            delivery=delivery.delivery_schedule_service.view(session, req, role),
         )
 
     def _step(self, session: Session, req: Requirement, quotation: Quotation, new_status: str,
@@ -270,7 +273,9 @@ class FulfillmentService:
             done["auto_confirmed"] += 1
             return
 
-        window_end = max(req.delivery_end or last, last)
+        agreed = delivery.agreed_date(session, req.id)
+        due = datetime.combine(agreed, time(23, 59)) if agreed else req.delivery_end
+        window_end = max(due or last, last)
         if not delivered and idle >= timedelta(days=UNCONFIRMED_DAYS) and now >= window_end + timedelta(days=UNCONFIRMED_DAYS):
             self._step(session, req, quotation, "unconfirmed", None, "system", None)
             _log(session, "ORDER_UNCONFIRMED", req.id, quotation.id, None, {"requirement_id": req.id})

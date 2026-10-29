@@ -58,6 +58,10 @@ const EVENT_LABEL: Record<LedgerEntryType, string> = {
   ORDER_RECEIVED: 'Buyer confirmed — completed',
   ORDER_AUTO_CONFIRMED: 'Order auto-confirmed as completed',
   ORDER_UNCONFIRMED: 'Order marked unconfirmed',
+  DELIVERY_DATE_PROPOSED: 'Delivery date set by buyer',
+  DELIVERY_DATE_CONFIRMED: 'Delivery date confirmed by supplier',
+  DELIVERY_DATE_DECLINED: 'Delivery date declined by supplier',
+  DELIVERY_DATE_WITHDRAWN: 'Delivery date withdrawn',
 };
 
 function formatDateTime(iso: string): string {

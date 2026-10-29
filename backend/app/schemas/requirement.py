@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field, model_validator
@@ -416,6 +416,42 @@ class CloseoutOut(BaseModel):
     history: List[CloseoutProposalOut] = []
 
 
+class DeliveryProposeIn(BaseModel):
+    delivery_date: date
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class DeliveryRespondIn(BaseModel):
+    confirm: bool
+    # Required when declining (min 5 characters, checked in the service).
+    reason: Optional[str] = Field(default=None, max_length=500)
+    # Declining only: a date the supplier can make instead.
+    suggested_date: Optional[date] = None
+
+
+class DeliveryProposalOut(BaseModel):
+    id: int
+    delivery_date: date
+    note: Optional[str]
+    status: str  # pending | confirmed | declined | withdrawn
+    decline_reason: Optional[str]
+    suggested_date: Optional[date]
+    created_at: datetime
+    responded_at: Optional[datetime]
+
+
+class DeliveryOut(BaseModel):
+    """The agreed delivery date of an awarded order (delivery_schedule_service)."""
+    requirement_id: int
+    viewer_role: str  # buyer | supplier | admin
+    agreed_date: Optional[date] = None
+    pending: Optional[DeliveryProposalOut] = None
+    awaiting_viewer: bool = False  # the supplier, while a date waits for them
+    # The most recent declined proposal, if nothing newer — its reason and suggested date.
+    last_declined: Optional[DeliveryProposalOut] = None
+    history: List[DeliveryProposalOut] = []
+
+
 class OrderUpdateOut(BaseModel):
     status: str
     actor_role: str  # buyer | supplier | system
@@ -437,6 +473,7 @@ class FulfillmentOut(BaseModel):
     auto_confirmed: bool = False
     timeline: List[OrderUpdateOut] = []
     closeout: Optional[CloseoutOut] = None  # "did not push through" proposals
+    delivery: Optional[DeliveryOut] = None  # the delivery date agreed after the award
 
 
 class FulfillmentUpdateIn(BaseModel):

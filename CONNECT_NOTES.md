@@ -64,6 +64,15 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Delivery date pagkatapos ng award**
+- Ang **buyer** ang nagse-set ng delivery date ("Set delivery date" sa Order status panel). Bawal ang petsang lumipas na, at isa lang ang puwedeng naghihintay (409 kung may pending pa). Puwede itong i-withdraw ng buyer.
+- Ang **supplier** ay mag-"Confirm date", o "Can't make it" na may required na dahilan (min 5 characters) at optional na mungkahing petsa.
+- Kapag may mungkahing petsa, may button ang buyer na **"Use <petsa>"**: isang tap lang, ipapadala na ulit sa supplier. Puwede ring baguhin ang na-agree na petsa ("Change date"). Ang bagong confirm ang papalit sa luma.
+- Bawat hakbang: ledger (`DELIVERY_DATE_PROPOSED` / `_CONFIRMED` / `_DECLINED` / `_WITHDRAWN`), system message sa award chat, at DECISION alert sa kabila. Pagka-confirm, may OrderUpdate na `delivery_scheduled` ("Delivery date confirmed" sa Updates).
+- Saan makikita: Order status panel (My Requirements, My Quotations, Requirement Detail), chat line ("Status: Awarded · Delivery Nov 6, 2026"), at "Needed by" sa Requirement Detail para sa buyer at supplier. Napalitan din ang lumang label na "Installation window" ng "Delivery window".
+- Ang Unconfirmed check (`fulfillment_service._run_one`) ay gumagamit na ng na-agree na petsa kung meron, hindi ng `delivery_end` ng post.
+- Code: `models/delivery_schedule.py`, `services/delivery_schedule_service.py`, `POST /requirements/{id}/delivery`, `/delivery/respond`, `/delivery/withdraw`, at `delivery` sa `FulfillmentOut`. Frontend: `DeliveryBlock` sa `components/ui/OrderStatusPanel.tsx`. Tests: `backend/tests/test_delivery_schedule.py` (9).
+
 **AI document check sa onboarding: na-test na sa browser + 2 bug fix**
 - Na-test ang DOCUMENTS screen gamit ang pansamantalang seller na "Demo Test Shop" (binura na pagkatapos):
   - drawing sa DTI → tinanggihan, may paliwanag
