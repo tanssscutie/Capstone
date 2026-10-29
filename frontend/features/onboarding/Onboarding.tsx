@@ -115,6 +115,10 @@ interface IdentityProps {
    *  read-only); changes go through "Request a change" on Business details. */
   locked?: boolean;
   onRequestChange?: () => void;
+  /** First onboarding: the name and number were filled in from the account. */
+  prefilled?: boolean;
+  /** The account's login mobile, offered as the contact number. */
+  accountMobile?: string | null;
 }
 
 interface OperationsProps {
@@ -605,7 +609,12 @@ function IdentityScreen(props: IdentityProps & { reportContinue: (fn: () => void
   return <EditableIdentity {...props} />;
 }
 
-function EditableIdentity({ initial, onContinue, reportContinue }: IdentityProps & { reportContinue: (fn: () => void) => void }) {
+/** "09171234567" / "+63 917…" → the 10 digits after +63. */
+function mobileTenDigits(value: string | null | undefined): string {
+  return (value ?? '').replace(/^\+?63\s*/, '').replace(/[^0-9]/g, '').replace(/^0(?=\d{10}$)/, '');
+}
+
+function EditableIdentity({ initial, onContinue, reportContinue, prefilled, accountMobile }: IdentityProps & { reportContinue: (fn: () => void) => void }) {
   const [registeredName, setRegisteredName] = useState(initial?.registeredName ?? '');
   const [displayName, setDisplayName] = useState(initial?.displayName ?? '');
   const [businessType, setBusinessType] = useState<BusinessType | ''>(initial?.businessType ?? '');
@@ -619,7 +628,8 @@ function EditableIdentity({ initial, onContinue, reportContinue }: IdentityProps
   // Strip a leading "+63" before stripping the rest of the non-digits, so re-hydrating from
   // a previously-submitted "+63 917 555 0142" (going Back to this step) yields the 10-digit
   // "9175550142" the input expects, not "639175550142" with the country code folded in.
-  const [mobileDigits, setMobileDigits] = useState(() => (initial?.contactMobile ?? '').replace(/^\+?63\s*/, '').replace(/[^0-9]/g, ''));
+  const [mobileDigits, setMobileDigits] = useState(() => mobileTenDigits(initial?.contactMobile));
+  const accountDigits = mobileTenDigits(accountMobile);
   const [attempted, setAttempted] = useState(false);
 
   const nameBad = registeredName.trim().length > 0 && registeredName.trim().length < 4;
@@ -675,6 +685,9 @@ function EditableIdentity({ initial, onContinue, reportContinue }: IdentityProps
               style={[styles.input, nameBad ? styles.inputError : null]}
             />
             {nameBad && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>That looks short for a registered name — check it against the certificate.</Text>}
+            {prefilled && !!initial?.registeredName && registeredName === initial.registeredName && (
+              <Text style={styles.quietNote}>Filled in from your account. Change it only if your certificate spells it differently.</Text>
+            )}
           </View>
 
           <View>
@@ -749,6 +762,13 @@ function EditableIdentity({ initial, onContinue, reportContinue }: IdentityProps
               />
             </View>
             {mobileBad && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>That does not look like a Philippine mobile number — 10 digits after +63.</Text>}
+            {accountDigits.length === 10 && (mobileDigits === accountDigits ? (
+              <Text style={styles.quietNote}>Your account's number. Type another one if the business uses a different number.</Text>
+            ) : (
+              <Pressable onPress={() => setMobileDigits(accountDigits)} hitSlop={6} accessibilityRole="button">
+                <Text style={styles.useAccountNumber}>Use my account number (+63 {accountDigits})</Text>
+              </Pressable>
+            ))}
             <Text style={styles.quietNote}>Never shown publicly — only shared after an award.</Text>
           </View>
         </View>
@@ -1675,6 +1695,7 @@ export default function Onboarding(props: OnboardingProps) {
 /* ─── Styles ─────────────────────────────────────────── */
 
 const styles = StyleSheet.create({
+  useAccountNumber: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.primary, marginTop: space.xs },
   root: { flex: 1, backgroundColor: color.surfaceSunken },
 
   /* top header — mark + wordmark only, far left of the viewport. Full-width bar with a

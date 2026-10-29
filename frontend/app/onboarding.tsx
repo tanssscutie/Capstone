@@ -27,6 +27,10 @@ export default function OnboardingRoute() {
   const [documents, setDocuments] = useState<DocumentsDraft | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
   const [role, setRole] = useState<AccountRole | null>(null);
+  // First onboarding: the name given at sign-up and the login mobile, so
+  // IDENTITY doesn't ask for them again (both stay editable).
+  const [prefill, setPrefill] = useState<Partial<IdentityDraft> | null>(null);
+  const [accountMobile, setAccountMobile] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(true);
   // The category picked at registration — seeds OPERATIONS for a business
   // that hasn't finished onboarding yet, so it isn't asked a second time.
@@ -48,8 +52,12 @@ export default function OnboardingRoute() {
       try {
         const [status, user] = await Promise.all([getVerificationStatus(), me()]);
         setRole(user.role);
+        setAccountMobile(user.mobile_number ?? null);
         setRegisteredCategory(status.industry_category ?? '');
-        if (!status.onboarding_completed) return;
+        if (!status.onboarding_completed) {
+          setPrefill({ registeredName: user.business_name ?? '', contactMobile: user.mobile_number ?? '' });
+          return;
+        }
         setIdentity({
           registeredName: status.registered_name ?? '',
           displayName: status.display_name ?? '',
@@ -221,7 +229,9 @@ export default function OnboardingRoute() {
   return (
     <Onboarding
       step="IDENTITY"
-      initial={identity ?? undefined}
+      initial={identity ?? prefill ?? undefined}
+      prefilled={!identity && !!prefill}
+      accountMobile={accountMobile}
       onContinue={(draft) => {
         setIdentity(draft);
         setStep('OPERATIONS');

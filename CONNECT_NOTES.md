@@ -64,6 +64,11 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Onboarding: naka-prefill na ang pangalan at mobile number**
+- Sa unang onboarding, kusang napupunan ang **Registered business name** mula sa pangalang inilagay sa sign-up, at ang **Mobile number** mula sa login mobile ng account. Puwede pa ring palitan ang dalawa.
+- Kapag pinalitan ang numero, may link na "Use my account number (+63 …)" para maibalik ito.
+- Code: `prefill` at `accountMobile` sa `app/onboarding.tsx`, `prefilled` at `accountMobile` sa `EditableIdentity` (`features/onboarding/Onboarding.tsx`).
+
 **Lihim na link ng admin console (wala nang `/admin`)**
 - Nasa **`/x~7Qz_k9-Ra`** na ang admin console. Ang login ay **`/x~7Qz_k9-Ra/login`**, at ang ibang page ay `/x~7Qz_k9-Ra/businesses`, `…/requirements`, `…/reports`, `…/change-requests`, `…/documents`, `…/api`, `…/settings`, `…/rules`, `…/team`, `…/audit` at `…/data`. Ibigay lang ang link sa mga admin.
 - Ang `/admin`, `/admin-login`, ang lahat ng lumang `/admin-*` at ang `/_sitemap` ay **404 "Page not found"** na. May sariling `app/+not-found.tsx`, at pinalitan ang built-in sitemap ng Expo Router, na naglilista sana ng lahat ng route.
