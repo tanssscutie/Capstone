@@ -1,7 +1,7 @@
 // components/ui/AdminSidebar.tsx
 // Shared nav shell for the admin area. Menus are grouped under headings
 // (ADMIN_NAV_GROUPS); a menu with `tabs` covers several pages, which
-// AdminShell shows as a tab bar (AdminSectionTabs) — e.g. System settings =
+// AdminShell shows as a tab bar. Paths come from lib/adminRoutes.ts; (AdminSectionTabs) — e.g. System settings =
 // General, Platform rules, Admin team, Audit log, Backups & exports.
 // AdminSidebar is the desktop column; AdminMobileNav is the phone
 // equivalent (top bar + tabs), so the admin area stays navigable below
@@ -10,11 +10,10 @@ import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { color, font, fontSize, letterSpacing, space, radius } from './tokens';
 import { useAdminRole } from '../../lib/useAdminRole';
+import { ADMIN, type AdminHref } from '../../lib/adminRoutes';
 
 type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes' | 'settings' | 'api' | 'files' | 'team' | 'rules' | 'audit' | 'data';
 
-export type AdminHref = '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests'
-  | '/admin-documents' | '/admin-api' | '/admin-team' | '/admin-rules' | '/admin-audit' | '/admin-data' | '/admin-settings';
 
 export interface AdminTab {
   label: string;
@@ -32,33 +31,33 @@ export interface AdminNavItem {
 }
 
 export const ADMIN_NAV_GROUPS: { heading: string; items: AdminNavItem[] }[] = [
-  { heading: 'Overview', items: [{ label: 'Dashboard', href: '/admin', glyph: 'dashboard' }] },
+  { heading: 'Overview', items: [{ label: 'Dashboard', href: ADMIN.dashboard, glyph: 'dashboard' }] },
   {
     heading: 'Manage',
     items: [
-      { label: 'Businesses', href: '/admin-businesses', glyph: 'businesses' },
-      { label: 'Requirements', href: '/admin-requirements', glyph: 'requirements' },
-      { label: 'Reports', href: '/admin-reports', glyph: 'reports' },
-      { label: 'Change requests', href: '/admin-change-requests', glyph: 'changes' },
+      { label: 'Businesses', href: ADMIN.businesses, glyph: 'businesses' },
+      { label: 'Requirements', href: ADMIN.requirements, glyph: 'requirements' },
+      { label: 'Reports', href: ADMIN.reports, glyph: 'reports' },
+      { label: 'Change requests', href: ADMIN.changeRequests, glyph: 'changes' },
     ],
   },
   {
     heading: 'Resources',
     items: [{
-      label: 'Documents & API', href: '/admin-documents', glyph: 'files',
-      tabs: [{ label: 'Documents', href: '/admin-documents' }, { label: 'API reference', href: '/admin-api' }],
+      label: 'Documents & API', href: ADMIN.documents, glyph: 'files',
+      tabs: [{ label: 'Documents', href: ADMIN.documents }, { label: 'API reference', href: ADMIN.api }],
     }],
   },
   {
     heading: 'System',
     items: [{
-      label: 'System settings', href: '/admin-settings', glyph: 'settings',
+      label: 'System settings', href: ADMIN.settings, glyph: 'settings',
       tabs: [
-        { label: 'General', href: '/admin-settings' },
-        { label: 'Platform rules', href: '/admin-rules', superOnly: true },
-        { label: 'Admin team', href: '/admin-team', superOnly: true },
-        { label: 'Audit log', href: '/admin-audit', superOnly: true },
-        { label: 'Backups & exports', href: '/admin-data', superOnly: true },
+        { label: 'General', href: ADMIN.settings },
+        { label: 'Platform rules', href: ADMIN.rules, superOnly: true },
+        { label: 'Admin team', href: ADMIN.team, superOnly: true },
+        { label: 'Audit log', href: ADMIN.audit, superOnly: true },
+        { label: 'Backups & exports', href: ADMIN.data, superOnly: true },
       ],
     }],
   },

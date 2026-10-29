@@ -64,6 +64,12 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Lihim na link ng admin console (wala nang `/admin`)**
+- Nasa **`/x~7Qz_k9-Ra`** na ang admin console. Ang login ay **`/x~7Qz_k9-Ra/login`**, at ang ibang page ay `/x~7Qz_k9-Ra/businesses`, `…/requirements`, `…/reports`, `…/change-requests`, `…/documents`, `…/api`, `…/settings`, `…/rules`, `…/team`, `…/audit` at `…/data`. Ibigay lang ang link sa mga admin.
+- Ang `/admin`, `/admin-login`, ang lahat ng lumang `/admin-*` at ang `/_sitemap` ay **404 "Page not found"** na. May sariling `app/+not-found.tsx`, at pinalitan ang built-in sitemap ng Expo Router, na naglilista sana ng lahat ng route.
+- Hindi ito ang mismong proteksyon. Login at role pa rin ang kailangan sa bawat admin page at admin API.
+- Para palitan ang link: baguhin ang `ADMIN_BASE` sa `frontend/lib/adminRoutes.ts` at i-rename ang folder na `frontend/app/x~7Qz_k9-Ra/`. Lahat ng link (sidebar, tiles, redirects) ay galing sa `ADMIN` sa file na iyon.
+
 **Admin menus na naka-kategorya + auto-login kapag expired ang session**
 - **May mga kategorya na ang sidebar:**
   - Overview: Dashboard

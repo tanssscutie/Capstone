@@ -1,12 +1,12 @@
-// app/admin-businesses.tsx
+// app/x~7Qz_k9-Ra/businesses.tsx
 // Admin's full business roster (GET /business/admin/businesses) — every
 // registered business, not just the ones currently waiting on review.
 // Same shell as admin.tsx (sidebar, auth guard), with search and role /
 // status filters above the list.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { color, font, fontSize, lineHeight, space } from '../components/ui/tokens';
-import { AvatarChip, initials } from '../components/ui/AvatarChip';
+import { color, font, fontSize, lineHeight, space } from '../../components/ui/tokens';
+import { AvatarChip, initials } from '../../components/ui/AvatarChip';
 import {
   AdminShell,
   AdminCard,
@@ -22,12 +22,12 @@ import {
   SearchField,
   formatDate,
   useAdminAccess,
-} from '../components/ui/AdminKit';
-import type { PillTone } from '../components/ui/AdminKit';
-import { listAllBusinesses, reviewBusiness, liftRestriction } from '../lib/api/admin';
-import type { AdminBusinessOut } from '../lib/api/admin';
-import { errorMessage } from '../lib/api/client';
-import { BusinessLink, BusinessNameLink } from '../components/ui/BusinessLink';
+} from '../../components/ui/AdminKit';
+import type { PillTone } from '../../components/ui/AdminKit';
+import { listAllBusinesses, reviewBusiness, liftRestriction } from '../../lib/api/admin';
+import type { AdminBusinessOut } from '../../lib/api/admin';
+import { errorMessage } from '../../lib/api/client';
+import { BusinessLink, BusinessNameLink } from '../../components/ui/BusinessLink';
 
 const STATUS_LABELS: Record<string, string> = {
   unverified: 'Unverified',

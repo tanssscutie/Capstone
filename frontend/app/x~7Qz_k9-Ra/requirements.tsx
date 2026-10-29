@@ -1,10 +1,10 @@
-// app/admin-requirements.tsx
+// app/x~7Qz_k9-Ra/requirements.tsx
 // Admin's full requirement roster (GET /requirements/admin/all) — every
 // requirement ever posted, across every business. Same shell as
 // admin.tsx and admin-businesses.tsx, with search and a status filter.
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { color, font, fontSize, lineHeight, letterSpacing, space } from '../components/ui/tokens';
+import { color, font, fontSize, lineHeight, letterSpacing, space } from '../../components/ui/tokens';
 import {
   AdminShell,
   AdminCard,
@@ -18,12 +18,12 @@ import {
   SearchField,
   formatDate,
   useAdminAccess,
-} from '../components/ui/AdminKit';
-import type { PillTone } from '../components/ui/AdminKit';
-import { listAllRequirements } from '../lib/api/admin';
-import type { AdminRequirementOut } from '../lib/api/admin';
-import { errorMessage } from '../lib/api/client';
-import { BusinessNameLink } from '../components/ui/BusinessLink';
+} from '../../components/ui/AdminKit';
+import type { PillTone } from '../../components/ui/AdminKit';
+import { listAllRequirements } from '../../lib/api/admin';
+import type { AdminRequirementOut } from '../../lib/api/admin';
+import { errorMessage } from '../../lib/api/client';
+import { BusinessNameLink } from '../../components/ui/BusinessLink';
 
 const STATUS_LABELS: Record<string, string> = {
   open: 'Open',

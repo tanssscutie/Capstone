@@ -11,6 +11,7 @@ import {
 } from '@expo-google-fonts/dm-sans';
 import { DMMono_400Regular, DMMono_500Medium } from '@expo-google-fonts/dm-mono';
 import AppHeader, { APP_HEADER_RESERVED_HEIGHT } from '../components/ui/AppHeader';
+import { isAdminPath } from '../lib/adminRoutes';
 import { MaintenanceBanner } from '../components/ui/MaintenanceBanner';
 import { me, isLoggedIn } from '../lib/api/auth';
 import { getVerificationStatus, getDashboardStats } from '../lib/api/business';
@@ -31,7 +32,7 @@ function isPreLoginRoute(pathname: string): boolean {
     pathname === '/' ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/onboarding') ||
-    pathname.startsWith('/admin') ||
+    isAdminPath(pathname) ||
     pathname.startsWith('/auth-callback') ||
     pathname.startsWith('/complete-profile') ||
     pathname.startsWith('/privacy')

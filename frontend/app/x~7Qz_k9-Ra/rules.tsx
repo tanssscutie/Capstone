@@ -1,14 +1,14 @@
-// app/admin-rules.tsx
+// app/x~7Qz_k9-Ra/rules.tsx
 // Platform rules (super admins only — /business/admin/platform-rules): the
 // rules every business runs under, editable here. Each shows its value in
 // force and the server's .env default; "Reset" goes back to the default.
 // The server validates every value (ranges, on/off, length).
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
-import { color, font, fontSize, lineHeight, space, radius } from '../components/ui/tokens';
-import { AdminShell, AdminCard, ErrorBanner, GhostButton, LoadingBlock, Pill, useAdminAccess } from '../components/ui/AdminKit';
-import { listPlatformRules, resetPlatformRule, setPlatformRule, type PlatformRule } from '../lib/api/admin';
-import { errorMessage } from '../lib/api/client';
+import { color, font, fontSize, lineHeight, space, radius } from '../../components/ui/tokens';
+import { AdminShell, AdminCard, ErrorBanner, GhostButton, LoadingBlock, Pill, useAdminAccess } from '../../components/ui/AdminKit';
+import { listPlatformRules, resetPlatformRule, setPlatformRule, type PlatformRule } from '../../lib/api/admin';
+import { errorMessage } from '../../lib/api/client';
 
 function show(rule: PlatformRule, value: PlatformRule['value']): string {
   if (rule.type === 'bool') return value ? 'On' : 'Off';

@@ -1,4 +1,4 @@
-// app/admin-settings.tsx
+// app/x~7Qz_k9-Ra/settings.tsx
 // Admin Settings: the admin's own account (appearance — light/dark/system —
 // and password), and a read-only view of the platform rules in force and
 // which services are switched on (GET /business/admin/system-status). The
@@ -7,12 +7,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { color, font, fontSize, lineHeight, letterSpacing, space } from '../components/ui/tokens';
-import { AdminShell, AdminCard, ErrorBanner, GhostButton, InfoGrid, LoadingBlock, Pill, useAdminAccess } from '../components/ui/AdminKit';
-import { AppearanceCard, PasswordCard } from '../features/settings/AccountSettings';
-import { getSystemStatus, type AdminSystemStatus } from '../lib/api/admin';
-import { changePassword, logout, me, requestPasswordChangeOtp, updateTheme, type BackendUser } from '../lib/api/auth';
-import { errorMessage } from '../lib/api/client';
+import { color, font, fontSize, lineHeight, letterSpacing, space } from '../../components/ui/tokens';
+import { AdminShell, AdminCard, ErrorBanner, GhostButton, InfoGrid, LoadingBlock, Pill, useAdminAccess } from '../../components/ui/AdminKit';
+import { AppearanceCard, PasswordCard } from '../../features/settings/AccountSettings';
+import { getSystemStatus, type AdminSystemStatus } from '../../lib/api/admin';
+import { changePassword, logout, me, requestPasswordChangeOtp, updateTheme, type BackendUser } from '../../lib/api/auth';
+import { errorMessage } from '../../lib/api/client';
+import { ADMIN } from '../../lib/adminRoutes';
 
 function StatusRow({ label, on, onText, offText, detail }: { label: string; on: boolean; onText: string; offText: string; detail: string }) {
   return (
@@ -85,7 +86,7 @@ export default function AdminSettingsRoute() {
                 label="Log out"
                 onPress={() => {
                   logout();
-                  router.replace('/admin-login');
+                  router.replace(ADMIN.login);
                 }}
               />
             </View>

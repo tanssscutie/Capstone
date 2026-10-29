@@ -1,4 +1,4 @@
-// app/admin-team.tsx
+// app/x~7Qz_k9-Ra/team.tsx
 // Admin team (super admins only — GET/POST /business/admin/team): every
 // administrator account; create one, promote or demote, disable or re-enable,
 // and reset a password (the temporary one is shown once, to hand over). The
@@ -6,13 +6,13 @@
 // admin can't disable their own account.
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
-import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../components/ui/tokens';
-import { AdminShell, AdminCard, ErrorBanner, FilterChips, GhostButton, LoadingBlock, Pill, SectionHeader, formatDate, useAdminAccess } from '../components/ui/AdminKit';
+import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../../components/ui/tokens';
+import { AdminShell, AdminCard, ErrorBanner, FilterChips, GhostButton, LoadingBlock, Pill, SectionHeader, formatDate, useAdminAccess } from '../../components/ui/AdminKit';
 import {
   createAdminMember, getAdminMe, listAdminTeam, resetAdminPassword, setAdminActive, setAdminRole,
   type AdminRole, type AdminTeamMember,
-} from '../lib/api/admin';
-import { errorMessage } from '../lib/api/client';
+} from '../../lib/api/admin';
+import { errorMessage } from '../../lib/api/client';
 
 function CreateCard({ onCreated, onError }: { onCreated: () => void; onError: (m: string | null) => void }) {
   const [name, setName] = useState('');
@@ -43,7 +43,7 @@ function CreateCard({ onCreated, onError }: { onCreated: () => void; onError: (m
   return (
     <AdminCard>
       <Text style={styles.cardTitle}>Add an administrator</Text>
-      <Text style={styles.muted}>They sign in at /admin-login with this email and password. Share the password privately.</Text>
+      <Text style={styles.muted}>They sign in on the admin login page with this email and password. Share the link and password privately.</Text>
       <View style={styles.formRow}>
         <TextInput value={name} onChangeText={setName} placeholder="Full name" placeholderTextColor={color.inkFaint} style={styles.input} maxLength={120} />
         <TextInput value={email} onChangeText={setEmail} placeholder="Email" placeholderTextColor={color.inkFaint} style={styles.input}

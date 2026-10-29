@@ -1,4 +1,4 @@
-// app/admin-api.tsx
+// app/x~7Qz_k9-Ra/api.tsx
 // Admin API reference: every backend endpoint, read from the live
 // /openapi.json and grouped by tag (auth, requirements, business,
 // notifications, messages, meta). Each row shows the method, path, summary
@@ -8,10 +8,10 @@
 // trying calls out.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../components/ui/tokens';
-import { AdminShell, AdminCard, EmptyState, ErrorBanner, FilterChips, GhostButton, LoadingBlock, Pill, SearchField, useAdminAccess } from '../components/ui/AdminKit';
-import { getOpenApi } from '../lib/api/admin';
-import { API_BASE_URL, errorMessage } from '../lib/api/client';
+import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../../components/ui/tokens';
+import { AdminShell, AdminCard, EmptyState, ErrorBanner, FilterChips, GhostButton, LoadingBlock, Pill, SearchField, useAdminAccess } from '../../components/ui/AdminKit';
+import { getOpenApi } from '../../lib/api/admin';
+import { API_BASE_URL, errorMessage } from '../../lib/api/client';
 
 const TAG_ORDER = ['auth', 'requirements', 'business', 'notifications', 'messages', 'meta'];
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'];

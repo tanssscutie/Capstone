@@ -1,4 +1,4 @@
-// app/admin-data.tsx
+// app/x~7Qz_k9-Ra/data.tsx
 // Backups & exports (super admins only). "Run backup now" runs the server's
 // backup script (database + encrypted uploads into backend/backups/); the
 // folders are listed here but never downloadable — they hold personal data
@@ -6,10 +6,10 @@
 // sealed content (no quotation figures; the ledger without payloads).
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { color, font, fontSize, lineHeight, space, radius } from '../components/ui/tokens';
-import { AdminShell, AdminCard, EmptyState, ErrorBanner, LoadingBlock, SectionHeader, useAdminAccess } from '../components/ui/AdminKit';
-import { listBackups, runBackup, type BackupFolder, type ExportKind } from '../lib/api/admin';
-import { downloadAuthedFile, errorMessage } from '../lib/api/client';
+import { color, font, fontSize, lineHeight, space, radius } from '../../components/ui/tokens';
+import { AdminShell, AdminCard, EmptyState, ErrorBanner, LoadingBlock, SectionHeader, useAdminAccess } from '../../components/ui/AdminKit';
+import { listBackups, runBackup, type BackupFolder, type ExportKind } from '../../lib/api/admin';
+import { downloadAuthedFile, errorMessage } from '../../lib/api/client';
 
 const EXPORTS: { kind: ExportKind; title: string; body: string }[] = [
   { kind: 'users', title: 'Users', body: 'Every account: names, role, contact, location, verification, tier and restrictions. No passwords.' },

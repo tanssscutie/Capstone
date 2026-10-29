@@ -1,4 +1,4 @@
-// app/admin-login.tsx
+// app/x~7Qz_k9-Ra/login.tsx
 // Separate entry point from app/login.tsx on purpose: a regular business account
 // should never land here by accident, and this screen never offers a "create
 // account" path. It reuses the same POST /auth/login endpoint (there is only
@@ -9,9 +9,10 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { color, font, fontSize, lineHeight, letterSpacing, space, radius, layout } from '../components/ui/tokens';
-import { login, logout } from '../lib/api/auth';
-import { checkAdminAccess } from '../lib/api/admin';
+import { color, font, fontSize, lineHeight, letterSpacing, space, radius, layout } from '../../components/ui/tokens';
+import { login, logout } from '../../lib/api/auth';
+import { checkAdminAccess } from '../../lib/api/admin';
+import { ADMIN } from '../../lib/adminRoutes';
 
 export default function AdminLoginRoute() {
   const router = useRouter();
@@ -35,7 +36,7 @@ export default function AdminLoginRoute() {
         setError('This account does not have admin access.');
         return;
       }
-      router.replace('/admin');
+      router.replace(ADMIN.dashboard);
     } catch (e: any) {
       setError(typeof e?.message === 'string' ? e.message : 'Invalid mobile number, email or password.');
     } finally {
@@ -50,7 +51,7 @@ export default function AdminLoginRoute() {
         <View style={styles.cardBody}>
           <View style={styles.brandRow}>
             <View style={styles.logoWrap}>
-              <Image source={require('../assets/logo.jpg')} style={styles.logo} resizeMode="contain" />
+              <Image source={require('../../assets/logo.jpg')} style={styles.logo} resizeMode="contain" />
             </View>
             <View>
               <Text style={styles.brandEyebrow}>TrustLink</Text>

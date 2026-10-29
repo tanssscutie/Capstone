@@ -1,4 +1,4 @@
-// app/admin-documents.tsx
+// app/x~7Qz_k9-Ra/documents.tsx
 // Admin Documents: supporting files for the study (interview data, thesis
 // chapters, the survey, others), the project notes, and the platform's data
 // sets — backend admin_library_service, admin-only.
@@ -10,18 +10,18 @@
 //   rules, withdrawal reasons, document types, profile visibility levels.
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../components/ui/tokens';
+import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../../components/ui/tokens';
 import {
   AdminShell, AdminCard, EmptyState, ErrorBanner, FilterChips, GhostButton, LoadingBlock, Pill, SearchField,
   SectionHeader, formatDate, useAdminAccess,
-} from '../components/ui/AdminKit';
+} from '../../components/ui/AdminKit';
 import {
   deleteAdminDocument, getAdminDatasets, getAdminDocumentTable, getAdminNote, listAdminDocuments, listAdminNotes,
   openAdminDocument, uploadAdminDocument,
   type AdminDatasetsOut, type AdminDocumentCategory, type AdminDocumentOut, type AdminDocumentTable,
-} from '../lib/api/admin';
-import { errorMessage } from '../lib/api/client';
-import { isWebFilePickerSupported, pickWebFile } from '../lib/pickWebFile';
+} from '../../lib/api/admin';
+import { errorMessage } from '../../lib/api/client';
+import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
 
 type Tab = 'files' | 'notes' | 'data';
 

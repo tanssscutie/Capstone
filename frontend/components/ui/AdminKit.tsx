@@ -22,6 +22,7 @@ import { checkAdminAccess, openAdminDocumentFile } from '../../lib/api/admin';
 import type { DocumentUploadOut } from '../../lib/api/business';
 import { logout, me } from '../../lib/api/auth';
 import { loadAdminRole } from '../../lib/useAdminRole';
+import { ADMIN } from '../../lib/adminRoutes';
 
 /* ─── Access gate ───────────────────────────────────── */
 
@@ -38,7 +39,7 @@ export function useAdminAccess(level: 'admin' | 'super' = 'admin'): AdminAccess 
       const ok = isAdmin && (level === 'admin' || (await loadAdminRole()) === 'super_admin');
       if (cancelled) return;
       setAccess(ok ? 'GRANTED' : 'DENIED');
-      if (!ok) router.replace(isAdmin ? '/admin' : '/admin-login');
+      if (!ok) router.replace(isAdmin ? ADMIN.dashboard : ADMIN.login);
       // The app layout skips admin routes, so the admin's own Light/Dark
       // choice (admin Settings) is applied here.
       if (ok) me().then((u) => !cancelled && applyTheme(u.theme)).catch(() => {});
@@ -103,7 +104,7 @@ export function AdminShell({
 
   function handleLogout() {
     logout();
-    router.replace('/admin-login');
+    router.replace(ADMIN.login);
   }
 
   return (

@@ -1,3 +1,4 @@
+import { ADMIN, isAdminPath } from '../adminRoutes';
 // lib/api/client.ts
 // Thin fetch wrapper shared by every lib/api/*.ts service module.
 //
@@ -111,9 +112,9 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
       tokenStore.clear();
       if (typeof window !== 'undefined') {
         const path = window.location.pathname;
-        if (path.startsWith('/admin') && !path.startsWith('/admin-login')) {
-          window.location.assign('/admin-login');
-        } else if (!path.startsWith('/admin') && !path.startsWith('/login')) {
+        if (isAdminPath(path) && path !== ADMIN.login) {
+          window.location.assign(ADMIN.login);
+        } else if (!isAdminPath(path) && !path.startsWith('/login')) {
           window.location.assign(`/login?blocked=${encodeURIComponent('Your session expired. Log in again.')}`);
         }
       }

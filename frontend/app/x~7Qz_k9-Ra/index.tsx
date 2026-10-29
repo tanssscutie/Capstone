@@ -1,4 +1,4 @@
-// app/admin.tsx
+// app/x~7Qz_k9-Ra/index.tsx
 // Admin dashboard (GET /business/admin/stats): an attention banner, "Needs
 // action" counters that each open their page, KPI cards, the 7-day
 // registrations chart, Marketplace (requirements by status, the posted →
@@ -11,8 +11,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../components/ui/tokens';
-import { AvatarChip, initials } from '../components/ui/AvatarChip';
+import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../../components/ui/tokens';
+import { AvatarChip, initials } from '../../components/ui/AvatarChip';
 import {
   AdminShell,
   AdminCard,
@@ -27,12 +27,13 @@ import {
   SectionHeader,
   timeAgo,
   useAdminAccess,
-} from '../components/ui/AdminKit';
-import { listFlagged, reviewBusiness, getAdminStats } from '../lib/api/admin';
-import type { AdminFlaggedBusinessOut, AdminStatsOut, LabelCount } from '../lib/api/admin';
-import { errorMessage } from '../lib/api/client';
-import { BusinessLink, BusinessNameLink } from '../components/ui/BusinessLink';
-import { SuperOverview } from '../components/ui/SuperOverview';
+} from '../../components/ui/AdminKit';
+import { listFlagged, reviewBusiness, getAdminStats } from '../../lib/api/admin';
+import type { AdminFlaggedBusinessOut, AdminStatsOut, LabelCount } from '../../lib/api/admin';
+import { errorMessage } from '../../lib/api/client';
+import { BusinessLink, BusinessNameLink } from '../../components/ui/BusinessLink';
+import { SuperOverview } from '../../components/ui/SuperOverview';
+import { ADMIN, type AdminHref } from '../../lib/adminRoutes';
 
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
@@ -149,7 +150,7 @@ function RegistrationsChart({ data }: { data: AdminStatsOut['registrations_last_
 
 /* ─── Needs action ──────────────────────────────────── */
 
-type AdminRoutePath = '/admin-businesses' | '/admin-reports' | '/admin-change-requests' | '/admin-requirements';
+type AdminRoutePath = AdminHref;
 
 function ActionTile({ label, count, caption, to }: { label: string; count: number; caption: string; to: AdminRoutePath }) {
   const router = useRouter();
@@ -175,19 +176,19 @@ function NeedsAction({ n }: { n: AdminStatsOut['needs_action'] }) {
     <View style={styles.section}>
       <SectionHeader title="Needs action" caption="Each opens the page where you act on it" />
       <View style={styles.actionGrid}>
-        <ActionTile label="Verification queue" count={n.verification_queue} to="/admin-businesses"
+        <ActionTile label="Verification queue" count={n.verification_queue} to={ADMIN.businesses}
           caption={n.oldest_waiting_days != null ? `Oldest waiting ${n.oldest_waiting_days} day${n.oldest_waiting_days === 1 ? '' : 's'}` : 'Nobody waiting'} />
-        <ActionTile label="Documents to check" count={docs} to="/admin-businesses"
+        <ActionTile label="Documents to check" count={docs} to={ADMIN.businesses}
           caption={`${n.documents_different} may be a different document · ${n.documents_not_checked} not auto-checked`} />
-        <ActionTile label="Open reports" count={n.open_reports} to="/admin-reports"
+        <ActionTile label="Open reports" count={n.open_reports} to={ADMIN.reports}
           caption={`Incl. ${n.withdrawal_flags} withdrawal-policy flag${n.withdrawal_flags === 1 ? '' : 's'}`} />
-        <ActionTile label="Change requests" count={n.pending_change_requests} to="/admin-change-requests"
+        <ActionTile label="Change requests" count={n.pending_change_requests} to={ADMIN.changeRequests}
           caption="Locked business details to approve" />
-        <ActionTile label="Awards awaiting supplier" count={n.awards_awaiting_supplier} to="/admin-requirements"
+        <ActionTile label="Awards awaiting supplier" count={n.awards_awaiting_supplier} to={ADMIN.requirements}
           caption="Notice of Award not answered yet" />
-        <ActionTile label="Delivery dates" count={n.delivery_dates_awaiting_reply} to="/admin-requirements"
+        <ActionTile label="Delivery dates" count={n.delivery_dates_awaiting_reply} to={ADMIN.requirements}
           caption="Waiting for the supplier's reply" />
-        <ActionTile label="Orders to follow up" count={orders} to="/admin-requirements"
+        <ActionTile label="Orders to follow up" count={orders} to={ADMIN.requirements}
           caption={`${n.overdue_orders} past the delivery date · ${n.unconfirmed_orders} unconfirmed`} />
       </View>
     </View>

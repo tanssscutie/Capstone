@@ -1,4 +1,4 @@
-// app/admin-change-requests.tsx
+// app/x~7Qz_k9-Ra/change-requests.tsx
 // Change requests (GET /business/admin/change-requests): a business asking to
 // change a locked detail — registered name, business type, category, location
 // or contact (change_request_service). Old → new for each field and the
@@ -6,7 +6,7 @@
 // shell as the other admin pages.
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
-import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../components/ui/tokens';
+import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../../components/ui/tokens';
 import {
   AdminShell,
   AdminCard,
@@ -19,10 +19,10 @@ import {
   timeAgo,
   formatDate,
   useAdminAccess,
-} from '../components/ui/AdminKit';
-import { listChangeRequestsForAdmin, lockedFieldLabel, reviewChangeRequest, type AdminChangeRequestOut } from '../lib/api/business';
-import { errorMessage } from '../lib/api/client';
-import { BusinessNameLink } from '../components/ui/BusinessLink';
+} from '../../components/ui/AdminKit';
+import { listChangeRequestsForAdmin, lockedFieldLabel, reviewChangeRequest, type AdminChangeRequestOut } from '../../lib/api/business';
+import { errorMessage } from '../../lib/api/client';
+import { BusinessNameLink } from '../../components/ui/BusinessLink';
 
 type StatusFilter = 'pending' | 'approved' | 'rejected' | 'all';
 

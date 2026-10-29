@@ -1,4 +1,4 @@
-// app/admin-reports.tsx
+// app/x~7Qz_k9-Ra/reports.tsx
 // Business reports (GET /business/admin/reports): "Report this business" from
 // a profile lands here for an admin to resolve (action taken) or dismiss (no
 // violation). Acting on a business itself — re-verification, deactivation —
@@ -6,7 +6,7 @@
 // shell as the other admin pages.
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
-import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../components/ui/tokens';
+import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../../components/ui/tokens';
 import {
   AdminShell,
   AdminCard,
@@ -20,10 +20,10 @@ import {
   timeAgo,
   formatDate,
   useAdminAccess,
-} from '../components/ui/AdminKit';
-import { listReports, openWithdrawalProof, reviewReport, type AdminReportOut, type ModerationAction } from '../lib/api/admin';
-import { errorMessage } from '../lib/api/client';
-import { BusinessNameLink } from '../components/ui/BusinessLink';
+} from '../../components/ui/AdminKit';
+import { listReports, openWithdrawalProof, reviewReport, type AdminReportOut, type ModerationAction } from '../../lib/api/admin';
+import { errorMessage } from '../../lib/api/client';
+import { BusinessNameLink } from '../../components/ui/BusinessLink';
 
 type StatusFilter = 'open' | 'resolved' | 'dismissed' | 'all';
 
