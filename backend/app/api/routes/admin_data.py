@@ -5,9 +5,15 @@ from fastapi.concurrency import run_in_threadpool
 from app.core.clock import now_ph
 from app.core.security import require_super_admin
 from app.models.user import User
-from app.services import admin_audit, admin_data_service
+from app.services import admin_audit, admin_data_service, super_overview_service
 
 router = APIRouter()
+
+
+@router.get("/admin/super-overview")
+def super_overview(_super: User = Depends(require_super_admin)):
+    """Each administrator's workload (last 30 days) and service health."""
+    return super_overview_service.overview()
 
 
 @router.get("/admin/backups")

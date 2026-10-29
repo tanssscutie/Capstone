@@ -516,3 +516,34 @@ export function runBackup(): Promise<{ name: string; uploaded_files: number; siz
 }
 
 export type ExportKind = 'users' | 'requirements' | 'ledger';
+
+/* ─── Super-admin dashboard ─── */
+
+export interface AdminWorkload {
+  id: number;
+  name: string;
+  admin_role: AdminRole;
+  is_active: boolean;
+  verifications: number;
+  reports: number;
+  change_requests: number;
+  actions: number;
+  avg_review_hours: number | null;
+  last_action_at: string | null;
+}
+
+export interface ServiceCheck {
+  name: string;
+  status: 'ok' | 'warning' | 'off' | 'down';
+  detail: string;
+}
+
+export interface SuperOverview {
+  window_days: number;
+  workload: AdminWorkload[];
+  health: ServiceCheck[];
+}
+
+export function getSuperOverview(): Promise<SuperOverview> {
+  return api.get<SuperOverview>('/business/admin/super-overview');
+}

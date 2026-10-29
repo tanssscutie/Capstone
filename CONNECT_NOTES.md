@@ -64,6 +64,13 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Super admin (6/6): Super-admin dashboard**
+- Sa itaas ng `/admin`, may section na **"Super admin"** na super admin lang ang nakakakita. Galing ito sa `GET /business/admin/super-overview`.
+- **Service health:** Database (may latency), Release scheduler, AI (Gemini; may key at naka-On pero hindi tinatawagan), Email (SMTP), Semantic matching (Qdrant), File encryption, laki ng uploads, at ang huling backup ("Check" kapag lampas 7 araw na). Ang mga status: OK, Check, Off, Down.
+- **Admin workload sa huling 30 araw, bawat admin:** verifications, reports, change requests, average review time (mula pag-submit hanggang desisyon) at kung kailan ang huling action.
+- Code: `services/super_overview_service.py`, `components/ui/SuperOverview.tsx`. Tests: `backend/tests/test_super_overview.py`.
+- **Buod ng P4:** `admin_role` → Admin team → Platform rules → Audit log → Backups & exports → Super-admin dashboard. Lima ang bagong menu na super admin lang ang nakakakita: Admin team, Platform rules, Audit log, Backups & exports, at ang section sa Dashboard.
+
 **Super admin (5/6): Backups & exports (`/admin-data`, super admin lang)**
 - **"Run backup now":** pinapatakbo ang `scripts/backup.py` (database at encrypted uploads, papunta sa `backend/backups/<petsa_oras>/`). Nakalista ang mga backup folder pero **hindi kailanman nada-download** mula sa app, dahil may personal data ang mga ito. Kapag pumalya (halimbawa, walang mysqldump), 503 ito at ipinapakita ang mensahe ng script. Sa dev, gumana: `2026-10-29_110635`, 11.7 MB.
 - **CSV exports:**

@@ -32,6 +32,7 @@ import { listFlagged, reviewBusiness, getAdminStats } from '../lib/api/admin';
 import type { AdminFlaggedBusinessOut, AdminStatsOut, LabelCount } from '../lib/api/admin';
 import { errorMessage } from '../lib/api/client';
 import { BusinessLink, BusinessNameLink } from '../components/ui/BusinessLink';
+import { SuperOverview } from '../components/ui/SuperOverview';
 
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
@@ -348,6 +349,7 @@ export default function AdminRoute() {
   const [stats, setStats] = useState<AdminStatsOut | null>(null);
   const [notesByUser, setNotesByUser] = useState<Record<number, string>>({});
   const [actingOn, setActingOn] = useState<number | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -356,6 +358,7 @@ export default function AdminRoute() {
       const [rows, statsOut] = await Promise.all([listFlagged(), getAdminStats()]);
       setBusinesses(rows);
       setStats(statsOut);
+      setRefreshKey((k) => k + 1);
     } catch (e: any) {
       setError(errorMessage(e, 'Could not load the admin dashboard.'));
     } finally {
@@ -400,6 +403,7 @@ export default function AdminRoute() {
           {stats && (
             <>
               <AttentionBanner count={stats.pending_review_count} />
+              <SuperOverview refreshKey={refreshKey} />
               <NeedsAction n={stats.needs_action} />
 
               <View style={styles.statsGrid}>
