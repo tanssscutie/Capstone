@@ -77,3 +77,48 @@ def root():
 
 
 app.include_router(api_router)
+
+
+# Who can call each endpoint — the strictest auth dependency the route uses —
+# added to /openapi.json as "x-access", for the admin API reference page.
+_ACCESS = [
+    ("require_admin", "Admins only"),
+    ("require_buyer", "Verified buyers"),
+    ("require_seller", "Verified sellers"),
+    ("require_seller_role", "Sellers"),
+    ("require_verified", "Verified businesses"),
+    ("get_current_user", "Signed-in users"),
+]
+
+
+def _dependency_names(dependant) -> set:
+    names = set()
+    for dep in dependant.dependencies:
+        if dep.call is not None:
+            names.add(getattr(dep.call, "__name__", ""))
+        names |= _dependency_names(dep)
+    return names
+
+
+def _openapi_with_access():
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi import routing
+    from fastapi.openapi.utils import get_openapi
+
+    schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
+    # Same walk get_openapi does: included routers are wrapped, not flattened.
+    for route in routing.iter_route_contexts(app.routes):
+        if not isinstance(route.original_route, routing.APIRoute):
+            continue
+        names = _dependency_names(route.dependant)
+        access = next((label for name, label in _ACCESS if name in names), "Public")
+        for method in route.methods:
+            op = schema.get("paths", {}).get(route.path_format, {}).get(method.lower())
+            if op is not None:
+                op["x-access"] = access
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = _openapi_with_access

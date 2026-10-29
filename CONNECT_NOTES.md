@@ -64,6 +64,18 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Dalawang bagong admin menu: API reference at Documents**
+- **API reference (`/admin-api`):** listahan ng lahat ng endpoint (129), kinukuha nang live mula sa `/openapi.json`.
+  - Naka-grupo ayon sa tag (auth, requirements, business, notifications, messages, meta), may search, at may link papunta sa `/docs`.
+  - Bawat endpoint: method, path, summary at **kung sino ang puwedeng tumawag**. Pagbukas, makikita ang parameters, request fields at response fields.
+  - Ang "sino ang puwedeng tumawag" ay galing sa bagong `x-access` sa OpenAPI. Sa `app/main.py`, binabasa ang auth dependency ng bawat route (Admins only, Verified buyers, Verified sellers, Sellers, Verified businesses, Signed-in users, Public).
+- **Documents (`/admin-documents`), para sa admin lang:**
+  - **Files:** upload na may title at category (interview data, thesis chapter, survey, other). Tinatanggap: .xlsx, .csv, .pdf, .png, .jpg, .docx, hanggang 25 MB, at naka-encrypt sa disk. Ang .xlsx at .csv ay bumubukas bilang table sa app mismo (may tab bawat sheet at may search). Ang .pdf at mga larawan ay bumubukas sa bagong tab. May Delete na may kumpirmasyon.
+  - **Notes:** SYSTEM_PROCESS.md at CONNECT_NOTES.md, naka-render bilang readable text (headings, bullets, bold, code) at may search. Whitelist ito sa server, kaya hindi kailanman maibibigay ang .env, ang backups/ o anumang ibang file.
+  - **Data sets:** categories → items → specs, NCR addresses (may search ng city, barangay o ZIP), market rules, withdrawal reasons at consequences, document types, at profile visibility levels.
+- Bagong dependency: `openpyxl` (nasa `backend/requirements.txt`). Patakbuhin ang `pip install -r requirements.txt`.
+- Code: `models/admin_document.py`, `services/admin_library_service.py`, `api/routes/admin_library.py`, `app/admin-api.tsx`, `app/admin-documents.tsx`. Bagong glyph sa sidebar: folder at `< >`. Tests: `backend/tests/test_admin_library.py` (admin lang, whitelist at path traversal, upload validation, table parsing, x-access).
+
 **Admin dashboard: Needs action, Marketplace, Trust + audit ng verification review**
 - **Needs action:** bawat counter ay bumubukas sa page kung saan ito inaaksyunan. Mga counter:
   - verification queue at kung ilang araw nang naghihintay ang pinakamatagal

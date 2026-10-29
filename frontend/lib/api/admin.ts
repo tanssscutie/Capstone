@@ -1,7 +1,7 @@
 // lib/api/admin.ts
 // Maps to the admin-only endpoints in backend app/api/routes/business.py
 // (prefix /business/admin — see require_admin in app/core/security.py).
-import { api, API_BASE_URL, tokenStore } from './client';
+import { api, API_BASE_URL, openAuthedFile, tokenStore } from './client';
 import type { DocumentUploadOut } from './business';
 import type { AccountRole } from '../types';
 
@@ -292,4 +292,90 @@ export async function reviewReport(reportId: number, action: ModerationAction, n
     action,
     notes: notes && notes.trim() ? notes.trim() : null,
   });
+}
+
+/* ─── Admin Documents page (backend admin_library_service) ─── */
+
+export type AdminDocumentCategory = 'interview_data' | 'thesis' | 'survey' | 'other';
+
+export interface AdminDocumentOut {
+  id: number;
+  title: string;
+  category: AdminDocumentCategory;
+  category_label: string;
+  filename: string;
+  size_bytes: number;
+  uploaded_by: string;
+  created_at: string;
+  /** .xlsx / .csv — opens as an in-app table. */
+  opens_as_table: boolean;
+}
+
+export interface AdminTableSheet {
+  name: string;
+  rows: string[][];
+  total_rows: number;
+  truncated: boolean;
+}
+
+export interface AdminDocumentTable {
+  id: number;
+  title: string;
+  filename: string;
+  sheets: AdminTableSheet[];
+}
+
+export interface AdminDatasetsOut {
+  categories: {
+    name: string;
+    items: { code: string; name: string; specs: { id: string; label: string; required: boolean; type: string; unit?: string | null; options: string[] }[] }[];
+  }[];
+  ncr_addresses: { city: string; zips: { zip: string; area: string }[]; barangays: { name: string; zip: string | null }[] }[];
+  market_rules: { label: string; value: string }[];
+  withdrawal_reasons: { code: string; label: string }[];
+  withdrawal_consequences: { count: number; stage: string; text: string }[];
+  document_types: { code: string; label: string }[];
+  profile_visibility: { sections: string[]; levels: string[] };
+}
+
+export function listAdminDocuments(): Promise<AdminDocumentOut[]> {
+  return api.get<AdminDocumentOut[]>('/business/admin/library');
+}
+
+export function uploadAdminDocument(title: string, category: AdminDocumentCategory, file: Blob, filename: string): Promise<AdminDocumentOut> {
+  const form = new FormData();
+  form.append('title', title);
+  form.append('category', category);
+  form.append('file', file, filename);
+  return api.postForm<AdminDocumentOut>('/business/admin/library', form);
+}
+
+export function getAdminDocumentTable(id: number): Promise<AdminDocumentTable> {
+  return api.get<AdminDocumentTable>(`/business/admin/library/${id}/table`);
+}
+
+/** Opens a .pdf / image in a new tab (a .docx downloads). */
+export function openAdminDocument(id: number): Promise<void> {
+  return openAuthedFile(`/business/admin/library/${id}/file`);
+}
+
+export function deleteAdminDocument(id: number): Promise<void> {
+  return api.delete<void>(`/business/admin/library/${id}`);
+}
+
+export function listAdminNotes(): Promise<string[]> {
+  return api.get<string[]>('/business/admin/notes');
+}
+
+export function getAdminNote(name: string): Promise<{ name: string; content: string }> {
+  return api.get<{ name: string; content: string }>(`/business/admin/notes/${encodeURIComponent(name)}`);
+}
+
+export function getAdminDatasets(): Promise<AdminDatasetsOut> {
+  return api.get<AdminDatasetsOut>('/business/admin/datasets');
+}
+
+/** The backend's OpenAPI document — public, with "x-access" on every operation. */
+export function getOpenApi(): Promise<any> {
+  return api.get<any>('/openapi.json');
 }

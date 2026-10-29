@@ -8,11 +8,11 @@ import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { color, font, fontSize, letterSpacing, space, radius } from './tokens';
 
-type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes' | 'settings';
+type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes' | 'settings' | 'api' | 'files';
 
 export const ADMIN_NAV_ITEMS: {
   label: string;
-  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests' | '/admin-settings';
+  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests' | '/admin-documents' | '/admin-api' | '/admin-settings';
   glyph: NavGlyphKind;
 }[] = [
   { label: 'Dashboard', href: '/admin', glyph: 'dashboard' },
@@ -20,6 +20,8 @@ export const ADMIN_NAV_ITEMS: {
   { label: 'Requirements', href: '/admin-requirements', glyph: 'requirements' },
   { label: 'Reports', href: '/admin-reports', glyph: 'reports' },
   { label: 'Change requests', href: '/admin-change-requests', glyph: 'changes' },
+  { label: 'Documents', href: '/admin-documents', glyph: 'files' },
+  { label: 'API reference', href: '/admin-api', glyph: 'api' },
   { label: 'Settings', href: '/admin-settings', glyph: 'settings' },
 ];
 
@@ -51,6 +53,24 @@ function NavGlyph({ kind, tone }: { kind: NavGlyphKind; tone: string }) {
         <View style={[glyph.cogTooth, { backgroundColor: tone }]} />
         <View style={[glyph.cogTooth, { backgroundColor: tone, transform: [{ rotate: '90deg' }] }]} />
         <View style={[glyph.cogRing, { borderColor: tone }]} />
+      </View>
+    );
+  }
+  if (kind === 'api') {
+    // "< >": two chevrons, each a bordered square turned 45° and half hidden.
+    return (
+      <View style={[glyph.box, glyph.codeRow]}>
+        <View style={[glyph.chevron, glyph.chevronLeft, { borderColor: tone }]} />
+        <View style={[glyph.chevron, glyph.chevronRight, { borderColor: tone }]} />
+      </View>
+    );
+  }
+  if (kind === 'files') {
+    // A folder: a small tab on top of a rounded box.
+    return (
+      <View style={glyph.box}>
+        <View style={[glyph.folderTab, { borderColor: tone }]} />
+        <View style={[glyph.folder, { borderColor: tone }]} />
       </View>
     );
   }
@@ -174,6 +194,12 @@ const glyph = StyleSheet.create({
   flag: { width: 10, height: 7, borderWidth: 1.5, borderLeftWidth: 0, borderTopRightRadius: 2, borderBottomRightRadius: 2 },
   cogTooth: { position: 'absolute', width: 15, height: 3, borderRadius: 1 },
   cogRing: { width: 11, height: 11, borderRadius: 6, borderWidth: 2.5, backgroundColor: color.primary },
+  codeRow: { flexDirection: 'row', gap: 3 },
+  chevron: { width: 6, height: 6, borderTopWidth: 1.5 },
+  chevronLeft: { borderLeftWidth: 1.5, transform: [{ rotate: '-45deg' }] },
+  chevronRight: { borderRightWidth: 1.5, transform: [{ rotate: '45deg' }] },
+  folderTab: { width: 6, height: 3, borderWidth: 1.5, borderBottomWidth: 0, borderTopLeftRadius: 1.5, borderTopRightRadius: 1.5, alignSelf: 'flex-start', marginLeft: 1 },
+  folder: { width: 15, height: 10, borderWidth: 1.5, borderRadius: 2 },
 });
 
 const styles = StyleSheet.create({
