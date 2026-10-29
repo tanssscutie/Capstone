@@ -64,6 +64,13 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Super admin (2/6): Admin team page (`/admin-team`, super admin lang)**
+- Listahan ng lahat ng admin. Puwedeng gumawa ng bago (pangalan, email, password, role), Make super admin / Make admin, Disable / Enable, at Reset password. Ang temporary password ay ipinapakita nang isang beses lang, para iabot sa admin nang pribado.
+- Mga proteksyon: hindi puwedeng i-demote o i-disable ang huling aktibong super admin, at walang admin na makakapag-disable ng sarili niyang account. Ang disabled na super admin ay hindi binibilang.
+- Hindi nakikita ng ordinaryong admin ang menu, at kapag binuksan niya ang `/admin-team`, ibinabalik siya sa `/admin` (403 din sa backend).
+- Sa dev DB: may **Demo Admin** (`demo.admin@trustlink.local`, role admin) para maipakita ang pagkakaiba ng admin at super admin. I-reset ang password niya sa Admin team kapag gagamitin.
+- Code: `services/admin_team_service.py`, `api/routes/admin_team.py`, `app/admin-team.tsx`. Tests: `backend/tests/test_admin_team.py`.
+
 **Super admin (1/6): admin at super admin**
 - Bagong column na `User.admin_role`: `admin` o `super_admin`. Nananatili ang `is_admin` bilang pangunahing gate.
 - Sa startup, `admin` ang lahat ng kasalukuyang admin. Kung wala pang super admin, ang pinakaunang aktibong admin ang magiging super admin, kaya hindi kailanman mauubos ang may hawak ng admin team. Sa dev: si Trustlink Admin (#1) ang super admin.

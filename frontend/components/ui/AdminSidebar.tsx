@@ -9,11 +9,11 @@ import { usePathname, useRouter } from 'expo-router';
 import { color, font, fontSize, letterSpacing, space, radius } from './tokens';
 import { useAdminRole } from '../../lib/useAdminRole';
 
-type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes' | 'settings' | 'api' | 'files';
+type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes' | 'settings' | 'api' | 'files' | 'team';
 
 export const ADMIN_NAV_ITEMS: {
   label: string;
-  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests' | '/admin-documents' | '/admin-api' | '/admin-settings';
+  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests' | '/admin-documents' | '/admin-api' | '/admin-team' | '/admin-settings';
   glyph: NavGlyphKind;
   /** Shown to super admins only (the page checks it too). */
   superOnly?: boolean;
@@ -25,6 +25,7 @@ export const ADMIN_NAV_ITEMS: {
   { label: 'Change requests', href: '/admin-change-requests', glyph: 'changes' },
   { label: 'Documents', href: '/admin-documents', glyph: 'files' },
   { label: 'API reference', href: '/admin-api', glyph: 'api' },
+  { label: 'Admin team', href: '/admin-team', glyph: 'team', superOnly: true },
   { label: 'Settings', href: '/admin-settings', glyph: 'settings' },
 ];
 
@@ -65,6 +66,19 @@ function NavGlyph({ kind, tone }: { kind: NavGlyphKind; tone: string }) {
       <View style={[glyph.box, glyph.codeRow]}>
         <View style={[glyph.chevron, glyph.chevronLeft, { borderColor: tone }]} />
         <View style={[glyph.chevron, glyph.chevronRight, { borderColor: tone }]} />
+      </View>
+    );
+  }
+  if (kind === 'team') {
+    // Two people side by side.
+    return (
+      <View style={[glyph.box, glyph.teamRow]}>
+        {[0, 1].map((i) => (
+          <View key={i} style={{ alignItems: 'center' }}>
+            <View style={[glyph.teamHead, { borderColor: tone }]} />
+            <View style={[glyph.teamBody, { borderColor: tone }]} />
+          </View>
+        ))}
       </View>
     );
   }
@@ -200,6 +214,9 @@ const glyph = StyleSheet.create({
   cogTooth: { position: 'absolute', width: 15, height: 3, borderRadius: 1 },
   cogRing: { width: 11, height: 11, borderRadius: 6, borderWidth: 2.5, backgroundColor: color.primary },
   codeRow: { flexDirection: 'row', gap: 3 },
+  teamRow: { flexDirection: 'row', gap: 1, alignItems: 'flex-end' },
+  teamHead: { width: 5, height: 5, borderRadius: 3, borderWidth: 1.5, marginBottom: 1 },
+  teamBody: { width: 7, height: 5, borderWidth: 1.5, borderBottomWidth: 0, borderTopLeftRadius: 4, borderTopRightRadius: 4 },
   chevron: { width: 6, height: 6, borderTopWidth: 1.5 },
   chevronLeft: { borderLeftWidth: 1.5, transform: [{ rotate: '-45deg' }] },
   chevronRight: { borderRightWidth: 1.5, transform: [{ rotate: '45deg' }] },

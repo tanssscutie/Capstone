@@ -393,3 +393,36 @@ export function getAdminDatasets(): Promise<AdminDatasetsOut> {
 export function getOpenApi(): Promise<any> {
   return api.get<any>('/openapi.json');
 }
+
+/* ─── Admin team (super admins only) ─── */
+
+export interface AdminTeamMember {
+  id: number;
+  name: string;
+  email: string | null;
+  mobile_number: string | null;
+  admin_role: AdminRole;
+  is_active: boolean;
+  created_at: string;
+  password_changed_at: string | null;
+}
+
+export function listAdminTeam(): Promise<AdminTeamMember[]> {
+  return api.get<AdminTeamMember[]>('/business/admin/team');
+}
+
+export function createAdminMember(input: { name: string; email: string; password: string; role: AdminRole; mobile?: string | null }): Promise<AdminTeamMember> {
+  return api.post<AdminTeamMember>('/business/admin/team', input);
+}
+
+export function setAdminRole(id: number, role: AdminRole): Promise<AdminTeamMember> {
+  return api.post<AdminTeamMember>(`/business/admin/team/${id}/role`, { role });
+}
+
+export function setAdminActive(id: number, active: boolean): Promise<AdminTeamMember> {
+  return api.post<AdminTeamMember>(`/business/admin/team/${id}/active`, { active });
+}
+
+export function resetAdminPassword(id: number): Promise<{ id: number; temporary_password: string }> {
+  return api.post<{ id: number; temporary_password: string }>(`/business/admin/team/${id}/reset-password`, {});
+}
