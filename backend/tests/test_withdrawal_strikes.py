@@ -42,7 +42,7 @@ class WithdrawalStrikeTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         SQLModel.metadata.create_all(self.engine)
-        for target in ("app.services.requirement_service.engine", "app.services.moderation_service.engine",
+        for target in ("app.services.admin_audit.engine", "app.services.requirement_service.engine", "app.services.moderation_service.engine",
                        "app.services.report_service.engine"):
             p = patch(target, self.engine)
             p.start()

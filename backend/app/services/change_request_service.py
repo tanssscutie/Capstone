@@ -150,6 +150,10 @@ class ChangeRequestService:
             session.add(row)
             session.commit()
             labels = ", ".join(LOCKED_FIELDS[f][0] for f in changes if f in LOCKED_FIELDS)
+            from app.services import admin_audit
+            admin_audit.record(session, admin_id, "change_request_approved" if data.approve else "change_request_rejected",
+                               target_user_id=row.user_id, details=f"Request #{row.id}: {labels}"
+                               + (f". Notes: {notes}" if notes else ""))
             if data.approve:
                 detail = f"Updated: {labels}."
                 if "industry_category" in changes:

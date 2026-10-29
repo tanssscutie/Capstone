@@ -14,7 +14,7 @@ from app.core.clock import now_ph
 from app.core.database import engine
 from app.core.security import get_password_hash
 from app.models.user import User
-from app.services import admin_accounts
+from app.services import admin_accounts, admin_audit
 
 
 def _conflict(detail: str) -> HTTPException:
@@ -92,12 +92,8 @@ class AdminTeamService:
 
     @staticmethod
     def _audit(session: Session, actor_id: int, action: str, target: User, details: Optional[str]) -> None:
-        """Recorded in the admin audit log once it exists (admin_audit)."""
-        try:
-            from app.services import admin_audit
-        except ImportError:
-            return
-        admin_audit.record(session, actor_id, action, target_user_id=target.id, details=details)
+        admin_audit.record(session, actor_id, action, target_user_id=target.id,
+                           details=details or f"{target.business_name} <{target.email}>")
 
 
 admin_team_service = AdminTeamService()

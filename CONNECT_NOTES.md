@@ -64,6 +64,21 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Super admin (4/6): Admin audit log (`/admin-audit`, super admin lang)**
+- Nakatala kung sinong admin, ano ang ginawa, kanino, at kailan (bagong table na `AdminAction`). Ito ang mga itinatala:
+  - approve o reject ng verification
+  - dismiss o action sa report
+  - lift restriction
+  - change request
+  - **pagbukas** ng business document o withdrawal proof
+  - upload o delete sa Documents
+  - lahat ng Admin team actions
+  - platform rules
+  - CSV exports
+- Hindi kailanman pinababagsak ng `admin_audit.record()` ang action: kapag hindi naisulat ang entry, nilo-log lang ito.
+- Page: may filter ayon sa admin, action, panahon (Today, 7 days, 30 days, All time) at search. Ang "Export CSV" ay ang parehong naka-filter na listahan (hanggang 10,000), at naitatala rin bilang "Exported data".
+- Code: `services/admin_audit.py`, `api/routes/admin_audit.py`, `app/admin-audit.tsx`, at `downloadAuthedFile` sa `lib/api/client.ts`. Tests: `backend/tests/test_admin_audit.py`.
+
 **Super admin (3/6): Platform rules na nae-edit (`/admin-rules`, super admin lang)**
 - Mga rule:
   - quotations needed to release (1–20)

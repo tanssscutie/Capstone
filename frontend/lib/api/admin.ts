@@ -453,3 +453,48 @@ export function setPlatformRule(key: string, value: number | boolean | string): 
 export function resetPlatformRule(key: string): Promise<PlatformRule[]> {
   return api.delete<PlatformRule[]>(`/business/admin/platform-rules/${key}`);
 }
+
+/* ─── Admin audit log (super admins only) ─── */
+
+export interface AuditEntry {
+  id: number;
+  created_at: string;
+  admin_id: number;
+  admin_name: string;
+  action: string;
+  action_label: string;
+  target_user_id: number | null;
+  target_name: string | null;
+  details: string | null;
+}
+
+export interface AuditLogOut {
+  entries: AuditEntry[];
+  actions: { value: string; label: string }[];
+  admins: { id: number; name: string }[];
+}
+
+export interface AuditFilters {
+  admin_id?: number | null;
+  action?: string | null;
+  q?: string;
+  days?: number | null;
+}
+
+function auditQuery(f: AuditFilters): string {
+  const params = new URLSearchParams();
+  if (f.admin_id) params.set('admin_id', String(f.admin_id));
+  if (f.action) params.set('action', f.action);
+  if (f.q && f.q.trim()) params.set('q', f.q.trim());
+  if (f.days) params.set('days', String(f.days));
+  const s = params.toString();
+  return s ? `?${s}` : '';
+}
+
+export function getAuditLog(f: AuditFilters): Promise<AuditLogOut> {
+  return api.get<AuditLogOut>(`/business/admin/audit-log${auditQuery(f)}`);
+}
+
+export function auditLogCsvPath(f: AuditFilters): string {
+  return `/business/admin/audit-log.csv${auditQuery(f)}`;
+}

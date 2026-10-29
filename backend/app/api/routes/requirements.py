@@ -329,12 +329,14 @@ async def withdraw_quotation(
 
 
 @router.get("/admin/withdrawals/{strike_id}/proof")
-def withdrawal_proof(strike_id: int, _admin: User = Depends(require_admin)):
+def withdrawal_proof(strike_id: int, admin: User = Depends(require_admin)):
     """The proof a supplier attached to a withdrawal — administrators only."""
     try:
         content, filename = requirement_service.withdrawal_proof_file(strike_id)
     except Exception as exc:
         _handle_service_errors(exc)
+    from app.services import admin_audit
+    admin_audit.record(None, admin.id, "withdrawal_proof_viewed", details=f"Withdrawal #{strike_id} ({filename})")
     return _file_response(content, filename)
 
 

@@ -96,6 +96,8 @@ class ModerationService:
     def lift(self, admin_id: int, user_id: int, reason: str) -> None:
         with Session(engine) as session:
             self.apply(session, admin_id, user_id, "lift", reason or "Restriction lifted.")
+            from app.services import admin_audit
+            admin_audit.record(session, admin_id, "restriction_lifted", target_user_id=user_id, details=reason or None)
 
 
 moderation_service = ModerationService()

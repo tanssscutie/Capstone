@@ -29,7 +29,7 @@ class PlatformRulesTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         SQLModel.metadata.create_all(self.engine)
-        for target in ("app.core.database.engine", "app.api.routes.platform_rules.engine"):
+        for target in ("app.core.database.engine", "app.api.routes.platform_rules.engine", "app.services.admin_audit.engine"):
             p = patch(target, self.engine)
             p.start()
             self.addCleanup(p.stop)

@@ -46,7 +46,7 @@ class AdminLibraryTests(unittest.TestCase):
         SQLModel.metadata.create_all(self.engine)
         self.folder = tempfile.TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
-        for target, value in [("app.services.admin_library_service.engine", self.engine),
+        for target, value in [("app.services.admin_library_service.engine", self.engine), ("app.services.admin_audit.engine", self.engine),
                               ("app.services.admin_library_service.UPLOAD_DIR", self.folder.name)]:
             p = patch(target, value)
             p.start()

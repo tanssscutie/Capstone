@@ -538,6 +538,10 @@ class BusinessService:
                 notes=(notes or "").strip()[:1000] or None, submitted_at=submitted_at,
             ))
             session.commit()
+            from app.services import admin_audit
+            admin_audit.record(session, admin_id, "verification_approved" if approve else "verification_rejected",
+                               target_user_id=user_id, details=f"Result: {user.verification_status}"
+                               + (f". Notes: {notes.strip()}" if notes and notes.strip() else ""))
 
     # ---------- read ----------
 

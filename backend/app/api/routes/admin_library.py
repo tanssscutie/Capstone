@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from app.core.security import require_admin
 from app.models.user import User
+from app.services import admin_audit
 from app.services.admin_library_service import admin_library_service
 
 router = APIRouter()
@@ -33,7 +34,9 @@ async def upload_admin_document(
     admin: User = Depends(require_admin),
 ):
     """Upload a supporting file (.xlsx, .csv, .pdf, .png, .jpg, .docx; up to 25 MB), encrypted at rest."""
-    return await admin_library_service.upload(admin.id, title, category, file)
+    doc = await admin_library_service.upload(admin.id, title, category, file)
+    admin_audit.record(None, admin.id, "library_uploaded", details=f"{doc['title']} ({doc['filename']})")
+    return doc
 
 
 @router.get("/admin/library/{document_id}/file")
@@ -50,8 +53,9 @@ def get_admin_document_table(document_id: int, _admin: User = Depends(require_ad
 
 
 @router.delete("/admin/library/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_admin_document(document_id: int, _admin: User = Depends(require_admin)):
+def delete_admin_document(document_id: int, admin: User = Depends(require_admin)):
     admin_library_service.delete(document_id)
+    admin_audit.record(None, admin.id, "library_deleted", details=f"Document #{document_id}")
 
 
 @router.get("/admin/notes", response_model=List[str])

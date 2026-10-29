@@ -11,6 +11,7 @@ from app.core.database import engine
 from app.core.security import require_super_admin
 from app.models.platform_setting import PlatformSetting
 from app.models.user import User
+from app.services import admin_audit
 
 router = APIRouter()
 
@@ -32,12 +33,7 @@ def _rules() -> list:
 
 
 def _audit(actor_id: int, action: str, details: str) -> None:
-    try:
-        from app.services import admin_audit
-    except ImportError:
-        return
-    with Session(engine) as session:
-        admin_audit.record(session, actor_id, action, details=details)
+    admin_audit.record(None, actor_id, action, details=details)
 
 
 @router.get("/admin/platform-rules")

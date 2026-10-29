@@ -307,10 +307,12 @@ def get_admin_stats(_admin: User = Depends(require_admin)):
 
 
 @router.get("/admin/documents/{document_id}/file")
-def get_document_file(document_id: int, _admin: User = Depends(require_admin)):
+def get_document_file(document_id: int, admin: User = Depends(require_admin)):
     # Decrypted here, not streamed straight off disk — the file is encrypted
     # at rest (see business_service._save_file / file_crypto).
     content, filename = business_service.get_document_bytes_for_admin(document_id)
+    from app.services import admin_audit
+    admin_audit.record(None, admin.id, "business_document_viewed", details=f"Document #{document_id} ({filename})")
     media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
     return Response(
         content=content,

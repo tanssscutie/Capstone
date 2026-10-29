@@ -166,3 +166,24 @@ export async function openAuthedFile(path: string): Promise<void> {
     throw e;
   }
 }
+
+/** Saves an access-checked file (a CSV export) under `filename` — the
+ *  endpoint needs the Authorization header, so a plain link won't do. Web only.
+ *  Throws an ApiError on a refused request. */
+export async function downloadAuthedFile(path: string, filename: string): Promise<void> {
+  if (typeof document === 'undefined') return;
+  const token = tokenStore.get();
+  const res = await fetch(`${API_BASE_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    throw new ApiError(res.status, payload?.detail ?? `Could not download that file (${res.status})`);
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}

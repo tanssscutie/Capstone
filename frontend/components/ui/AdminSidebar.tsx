@@ -9,11 +9,11 @@ import { usePathname, useRouter } from 'expo-router';
 import { color, font, fontSize, letterSpacing, space, radius } from './tokens';
 import { useAdminRole } from '../../lib/useAdminRole';
 
-type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes' | 'settings' | 'api' | 'files' | 'team' | 'rules';
+type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes' | 'settings' | 'api' | 'files' | 'team' | 'rules' | 'audit';
 
 export const ADMIN_NAV_ITEMS: {
   label: string;
-  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests' | '/admin-documents' | '/admin-api' | '/admin-team' | '/admin-rules' | '/admin-settings';
+  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests' | '/admin-documents' | '/admin-api' | '/admin-team' | '/admin-rules' | '/admin-audit' | '/admin-settings';
   glyph: NavGlyphKind;
   /** Shown to super admins only (the page checks it too). */
   superOnly?: boolean;
@@ -27,6 +27,7 @@ export const ADMIN_NAV_ITEMS: {
   { label: 'API reference', href: '/admin-api', glyph: 'api' },
   { label: 'Admin team', href: '/admin-team', glyph: 'team', superOnly: true },
   { label: 'Platform rules', href: '/admin-rules', glyph: 'rules', superOnly: true },
+  { label: 'Audit log', href: '/admin-audit', glyph: 'audit', superOnly: true },
   { label: 'Settings', href: '/admin-settings', glyph: 'settings' },
 ];
 
@@ -67,6 +68,19 @@ function NavGlyph({ kind, tone }: { kind: NavGlyphKind; tone: string }) {
       <View style={[glyph.box, glyph.codeRow]}>
         <View style={[glyph.chevron, glyph.chevronLeft, { borderColor: tone }]} />
         <View style={[glyph.chevron, glyph.chevronRight, { borderColor: tone }]} />
+      </View>
+    );
+  }
+  if (kind === 'audit') {
+    // A list: three rows, each a dot and a line.
+    return (
+      <View style={[glyph.box, { gap: 2.5, alignItems: 'flex-start' }]}>
+        {[0, 1, 2].map((i) => (
+          <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+            <View style={[glyph.listDot, { backgroundColor: tone }]} />
+            <View style={[glyph.listLine, { backgroundColor: tone }]} />
+          </View>
+        ))}
       </View>
     );
   }
@@ -227,6 +241,8 @@ const glyph = StyleSheet.create({
   cogTooth: { position: 'absolute', width: 15, height: 3, borderRadius: 1 },
   cogRing: { width: 11, height: 11, borderRadius: 6, borderWidth: 2.5, backgroundColor: color.primary },
   codeRow: { flexDirection: 'row', gap: 3 },
+  listDot: { width: 2.5, height: 2.5, borderRadius: 1.5 },
+  listLine: { width: 10, height: 1.5, borderRadius: 1 },
   sliderLine: { width: 14, height: 1.5, borderRadius: 1, justifyContent: 'center' },
   sliderKnob: { position: 'absolute', width: 5, height: 5, borderRadius: 3, borderWidth: 1.5, backgroundColor: color.primary },
   teamRow: { flexDirection: 'row', gap: 1, alignItems: 'flex-end' },

@@ -229,6 +229,11 @@ class ReportService:
             report.reviewed_at = now_ph()
             session.add(report)
             session.commit()
+            from app.services import admin_audit
+            admin_audit.record(session, admin_id, "report_dismissed" if data.action == "dismiss" else "report_actioned",
+                               target_user_id=report.reported_id,
+                               details=f"Report #{report.id} ({report.reason}): {data.action}"
+                               + (f". Notes: {data.notes}" if data.notes else ""))
             reported = session.get(User, report.reported_id)
             notif_repo.create_if_allowed(
                 session, user_id=report.reporter_id, type_="VERIFICATION", category="activity",
