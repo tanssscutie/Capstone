@@ -64,6 +64,19 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Admin menus na naka-kategorya + auto-login kapag expired ang session**
+- **May mga kategorya na ang sidebar:**
+  - Overview: Dashboard
+  - Manage: Businesses, Requirements, Reports, Change requests
+  - Resources: **Documents & API**
+  - System: **System settings**
+- **Iisang menu na lang ang ilang page,** may tabs sa itaas:
+  - Documents & API: Documents, API reference
+  - System settings: General, at para sa super admin: Platform rules, Admin team, Audit log, Backups & exports. Para sa ordinaryong admin, General lang ang lalabas, kaya walang tab bar.
+- Code: `ADMIN_NAV_GROUPS` at `AdminSectionTabs` sa `components/ui/AdminSidebar.tsx`. Kusang ipinapakita ng `AdminShell` ang tabs, kaya walang page na kinailangang baguhin bukod sa title.
+- **Session na expired o invalid:** sa "Invalid authentication credentials" at sa mga katulad na session error, kusang nabubura ang token at napupunta sa `/login` ("Your session expired. Log in again."), o sa `/admin-login` kapag nasa admin. Hindi kasama ang "Current password is incorrect", kahit 401 din ito. Code: `SESSION_ERRORS` sa `lib/api/client.ts`.
+- Sa dev Documents: in-upload ang `Datasets.xlsx` bilang "Datasets - business survey (preliminary, Caloocan)" (Survey).
+
 **Super admin (6/6): Super-admin dashboard**
 - Sa itaas ng `/admin`, may section na **"Super admin"** na super admin lang ang nakakakita. Galing ito sa `GET /business/admin/super-overview`.
 - **Service health:** Database (may latency), Release scheduler, AI (Gemini; may key at naka-On pero hindi tinatawagan), Email (SMTP), Semantic matching (Qdrant), File encryption, laki ng uploads, at ang huling backup ("Check" kapag lampas 7 araw na). Ang mga status: OK, Check, Off, Down.

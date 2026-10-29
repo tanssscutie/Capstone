@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { color, font, fontSize, lineHeight, letterSpacing, space, radius, layout, breakpoint, applyTheme } from './tokens';
-import { AdminSidebar, AdminMobileNav } from './AdminSidebar';
+import { AdminSidebar, AdminMobileNav, AdminSectionTabs } from './AdminSidebar';
 import { checkAdminAccess, openAdminDocumentFile } from '../../lib/api/admin';
 import type { DocumentUploadOut } from '../../lib/api/business';
 import { logout, me } from '../../lib/api/auth';
@@ -120,6 +120,7 @@ export function AdminShell({
             </View>
             {actions}
           </View>
+          <AdminSectionTabs />
           {children}
         </ScrollView>
       </View>

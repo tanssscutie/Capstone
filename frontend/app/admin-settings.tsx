@@ -55,7 +55,7 @@ export default function AdminSettingsRoute() {
   return (
     <AdminShell
       access={access}
-      title="Settings"
+      title="System settings"
       subtitle="Your admin account, and how the platform is set up."
       actions={<GhostButton label="Refresh" onPress={load} busy={loading} />}
     >

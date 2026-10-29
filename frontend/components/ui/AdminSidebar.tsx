@@ -1,9 +1,11 @@
 // components/ui/AdminSidebar.tsx
-// Shared nav shell for the admin area — used by the dashboard, businesses,
-// and requirements pages, so a new page one-lines into ADMIN_NAV_ITEMS below
-// instead of hand-rolled per screen. AdminSidebar is the desktop column;
-// AdminMobileNav is the phone equivalent (top bar + tabs), so the admin area
-// stays navigable below breakpoint.desktop too.
+// Shared nav shell for the admin area. Menus are grouped under headings
+// (ADMIN_NAV_GROUPS); a menu with `tabs` covers several pages, which
+// AdminShell shows as a tab bar (AdminSectionTabs) — e.g. System settings =
+// General, Platform rules, Admin team, Audit log, Backups & exports.
+// AdminSidebar is the desktop column; AdminMobileNav is the phone
+// equivalent (top bar + tabs), so the admin area stays navigable below
+// breakpoint.desktop too.
 import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { color, font, fontSize, letterSpacing, space, radius } from './tokens';
@@ -11,26 +13,85 @@ import { useAdminRole } from '../../lib/useAdminRole';
 
 type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes' | 'settings' | 'api' | 'files' | 'team' | 'rules' | 'audit' | 'data';
 
-export const ADMIN_NAV_ITEMS: {
+export type AdminHref = '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests'
+  | '/admin-documents' | '/admin-api' | '/admin-team' | '/admin-rules' | '/admin-audit' | '/admin-data' | '/admin-settings';
+
+export interface AdminTab {
   label: string;
-  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests' | '/admin-documents' | '/admin-api' | '/admin-team' | '/admin-rules' | '/admin-audit' | '/admin-data' | '/admin-settings';
-  glyph: NavGlyphKind;
+  href: AdminHref;
   /** Shown to super admins only (the page checks it too). */
   superOnly?: boolean;
-}[] = [
-  { label: 'Dashboard', href: '/admin', glyph: 'dashboard' },
-  { label: 'Businesses', href: '/admin-businesses', glyph: 'businesses' },
-  { label: 'Requirements', href: '/admin-requirements', glyph: 'requirements' },
-  { label: 'Reports', href: '/admin-reports', glyph: 'reports' },
-  { label: 'Change requests', href: '/admin-change-requests', glyph: 'changes' },
-  { label: 'Documents', href: '/admin-documents', glyph: 'files' },
-  { label: 'API reference', href: '/admin-api', glyph: 'api' },
-  { label: 'Admin team', href: '/admin-team', glyph: 'team', superOnly: true },
-  { label: 'Platform rules', href: '/admin-rules', glyph: 'rules', superOnly: true },
-  { label: 'Audit log', href: '/admin-audit', glyph: 'audit', superOnly: true },
-  { label: 'Backups & exports', href: '/admin-data', glyph: 'data', superOnly: true },
-  { label: 'Settings', href: '/admin-settings', glyph: 'settings' },
+}
+
+export interface AdminNavItem {
+  label: string;
+  href: AdminHref;
+  glyph: NavGlyphKind;
+  /** The pages this menu covers, shown as tabs on each of them. */
+  tabs?: AdminTab[];
+}
+
+export const ADMIN_NAV_GROUPS: { heading: string; items: AdminNavItem[] }[] = [
+  { heading: 'Overview', items: [{ label: 'Dashboard', href: '/admin', glyph: 'dashboard' }] },
+  {
+    heading: 'Manage',
+    items: [
+      { label: 'Businesses', href: '/admin-businesses', glyph: 'businesses' },
+      { label: 'Requirements', href: '/admin-requirements', glyph: 'requirements' },
+      { label: 'Reports', href: '/admin-reports', glyph: 'reports' },
+      { label: 'Change requests', href: '/admin-change-requests', glyph: 'changes' },
+    ],
+  },
+  {
+    heading: 'Resources',
+    items: [{
+      label: 'Documents & API', href: '/admin-documents', glyph: 'files',
+      tabs: [{ label: 'Documents', href: '/admin-documents' }, { label: 'API reference', href: '/admin-api' }],
+    }],
+  },
+  {
+    heading: 'System',
+    items: [{
+      label: 'System settings', href: '/admin-settings', glyph: 'settings',
+      tabs: [
+        { label: 'General', href: '/admin-settings' },
+        { label: 'Platform rules', href: '/admin-rules', superOnly: true },
+        { label: 'Admin team', href: '/admin-team', superOnly: true },
+        { label: 'Audit log', href: '/admin-audit', superOnly: true },
+        { label: 'Backups & exports', href: '/admin-data', superOnly: true },
+      ],
+    }],
+  },
 ];
+
+export const ADMIN_NAV_ITEMS: AdminNavItem[] = ADMIN_NAV_GROUPS.flatMap((g) => g.items);
+
+function isActive(item: AdminNavItem, pathname: string): boolean {
+  return pathname === item.href || !!item.tabs?.some((t) => t.href === pathname);
+}
+
+/** The tab bar for a page that belongs to a multi-page menu; nothing otherwise. */
+export function AdminSectionTabs() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const role = useAdminRole();
+  const item = ADMIN_NAV_ITEMS.find((i) => i.tabs?.some((t) => t.href === pathname));
+  const tabs = item?.tabs?.filter((t) => !t.superOnly || role === 'super_admin') ?? [];
+  if (tabs.length < 2) return null;
+  return (
+    <View style={styles.sectionTabs} accessibilityRole="tablist">
+      {tabs.map((t) => {
+        const active = t.href === pathname;
+        return (
+          <Pressable key={t.href} onPress={() => { if (!active) router.replace(t.href); }} accessibilityRole="tab"
+            accessibilityState={{ selected: active }} style={[styles.sectionTab, active && styles.sectionTabActive]}>
+            <Text style={[styles.sectionTabLabel, active && styles.sectionTabLabelActive]}>{t.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 /** No icon library in this project — each glyph is a few plain Views. */
 function NavGlyph({ kind, tone }: { kind: NavGlyphKind; tone: string }) {
@@ -167,10 +228,12 @@ export function AdminSidebar({ onLogout }: { onLogout: () => void }) {
           </View>
         </View>
 
-        <Text style={styles.navHeading}>Manage</Text>
+        {ADMIN_NAV_GROUPS.map((group) => (
+        <View key={group.heading}>
+        <Text style={styles.navHeading}>{group.heading}</Text>
         <View style={styles.navSection}>
-          {ADMIN_NAV_ITEMS.filter((item) => !item.superOnly || role === 'super_admin').map((item) => {
-            const active = pathname === item.href;
+          {group.items.map((item) => {
+            const active = isActive(item, pathname);
             return (
               <Pressable
                 key={item.href}
@@ -186,6 +249,8 @@ export function AdminSidebar({ onLogout }: { onLogout: () => void }) {
             );
           })}
         </View>
+        </View>
+        ))}
       </View>
 
       <View style={styles.footer}>
@@ -222,8 +287,8 @@ export function AdminMobileNav({ onLogout }: { onLogout: () => void }) {
         </Pressable>
       </View>
       <View style={styles.mobileTabs}>
-        {ADMIN_NAV_ITEMS.filter((item) => !item.superOnly || role === 'super_admin').map((item) => {
-          const active = pathname === item.href;
+        {ADMIN_NAV_ITEMS.map((item) => {
+          const active = isActive(item, pathname);
           return (
             <Pressable key={item.href} onPress={() => router.push(item.href)} style={styles.mobileTab}>
               <NavGlyph kind={item.glyph} tone={active ? color.primary : color.inkFaint} />
@@ -304,6 +369,7 @@ const styles = StyleSheet.create({
     letterSpacing: letterSpacing.label,
     textTransform: 'uppercase',
     opacity: 0.55,
+    marginTop: space.lg,
     marginBottom: space.sm,
     paddingHorizontal: space.md,
   },
@@ -365,6 +431,11 @@ const styles = StyleSheet.create({
     paddingVertical: space.xs,
   },
   mobileLogoutLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
+  sectionTabs: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, borderBottomWidth: 1, borderBottomColor: color.border, marginBottom: space.lg },
+  sectionTab: { paddingHorizontal: space.md, paddingVertical: space.sm, borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -1 },
+  sectionTabActive: { borderBottomColor: color.primary },
+  sectionTabLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.inkMuted },
+  sectionTabLabelActive: { fontFamily: font.bodySemi, color: color.primary },
   mobileTabs: { flexDirection: 'row', paddingHorizontal: space.sm },
   mobileTab: { flex: 1, alignItems: 'center', gap: space.xs, paddingTop: space.sm, minHeight: 44 },
   mobileTabLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.micro, color: color.inkFaint },

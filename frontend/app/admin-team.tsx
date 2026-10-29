@@ -146,7 +146,7 @@ export default function AdminTeamRoute() {
   const supers = team?.filter((m) => m.admin_role === 'super_admin' && m.is_active).length ?? 0;
 
   return (
-    <AdminShell access={access} title="Admin team" subtitle="Super admins only — who can sign in to the admin console"
+    <AdminShell access={access} title="System settings" subtitle="Admin team (super admins only) — who can sign in to the admin console"
       actions={<GhostButton label="Refresh" onPress={load} />}>
       {error && <ErrorBanner message={error} />}
       <CreateCard onCreated={load} onError={setError} />

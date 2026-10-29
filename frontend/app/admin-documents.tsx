@@ -422,7 +422,7 @@ export default function AdminDocumentsRoute() {
   const reportError = useCallback((m: string | null) => setError(m), []);
 
   return (
-    <AdminShell access={access} title="Documents" subtitle="Study files, project notes and the platform's data sets — administrators only">
+    <AdminShell access={access} title="Documents & API" subtitle="Study files, project notes and the platform's data sets — administrators only">
       {error && <ErrorBanner message={error} />}
       <FilterChips<Tab>
         options={[{ value: 'files', label: 'Files' }, { value: 'notes', label: 'Notes' }, { value: 'data', label: 'Data sets' }]}

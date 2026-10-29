@@ -61,7 +61,7 @@ export default function AdminAuditRoute() {
   const actionLabel = data?.actions.find((a) => a.value === action)?.label;
 
   return (
-    <AdminShell access={access} title="Audit log" subtitle="Super admins only — every administrator action, newest first"
+    <AdminShell access={access} title="System settings" subtitle="Audit log (super admins only) — every administrator action, newest first"
       actions={
         <View style={{ flexDirection: 'row', gap: space.sm }}>
           <GhostButton label="Export CSV" onPress={exportCsv} busy={exporting} />

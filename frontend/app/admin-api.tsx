@@ -207,7 +207,7 @@ export default function AdminApiRoute() {
   return (
     <AdminShell
       access={access}
-      title="API reference"
+      title="Documents & API"
       subtitle={`${endpoints.length} endpoints, read live from the backend's OpenAPI description`}
       actions={
         <View style={{ flexDirection: 'row', gap: space.sm }}>

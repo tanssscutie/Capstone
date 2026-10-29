@@ -83,7 +83,7 @@ export default function AdminRulesRoute() {
   useEffect(() => { if (access === 'GRANTED') load(); }, [access, load]);
 
   return (
-    <AdminShell access={access} title="Platform rules" subtitle="Super admins only — changes apply to every business within a few seconds"
+    <AdminShell access={access} title="System settings" subtitle="Platform rules (super admins only) — changes apply to every business within a few seconds"
       actions={<GhostButton label="Refresh" onPress={load} />}>
       {error && <ErrorBanner message={error} />}
       {rules === null ? <LoadingBlock /> : (

@@ -68,6 +68,9 @@ type RequestOpts = {
   formData?: FormData; // when set, sent as multipart instead of JSON
 };
 
+/** 401 details that mean the session itself is no longer valid (backend core/security.py). */
+const SESSION_ERRORS = new Set(['Invalid authentication credentials', 'Invalid token payload', 'User not found', 'Not authenticated']);
+
 async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   const { method = 'GET', body, auth = true, formData } = opts;
   const headers: Record<string, string> = {};
@@ -100,6 +103,21 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     const detail = isJson && payload && typeof payload === 'object' && 'detail' in (payload as any)
       ? (payload as any).detail
       : payload;
+    // The session is gone (expired or invalid token, account deleted): sign out
+    // and go to the right login page instead of every screen failing. Only
+    // these session errors — a wrong current password is a 401 too, and must
+    // not sign anyone out.
+    if (res.status === 401 && auth && headers['Authorization'] && typeof detail === 'string' && SESSION_ERRORS.has(detail)) {
+      tokenStore.clear();
+      if (typeof window !== 'undefined') {
+        const path = window.location.pathname;
+        if (path.startsWith('/admin') && !path.startsWith('/admin-login')) {
+          window.location.assign('/admin-login');
+        } else if (!path.startsWith('/admin') && !path.startsWith('/login')) {
+          window.location.assign(`/login?blocked=${encodeURIComponent('Your session expired. Log in again.')}`);
+        }
+      }
+    }
     // Suspended, banned or deactivated mid-session (backend account_access):
     // sign out and land on login with the reason, instead of every screen failing.
     if (res.status === 403 && auth && typeof detail === 'string' && /suspended|banned|deactivated/i.test(detail)) {

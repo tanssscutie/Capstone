@@ -69,7 +69,7 @@ export default function AdminDataRoute() {
   }
 
   return (
-    <AdminShell access={access} title="Backups & exports" subtitle="Super admins only — every backup and export goes on the audit log">
+    <AdminShell access={access} title="System settings" subtitle="Backups & exports (super admins only) — every backup and export goes on the audit log">
       {error && <ErrorBanner message={error} />}
 
       <SectionHeader title="Backups" caption="Database + encrypted uploads, written to backend/backups/ on the server" />
