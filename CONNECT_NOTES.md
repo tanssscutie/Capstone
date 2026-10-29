@@ -64,6 +64,25 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Admin dashboard: Needs action, Marketplace, Trust + audit ng verification review**
+- **Needs action:** bawat counter ay bumubukas sa page kung saan ito inaaksyunan. Mga counter:
+  - verification queue at kung ilang araw nang naghihintay ang pinakamatagal
+  - mga dokumentong "may be a different document" o "not auto-checked" ayon sa AI (sa mga nasa queue lang)
+  - open reports, kasama ang bilang ng withdrawal-policy flags
+  - change requests
+  - awards na hindi pa sinasagot ng supplier
+  - delivery dates na naghihintay ng sagot
+  - orders na lampas na sa delivery date o Unconfirmed
+- **Marketplace:**
+  - requirements ayon sa status (open, closing today, released na wala pang desisyon, award pending, awarded, kulang sa quotations, closed without award, cancelled)
+  - average quotations bawat requirement (hindi kasama ang withdrawn)
+  - funnel: posted → released → awarded → completed, at ang completion rate
+  - top 5 categories at top 5 cities
+- **Trust:** approval rate, average review time, verified businesses ayon sa tier, withdrawals sa huling 90 araw, suspended at banned.
+- Sa Python ginagawa ang lahat ng pagbibilang (hindi SQL GROUP BY o date functions), kaya pareho ang resulta sa MySQL at SQLite.
+- **Audit gap, naayos na:** hindi dati nakatala kung sinong admin ang nag-approve o nag-reject ng verification. Ngayon, ipinapasa na ng route ang admin, at bawat desisyon ay nase-save sa bagong `VerificationReview` table (admin, approve o reject, ang naging status, notes, kailan nag-submit ang business at kailan nagdesisyon). Ito rin ang pinagkukunan ng approval rate at review time. Sa Admin → Businesses, lumalabas na ang "Approved by <admin> · <petsa>".
+- Code: `business_service.get_admin_stats` (`_needs_action`, `_marketplace`, `_trust`), `models/verification_review.py`, `app/admin.tsx`. Tests: `backend/tests/test_admin_stats.py`.
+
 **Delivery date pagkatapos ng award**
 - Ang **buyer** ang nagse-set ng delivery date ("Set delivery date" sa Order status panel). Bawal ang petsang lumipas na, at isa lang ang puwedeng naghihintay (409 kung may pending pa). Puwede itong i-withdraw ng buyer.
 - Ang **supplier** ay mag-"Confirm date", o "Can't make it" na may required na dahilan (min 5 characters) at optional na mungkahing petsa.

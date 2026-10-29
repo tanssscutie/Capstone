@@ -203,6 +203,13 @@ class AdminFlaggedBusinessOut(BaseModel):
     documents: List[DocumentUploadOut]
 
 
+class AdminReviewRecordOut(BaseModel):
+    admin_name: str
+    approved: bool
+    result_status: str
+    reviewed_at: datetime
+
+
 class AdminBusinessOut(BaseModel):
     """One row of the admin's full business roster — every registered
     business, not just the ones currently waiting on review."""
@@ -224,6 +231,8 @@ class AdminBusinessOut(BaseModel):
     documents: List[DocumentUploadOut] = []
     suspended_until: Optional[datetime] = None
     banned_at: Optional[datetime] = None
+    # The latest verification decision and the administrator who made it.
+    last_review: Optional[AdminReviewRecordOut] = None
 
 
 class DashboardStatsOut(BaseModel):
@@ -366,6 +375,58 @@ class AdminReportOut(BaseModel):
     withdrawals: List[WithdrawalStrikeOut] = []
 
 
+class LabelCount(BaseModel):
+    label: str
+    count: int
+
+
+class AdminNeedsActionOut(BaseModel):
+    """Work waiting on an administrator — each links to its page."""
+    verification_queue: int = 0
+    oldest_waiting_days: Optional[int] = None  # the longest-waiting submission in the queue
+    # Documents of businesses in the queue the AI flagged as a different
+    # document, or couldn't check (Gemini unavailable).
+    documents_different: int = 0
+    documents_not_checked: int = 0
+    open_reports: int = 0
+    withdrawal_flags: int = 0  # open automatic withdrawal-policy reports (included in open_reports)
+    pending_change_requests: int = 0
+    awards_awaiting_supplier: int = 0
+    delivery_dates_awaiting_reply: int = 0
+    overdue_orders: int = 0  # awarded, not finished, past the agreed date (or the posted window)
+    unconfirmed_orders: int = 0
+
+
+class AdminMarketplaceOut(BaseModel):
+    open: int = 0
+    closing_today: int = 0
+    released: int = 0  # quotations opened, no award decision yet
+    award_pending: int = 0
+    awarded: int = 0
+    archived_insufficient: int = 0  # closed with too few quotations
+    closed_no_award: int = 0
+    cancelled: int = 0
+    avg_quotations_per_requirement: float = 0.0
+    # Funnel: every requirement posted → quotations released → awarded → completed.
+    posted: int = 0
+    reached_release: int = 0
+    reached_award: int = 0
+    completed: int = 0
+    completion_rate: Optional[float] = None  # completed / awarded, 0–1; None before any award
+    top_categories: List[LabelCount] = []
+    top_cities: List[LabelCount] = []
+
+
+class AdminTrustOut(BaseModel):
+    reviews_total: int = 0
+    approval_rate: Optional[float] = None  # approved / reviewed, 0–1; None before any review
+    avg_review_hours: Optional[float] = None  # submitted → decided
+    tiers: List[LabelCount] = []  # verified businesses per trust tier
+    withdrawals_90_days: int = 0
+    suspended: int = 0
+    banned: int = 0
+
+
 class AdminStatsOut(BaseModel):
     total_businesses: int
     total_buyers: int
@@ -377,6 +438,9 @@ class AdminStatsOut(BaseModel):
     open_requirements: int
     total_quotations: int
     registrations_last_7_days: List[RegistrationsByDay]
+    needs_action: AdminNeedsActionOut = AdminNeedsActionOut()
+    marketplace: AdminMarketplaceOut = AdminMarketplaceOut()
+    trust: AdminTrustOut = AdminTrustOut()
 
 
 # ---------- locked business details: change requests (change_request_service) ----------

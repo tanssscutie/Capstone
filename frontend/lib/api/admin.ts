@@ -26,6 +26,13 @@ export interface RegistrationsByDay {
   count: number;
 }
 
+export interface AdminReviewRecordOut {
+  admin_name: string;
+  approved: boolean;
+  result_status: string;
+  reviewed_at: string;
+}
+
 export interface AdminBusinessOut {
   user_id: number;
   role: AccountRole | null;
@@ -45,6 +52,8 @@ export interface AdminBusinessOut {
   documents: DocumentUploadOut[];
   suspended_until: string | null;
   banned_at: string | null;
+  /** The latest verification decision and the administrator who made it. */
+  last_review: AdminReviewRecordOut | null;
 }
 
 export interface AdminRequirementOut {
@@ -76,6 +85,58 @@ export interface AdminStatsOut {
   open_requirements: number;
   total_quotations: number;
   registrations_last_7_days: RegistrationsByDay[];
+  needs_action: AdminNeedsActionOut;
+  marketplace: AdminMarketplaceOut;
+  trust: AdminTrustOut;
+}
+
+export interface LabelCount {
+  label: string;
+  count: number;
+}
+
+/** Work waiting on an administrator — each links to its page. */
+export interface AdminNeedsActionOut {
+  verification_queue: number;
+  oldest_waiting_days: number | null;
+  documents_different: number;
+  documents_not_checked: number;
+  open_reports: number;
+  withdrawal_flags: number;
+  pending_change_requests: number;
+  awards_awaiting_supplier: number;
+  delivery_dates_awaiting_reply: number;
+  overdue_orders: number;
+  unconfirmed_orders: number;
+}
+
+export interface AdminMarketplaceOut {
+  open: number;
+  closing_today: number;
+  released: number;
+  award_pending: number;
+  awarded: number;
+  archived_insufficient: number;
+  closed_no_award: number;
+  cancelled: number;
+  avg_quotations_per_requirement: number;
+  posted: number;
+  reached_release: number;
+  reached_award: number;
+  completed: number;
+  completion_rate: number | null; // 0–1
+  top_categories: LabelCount[];
+  top_cities: LabelCount[];
+}
+
+export interface AdminTrustOut {
+  reviews_total: number;
+  approval_rate: number | null; // 0–1
+  avg_review_hours: number | null;
+  tiers: LabelCount[];
+  withdrawals_90_days: number;
+  suspended: number;
+  banned: number;
 }
 
 /** GET /business/admin/whoami — 204 if the current token belongs to an

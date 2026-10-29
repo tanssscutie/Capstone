@@ -9,16 +9,18 @@ from typing import List, Optional, Tuple
 
 from fastapi.concurrency import run_in_threadpool
 from fastapi import HTTPException, UploadFile, status
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.categories import OTHER_ITEM_CODE, items_for
 from app.core.database import engine
 from app.core import file_crypto
 from app.models.business_document import BusinessDocument
 from app.models.user import User
+from app.models.verification_review import VerificationReview
 from app.repositories import business_repository as repo
 from app.repositories import notification_repository as notif_repo
 from app.schemas.business import OfferedItem, OnboardingSubmit, VerificationStatusOut, DocumentUploadOut, DocumentExtractionOut, DashboardStatsOut, AdminFlaggedBusinessOut, AdminStatsOut, AdminBusinessOut, PublicBusinessProfileOut
+from app.schemas.business import AdminMarketplaceOut, AdminNeedsActionOut, AdminReviewRecordOut, AdminTrustOut, LabelCount
 from app.services import document_extraction_service, profile_privacy
 from app.services import matching_service
 
@@ -456,11 +458,12 @@ class BusinessService:
             tier = 3
         return tier
 
-    def admin_review(self, user_id: int, approve: bool, notes: str | None) -> None:
+    def admin_review(self, user_id: int, approve: bool, notes: str | None, admin_id: int) -> None:
         with Session(engine) as session:
             user = session.get(User, user_id)
             if not user:
                 raise HTTPException(status_code=404, detail="User not found")
+            submitted_at = user.submitted_at
 
             documents = repo.list_documents_for_user(session, user_id)
             for d in documents:
@@ -528,6 +531,13 @@ class BusinessService:
                     detail=notes or "Your submission was rejected. Contact support for details.",
                     urgent=True,
                 )
+
+            # Audit: which administrator decided, what, and when.
+            session.add(VerificationReview(
+                user_id=user_id, admin_id=admin_id, approved=approve, result_status=user.verification_status,
+                notes=(notes or "").strip()[:1000] or None, submitted_at=submitted_at,
+            ))
+            session.commit()
 
     # ---------- read ----------
 
@@ -669,6 +679,18 @@ class BusinessService:
     def list_all_businesses(self) -> List[AdminBusinessOut]:
         with Session(engine) as session:
             users = repo.list_all_users(session)
+            last_review = {}
+            for r in session.exec(select(VerificationReview).order_by(VerificationReview.created_at, VerificationReview.id)).all():
+                last_review[r.user_id] = r
+            admin_names = {u.id: u.business_name for u in session.exec(select(User).where(User.is_admin == True)).all()}  # noqa: E712
+
+            def review_out(user_id: int) -> Optional[AdminReviewRecordOut]:
+                r = last_review.get(user_id)
+                if not r:
+                    return None
+                return AdminReviewRecordOut(admin_name=admin_names.get(r.admin_id, f"Admin #{r.admin_id}"),
+                                            approved=r.approved, result_status=r.result_status, reviewed_at=r.created_at)
+
             return [
                 AdminBusinessOut(
                     user_id=user.id,
@@ -689,6 +711,7 @@ class BusinessService:
                     documents=[DocumentUploadOut(**d.model_dump()) for d in repo.list_documents_for_user(session, user.id)],
                     suspended_until=user.suspended_until,
                     banned_at=user.banned_at,
+                    last_review=review_out(user.id),
                 )
                 for user in users
             ]
@@ -729,7 +752,121 @@ class BusinessService:
                 open_requirements=req_repo.count_open_requirements(session),
                 total_quotations=req_repo.count_all_quotations(session),
                 registrations_last_7_days=[RegistrationsByDay(date=d, count=c) for d, c in by_day],
+                needs_action=self._needs_action(session),
+                marketplace=self._marketplace(session),
+                trust=self._trust(session),
             )
+
+    # Dashboard aggregates: rows are loaded and grouped in Python, not with
+    # SQL date/group functions, so the same code runs on MySQL and on the
+    # tests' SQLite. Fine at this platform's size.
+
+    @staticmethod
+    def _order_due(session: Session, req) -> Optional[datetime]:
+        from datetime import time
+        from app.services import delivery_schedule_service as delivery
+
+        agreed = delivery.agreed_date(session, req.id)
+        return datetime.combine(agreed, time(23, 59)) if agreed else req.delivery_end
+
+    def _needs_action(self, session: Session) -> AdminNeedsActionOut:
+        from app.models.business_report import BusinessReport
+        from app.models.delivery_schedule import DeliverySchedule
+        from app.models.profile_change_request import ProfileChangeRequest
+        from app.models.requirement import Requirement
+        from app.services.fulfillment_service import FINAL, effective_status
+        from app.services.withdrawal_policy import REPORT_REASON
+
+        now = now_ph()
+        queue = repo.list_flagged_users(session)
+        waited = [now - u.submitted_at for u in queue if u.submitted_at]
+        queue_ids = [u.id for u in queue]
+        docs = session.exec(select(BusinessDocument).where(BusinessDocument.user_id.in_(queue_ids))).all() if queue_ids else []
+        reports = session.exec(select(BusinessReport).where(BusinessReport.status == "open")).all()
+        awarded = session.exec(select(Requirement).where(Requirement.status == "awarded")).all()
+        overdue = unconfirmed = 0
+        for req in awarded:
+            state = effective_status(session, req)
+            if state == "unconfirmed":
+                unconfirmed += 1
+            elif state not in FINAL:
+                due = self._order_due(session, req)
+                if due and due < now:
+                    overdue += 1
+        return AdminNeedsActionOut(
+            verification_queue=len(queue),
+            oldest_waiting_days=max(waited).days if waited else None,
+            documents_different=sum(1 for d in docs if d.ai_check == "other_document"),
+            documents_not_checked=sum(1 for d in docs if d.ai_check == "not_checked"),
+            open_reports=len(reports),
+            withdrawal_flags=sum(1 for r in reports if r.reason == REPORT_REASON),
+            pending_change_requests=len(session.exec(
+                select(ProfileChangeRequest.id).where(ProfileChangeRequest.status == "pending")).all()),
+            awards_awaiting_supplier=len(session.exec(
+                select(Requirement.id).where(Requirement.status == "award_pending")).all()),
+            delivery_dates_awaiting_reply=len(session.exec(
+                select(DeliverySchedule.id).where(DeliverySchedule.status == "pending")).all()),
+            overdue_orders=overdue,
+            unconfirmed_orders=unconfirmed,
+        )
+
+    def _marketplace(self, session: Session) -> AdminMarketplaceOut:
+        from collections import Counter
+        from app.models.quotation import Quotation
+        from app.models.requirement import Requirement
+        from app.services.fulfillment_service import effective_status
+
+        today = now_ph().date()
+        reqs = session.exec(select(Requirement)).all()
+        by_status = Counter(r.status for r in reqs)
+        quotes = session.exec(select(Quotation.status)).all()
+        active_quotes = sum(1 for s in quotes if s not in ("withdrawn", "voided"))
+        awarded = [r for r in reqs if r.status == "awarded"]
+        completed = sum(1 for r in awarded if effective_status(session, r) == "completed")
+
+        def top(values) -> List[LabelCount]:
+            counts = Counter(v.strip() for v in values if v and v.strip())
+            return [LabelCount(label=k, count=c) for k, c in counts.most_common(5)]
+
+        return AdminMarketplaceOut(
+            open=by_status["open"],
+            closing_today=sum(1 for r in reqs if r.status == "open" and r.closes_at.date() == today),
+            released=by_status["closed"],
+            award_pending=by_status["award_pending"],
+            awarded=by_status["awarded"],
+            archived_insufficient=by_status["insufficient_quotations"],
+            closed_no_award=by_status["closed_no_award"],
+            cancelled=by_status["cancelled"],
+            avg_quotations_per_requirement=round(active_quotes / len(reqs), 1) if reqs else 0.0,
+            posted=len(reqs),
+            reached_release=sum(1 for r in reqs if r.released_at),
+            reached_award=len(awarded),
+            completed=completed,
+            completion_rate=round(completed / len(awarded), 3) if awarded else None,
+            top_categories=top(r.category for r in reqs),
+            top_cities=top(r.city for r in reqs),
+        )
+
+    def _trust(self, session: Session) -> AdminTrustOut:
+        from collections import Counter
+        from datetime import timedelta
+        from app.models.withdrawal_strike import WithdrawalStrike
+
+        now = now_ph()
+        reviews = session.exec(select(VerificationReview)).all()
+        timed = [(r.created_at - r.submitted_at).total_seconds() / 3600 for r in reviews if r.submitted_at]
+        businesses = [u for u in session.exec(select(User).where(User.is_admin == False)).all()]  # noqa: E712
+        tiers = Counter(u.tier for u in businesses if u.verification_status == "verified")
+        return AdminTrustOut(
+            reviews_total=len(reviews),
+            approval_rate=round(sum(1 for r in reviews if r.approved) / len(reviews), 3) if reviews else None,
+            avg_review_hours=round(sum(timed) / len(timed), 1) if timed else None,
+            tiers=[LabelCount(label=f"Tier {t}", count=tiers.get(t, 0)) for t in (1, 2, 3)],
+            withdrawals_90_days=len(session.exec(select(WithdrawalStrike.id).where(
+                WithdrawalStrike.created_at >= now - timedelta(days=90))).all()),
+            suspended=sum(1 for u in businesses if u.suspended_until and u.suspended_until > now and not u.banned_at),
+            banned=sum(1 for u in businesses if u.banned_at),
+        )
 
     # ---------- dashboard stats (home sidebar) ----------
 

@@ -315,6 +315,6 @@ def get_document_file(document_id: int, _admin: User = Depends(require_admin)):
 def review_user(
     user_id: int,
     payload: AdminReviewAction,
-    _admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
 ):
-    business_service.admin_review(user_id, payload.approve, payload.notes)
+    business_service.admin_review(user_id, payload.approve, payload.notes, admin.id)

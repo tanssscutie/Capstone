@@ -1,11 +1,14 @@
 // app/admin.tsx
-// Admin dashboard: an attention banner + KPI cards and a 7-day registrations
-// chart (from GET /business/admin/stats) above the review queue
+// Admin dashboard (GET /business/admin/stats): an attention banner, "Needs
+// action" counters that each open their page, KPI cards, the 7-day
+// registrations chart, Marketplace (requirements by status, the posted →
+// completed funnel, top categories and cities) and Trust (reviews, tiers,
+// withdrawals, restrictions) — above the review queue
 // (GET /business/admin/flagged + POST .../review).
 // Kept to the app's existing design tokens on purpose — no new colours, no
 // icon library, no chart dependency. The "chart" is plain Views sized by
 // proportion, same technique the rest of the app uses for hand-built icons.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { color, font, fontSize, lineHeight, letterSpacing, space, radius } from '../components/ui/tokens';
@@ -26,7 +29,7 @@ import {
   useAdminAccess,
 } from '../components/ui/AdminKit';
 import { listFlagged, reviewBusiness, getAdminStats } from '../lib/api/admin';
-import type { AdminFlaggedBusinessOut, AdminStatsOut } from '../lib/api/admin';
+import type { AdminFlaggedBusinessOut, AdminStatsOut, LabelCount } from '../lib/api/admin';
 import { errorMessage } from '../lib/api/client';
 import { BusinessLink, BusinessNameLink } from '../components/ui/BusinessLink';
 
@@ -68,11 +71,14 @@ function AttentionBanner({ count }: { count: number }) {
 function StatCard({
   label,
   value,
+  valueText,
   caption,
   progress,
 }: {
   label: string;
-  value: number;
+  value?: number;
+  /** Shown instead of value — a percentage or a duration. */
+  valueText?: string;
   caption: string;
   /** 0–1; draws a thin progress bar under the caption when set. */
   progress?: number;
@@ -80,7 +86,7 @@ function StatCard({
   return (
     <View style={styles.statCard}>
       <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value.toLocaleString()}</Text>
+      <Text style={styles.statValue}>{valueText ?? (value ?? 0).toLocaleString()}</Text>
       <Text style={styles.statCaption}>{caption}</Text>
       {progress !== undefined && (
         <View style={styles.progressTrack}>
@@ -135,6 +141,142 @@ function RegistrationsChart({ data }: { data: AdminStatsOut['registrations_last_
             </Text>
           );
         })}
+      </View>
+    </View>
+  );
+}
+
+/* ─── Needs action ──────────────────────────────────── */
+
+type AdminRoutePath = '/admin-businesses' | '/admin-reports' | '/admin-change-requests' | '/admin-requirements';
+
+function ActionTile({ label, count, caption, to }: { label: string; count: number; caption: string; to: AdminRoutePath }) {
+  const router = useRouter();
+  const waiting = count > 0;
+  return (
+    <Pressable
+      onPress={() => router.push(to)}
+      accessibilityRole="link"
+      accessibilityLabel={`${label}: ${count}. Open`}
+      style={[styles.actionTile, waiting ? styles.actionTileWaiting : null]}
+    >
+      <Text style={[styles.actionCount, waiting ? { color: color.danger } : null]}>{count}</Text>
+      <Text style={styles.actionLabel}>{label}</Text>
+      <Text style={styles.statCaption}>{caption}</Text>
+    </Pressable>
+  );
+}
+
+function NeedsAction({ n }: { n: AdminStatsOut['needs_action'] }) {
+  const docs = n.documents_different + n.documents_not_checked;
+  const orders = n.overdue_orders + n.unconfirmed_orders;
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Needs action" caption="Each opens the page where you act on it" />
+      <View style={styles.actionGrid}>
+        <ActionTile label="Verification queue" count={n.verification_queue} to="/admin-businesses"
+          caption={n.oldest_waiting_days != null ? `Oldest waiting ${n.oldest_waiting_days} day${n.oldest_waiting_days === 1 ? '' : 's'}` : 'Nobody waiting'} />
+        <ActionTile label="Documents to check" count={docs} to="/admin-businesses"
+          caption={`${n.documents_different} may be a different document · ${n.documents_not_checked} not auto-checked`} />
+        <ActionTile label="Open reports" count={n.open_reports} to="/admin-reports"
+          caption={`Incl. ${n.withdrawal_flags} withdrawal-policy flag${n.withdrawal_flags === 1 ? '' : 's'}`} />
+        <ActionTile label="Change requests" count={n.pending_change_requests} to="/admin-change-requests"
+          caption="Locked business details to approve" />
+        <ActionTile label="Awards awaiting supplier" count={n.awards_awaiting_supplier} to="/admin-requirements"
+          caption="Notice of Award not answered yet" />
+        <ActionTile label="Delivery dates" count={n.delivery_dates_awaiting_reply} to="/admin-requirements"
+          caption="Waiting for the supplier's reply" />
+        <ActionTile label="Orders to follow up" count={orders} to="/admin-requirements"
+          caption={`${n.overdue_orders} past the delivery date · ${n.unconfirmed_orders} unconfirmed`} />
+      </View>
+    </View>
+  );
+}
+
+/* ─── Marketplace & trust ───────────────────────────── */
+
+function pct(rate: number | null): string {
+  return rate == null ? '—' : `${Math.round(rate * 100)}%`;
+}
+
+/** One horizontal bar per row, scaled to `max` — single hue, value as text beside it. */
+function BarList({ rows, max }: { rows: LabelCount[]; max?: number }) {
+  const top = Math.max(1, max ?? Math.max(0, ...rows.map((r) => r.count)));
+  if (rows.length === 0) return <Text style={styles.statCaption}>No data yet.</Text>;
+  return (
+    <View style={{ gap: space.sm }}>
+      {rows.map((r) => (
+        <View key={r.label} style={styles.barRow} accessibilityLabel={`${r.label}: ${r.count}`}>
+          <Text style={styles.barLabel} numberOfLines={1}>{r.label}</Text>
+          <View style={styles.barTrack}>
+            <View style={[styles.barFill, { width: `${Math.round((r.count / top) * 100)}%` }, r.count === 0 ? { width: 0 } : null]} />
+          </View>
+          <Text style={styles.barValue}>{r.count}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function Panel({ title, caption, children }: { title: string; caption?: string; children: ReactNode }) {
+  return (
+    <View style={styles.panel}>
+      <Text style={styles.statLabel}>{title}</Text>
+      {caption && <Text style={styles.chartSub}>{caption}</Text>}
+      <View style={{ marginTop: space.md }}>{children}</View>
+    </View>
+  );
+}
+
+function Marketplace({ m }: { m: AdminStatsOut['marketplace'] }) {
+  const statuses: LabelCount[] = [
+    { label: 'Open', count: m.open },
+    { label: 'Closing today', count: m.closing_today },
+    { label: 'Released, no decision', count: m.released },
+    { label: 'Award pending', count: m.award_pending },
+    { label: 'Awarded', count: m.awarded },
+    { label: 'Too few quotations', count: m.archived_insufficient },
+    { label: 'Closed without award', count: m.closed_no_award },
+    { label: 'Cancelled', count: m.cancelled },
+  ];
+  const funnel: LabelCount[] = [
+    { label: 'Posted', count: m.posted },
+    { label: 'Quotations released', count: m.reached_release },
+    { label: 'Awarded', count: m.reached_award },
+    { label: 'Completed', count: m.completed },
+  ];
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Marketplace" caption="Every requirement posted on TrustLink" />
+      <View style={styles.statsGrid}>
+        <StatCard label="Avg. quotations" value={m.avg_quotations_per_requirement} caption="Per requirement (withdrawn not counted)" />
+        <StatCard label="Completion rate" valueText={pct(m.completion_rate)} caption={`${m.completed} of ${m.reached_award} awarded completed`}
+          progress={m.completion_rate ?? undefined} />
+      </View>
+      <View style={styles.panelGrid}>
+        <Panel title="Requirements by status"><BarList rows={statuses} /></Panel>
+        <Panel title="Funnel" caption="Posted → released → awarded → completed"><BarList rows={funnel} max={m.posted} /></Panel>
+        <Panel title="Top categories"><BarList rows={m.top_categories} /></Panel>
+        <Panel title="Top cities"><BarList rows={m.top_cities} /></Panel>
+      </View>
+    </View>
+  );
+}
+
+function Trust({ t }: { t: AdminStatsOut['trust'] }) {
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Trust" caption="Verification reviews, trust tiers and restrictions" />
+      <View style={styles.statsGrid}>
+        <StatCard label="Approval rate" valueText={pct(t.approval_rate)} caption={`${t.reviews_total} review${t.reviews_total === 1 ? '' : 's'} recorded`}
+          progress={t.approval_rate ?? undefined} />
+        <StatCard label="Avg. review time" valueText={t.avg_review_hours == null ? '—' : t.avg_review_hours >= 48 ? `${Math.round(t.avg_review_hours / 24)}d` : `${Math.round(t.avg_review_hours)}h`}
+          caption="From submission to decision" />
+        <StatCard label="Withdrawals" value={t.withdrawals_90_days} caption="Sealed quotations withdrawn, last 90 days" />
+        <StatCard label="Restricted" value={t.suspended + t.banned} caption={`${t.suspended} suspended · ${t.banned} banned`} />
+      </View>
+      <View style={styles.panelGrid}>
+        <Panel title="Verified businesses by tier"><BarList rows={t.tiers} /></Panel>
       </View>
     </View>
   );
@@ -199,7 +341,6 @@ function QueueCard({
 }
 
 export default function AdminRoute() {
-  const router = useRouter();
   const access = useAdminAccess();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -232,7 +373,8 @@ export default function AdminRoute() {
     try {
       await reviewBusiness(userId, approve, notesByUser[userId]);
       setBusinesses((prev) => prev.filter((b) => b.user_id !== userId));
-      setStats((prev) => (prev ? { ...prev, pending_review_count: Math.max(0, prev.pending_review_count - 1) } : prev));
+      // Every counter on the page depends on the decision — reload them.
+      getAdminStats().then(setStats).catch(() => {});
     } catch (e: any) {
       setError(errorMessage(e, 'Could not record that decision.'));
     } finally {
@@ -258,19 +400,7 @@ export default function AdminRoute() {
           {stats && (
             <>
               <AttentionBanner count={stats.pending_review_count} />
-              {stats.open_reports_count > 0 && (
-                <Pressable onPress={() => router.push('/admin-reports')} style={[styles.banner, styles.bannerWaiting]} accessibilityRole="link">
-                  <View style={[styles.bannerBadge, styles.bannerBadgeWaiting]}>
-                    <Text style={styles.bannerBadgeLabel}>{stats.open_reports_count}</Text>
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[styles.bannerTitle, { color: color.danger }]}>
-                      {stats.open_reports_count} business report{stats.open_reports_count === 1 ? '' : 's'} waiting for review
-                    </Text>
-                    <Text style={styles.bannerBody}>Open Reports to resolve or dismiss them.</Text>
-                  </View>
-                </Pressable>
-              )}
+              <NeedsAction n={stats.needs_action} />
 
               <View style={styles.statsGrid}>
                 <StatCard
@@ -293,6 +423,8 @@ export default function AdminRoute() {
               </View>
 
               <RegistrationsChart data={stats.registrations_last_7_days} />
+              <Marketplace m={stats.marketplace} />
+              <Trust t={stats.trust} />
             </>
           )}
 
@@ -405,6 +537,39 @@ const styles = StyleSheet.create({
   chartLabels: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
   chartLabel: { flex: 1, textAlign: 'center', fontFamily: font.body, fontSize: fontSize.micro, color: color.inkFaint },
   chartLabelToday: { fontFamily: font.bodySemi, color: color.primary },
+
+  /* needs action */
+  section: { marginTop: space.lg },
+  actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, marginBottom: space.lg },
+  actionTile: {
+    flexGrow: 1,
+    flexBasis: 200,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.xl,
+    padding: space.lg,
+  },
+  actionTileWaiting: { borderColor: color.dangerBorder, backgroundColor: color.dangerFaint },
+  actionCount: { fontFamily: font.display, fontSize: fontSize.xl, lineHeight: lineHeight.xl, color: color.inkMuted },
+  actionLabel: { fontFamily: font.bodySemi, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.ink, marginTop: space.xs },
+
+  /* marketplace & trust panels */
+  panelGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, marginBottom: space.lg },
+  panel: {
+    flexGrow: 1,
+    flexBasis: 320,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.xl,
+    padding: space.xl,
+  },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  barLabel: { width: 150, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
+  barTrack: { flex: 1, height: 8, borderRadius: radius.sm, backgroundColor: color.surfaceSunken, overflow: 'hidden' },
+  barFill: { height: 8, borderRadius: radius.sm, backgroundColor: color.primary },
+  barValue: { width: 32, textAlign: 'right', fontFamily: font.monoMedium, fontSize: fontSize.sm, color: color.inkMuted },
 
   /* queue */
   queueHeader: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap' },

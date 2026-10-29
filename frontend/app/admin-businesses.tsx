@@ -199,6 +199,11 @@ export default function AdminBusinessesRoute() {
                       { label: 'Joined', value: formatDate(b.created_at) },
                     ]}
                   />
+                  {b.last_review && (
+                    <Text style={styles.sub}>
+                      {b.last_review.approved ? 'Approved' : 'Rejected'} by {b.last_review.admin_name} · {formatDate(b.last_review.reviewed_at)}
+                    </Text>
+                  )}
                   {(b.banned_at || (b.suspended_until && new Date(b.suspended_until) > new Date())) && (
                     <View style={{ alignSelf: 'flex-start' }}>
                       <GhostButton
