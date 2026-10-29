@@ -94,6 +94,7 @@ class _DocumentCheck(BaseModel):
     detected_type: str = ""
     reason: str = ""
     id_number: str | None = None
+    business_name: str | None = None
 
 
 VERDICTS = ("expected", "other_document", "not_a_document")
@@ -116,6 +117,7 @@ class DocumentCheck:
     reason: str = ""
     id_number: Optional[str] = None
     message: Optional[str] = None  # what the uploader is told (None when fine)
+    business_name: Optional[str] = None  # DTI/SEC: the registered name printed on it
 
 
 # The pick-time check and the upload's own check see the same bytes — don't
@@ -267,8 +269,9 @@ def _check(expected: str, short: str, noun: str, id_hint: Optional[str], file_by
         "detected_type: a short name for what it looks like, e.g. \"a selfie\", \"a DTI certificate\", "
         "\"a screenshot of a chat\". reason: one short sentence. "
         + (f"If the verdict is \"expected\", also find {id_hint} and return it in id_number exactly as printed; "
-           "otherwise leave id_number empty. Never guess or invent a number that isn't legible."
-           if id_hint else "Leave id_number empty.")
+           "otherwise leave id_number empty. Never guess or invent a number that isn't legible. "
+           "Also return the registered business name printed on it in business_name (empty if none or not legible)."
+           if id_hint else "Leave id_number and business_name empty.")
     )
     ai = _ask_gemini(prompt, file_bytes, mime_type)
     if ai is None or ai.verdict not in VERDICTS:
@@ -281,6 +284,7 @@ def _check(expected: str, short: str, noun: str, id_hint: Optional[str], file_by
     result = DocumentCheck(
         verdict=ai.verdict, detected_type=detected, reason=(ai.reason or "").strip()[:300],
         id_number=((ai.id_number or "").strip() or None) if ai.verdict == "expected" else None,
+        business_name=((ai.business_name or "").strip()[:200] or None) if ai.verdict == "expected" else None,
     )
     if ai.verdict == "not_a_document":
         result.message = (f"This looks like {detected or 'a photo'}, not a {short}. "
@@ -292,6 +296,161 @@ def _check(expected: str, short: str, noun: str, id_hint: Optional[str], file_by
     if len(_CACHE) > _CACHE_MAX:
         _CACHE.popitem(last=False)
     return result
+
+
+# ---------- identity check: a valid ID and a selfie holding it ----------
+
+class _IdAnswer(BaseModel):
+    verdict: str = ""  # valid | not_valid
+    id_type_seen: str = ""
+    reason: str = ""
+    full_name: str = ""
+    id_number: str = ""
+    birthdate: str = ""  # YYYY-MM-DD or ""
+    expiry_date: str = ""  # YYYY-MM-DD or ""
+
+
+class _SelfieAnswer(BaseModel):
+    verdict: str = ""  # valid | not_valid
+    face_matches_id: bool = False
+    same_id_card: bool = False
+    reason: str = ""
+
+
+@dataclass
+class IdCheck:
+    verdict: str  # valid | not_valid | not_checked
+    reason: str = ""
+    full_name: str = ""
+    id_number: str = ""
+    birthdate: str = ""
+    expiry_date: str = ""
+    message: Optional[str] = None
+
+
+@dataclass
+class SelfieCheck:
+    verdict: str  # valid | not_valid | not_checked
+    face_match: Optional[bool] = None
+    reason: str = ""
+    message: Optional[str] = None
+
+
+_ID_CACHE: "OrderedDict[tuple, object]" = OrderedDict()
+IMAGE_MIME = ("image/jpeg", "image/png", "image/webp")
+
+
+def _ask_gemini_json(prompt: str, files: list[tuple[bytes, str]], schema):
+    """One vision call over one or more images, answered as `schema`. None on any failure."""
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=settings.GEMINI_API_KEY, http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_MS))
+    except Exception:
+        logger.exception("Identity check: Gemini client unavailable")
+        return None
+    parts = []
+    for data, mime in files:
+        data, mime = _shrink_image(data, mime)
+        parts.append(types.Part.from_bytes(data=data, mime_type=mime))
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            response = client.models.generate_content(
+                model=EXTRACTION_MODEL,
+                contents=[*parts, prompt],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=schema,
+                    thinking_config=types.ThinkingConfig(thinking_level=THINKING_LEVEL),
+                ),
+            )
+            return schema.model_validate_json(response.text)
+        except Exception:
+            logger.exception("Identity check failed (attempt %d/%d)", attempt, MAX_ATTEMPTS)
+            if attempt < MAX_ATTEMPTS:
+                time.sleep(RETRY_DELAY_SECONDS)
+    return None
+
+
+def _cached(key, compute):
+    if key in _ID_CACHE:
+        _ID_CACHE.move_to_end(key)
+        return _ID_CACHE[key]
+    result = compute()
+    if result.verdict != NOT_CHECKED:  # a failed call may work next time
+        _ID_CACHE[key] = result
+        if len(_ID_CACHE) > _CACHE_MAX:
+            _ID_CACHE.popitem(last=False)
+    return result
+
+
+def check_valid_id(id_name: str, file_bytes: bytes, mime_type: str) -> IdCheck:
+    """Strict: a real, current photo of the front of this Philippine government
+    ID — not a screenshot, photocopy, edited or cropped image. Also reads the
+    name, number, birthdate and expiry. When unsure, not_valid."""
+    mime_type = (mime_type or "").lower()
+    if not platform_settings.ai_enabled() or mime_type not in IMAGE_MIME:
+        return IdCheck(verdict=NOT_CHECKED)
+
+    def compute() -> IdCheck:
+        prompt = (
+            "You verify identity documents for a Philippine business platform. Be STRICT. "
+            f"The person says this image is the FRONT of their {id_name}. "
+            "verdict \"valid\" ONLY if ALL hold: it is a photo of the physical card itself (not a screenshot, not a "
+            "photo of a screen or monitor, not a photocopy or printout, not a scan of a scan); it is that kind of "
+            "Philippine government ID; all four corners are visible; the photo of the holder, the name and the ID "
+            "number are clearly legible; there is no sign of editing, pasted text or tampering; it is not a sample or "
+            "specimen card. Otherwise verdict \"not_valid\". If you are unsure, answer \"not_valid\". "
+            "id_type_seen: what ID it actually is. reason: one short sentence a user can act on. "
+            "Read full_name exactly as printed (given names, middle name, surname), id_number, birthdate and "
+            "expiry_date (YYYY-MM-DD; empty if none or not legible). Never guess a value that isn't legible."
+        )
+        ai = _ask_gemini_json(prompt, [(file_bytes, mime_type)], _IdAnswer)
+        if ai is None or ai.verdict not in ("valid", "not_valid"):
+            return IdCheck(verdict=NOT_CHECKED)
+        result = IdCheck(verdict=ai.verdict, reason=(ai.reason or "").strip()[:300],
+                         full_name=(ai.full_name or "").strip()[:200], id_number=(ai.id_number or "").strip()[:60],
+                         birthdate=(ai.birthdate or "").strip()[:10], expiry_date=(ai.expiry_date or "").strip()[:10])
+        if ai.verdict == "not_valid":
+            result.message = (f"We can't accept this as your {id_name}: {result.reason or 'it isn\'t clear enough'} "
+                              "Take a new photo of the front of the card itself — all four corners in view, no glare, "
+                              "not a screenshot or photocopy.")
+        return result
+
+    return _cached((hashlib.sha256(file_bytes).hexdigest(), "id", id_name), compute)
+
+
+def check_selfie_with_id(id_bytes: bytes, id_mime: str, selfie_bytes: bytes, selfie_mime: str) -> SelfieCheck:
+    """Strict: a live photo of one real person holding that same ID next to
+    their face, and the face matches the ID photo. Never overridable."""
+    id_mime, selfie_mime = (id_mime or "").lower(), (selfie_mime or "").lower()
+    if not platform_settings.ai_enabled() or id_mime not in IMAGE_MIME or selfie_mime not in IMAGE_MIME:
+        return SelfieCheck(verdict=NOT_CHECKED)
+
+    def compute() -> SelfieCheck:
+        prompt = (
+            "You verify identity for a Philippine business platform. Be STRICT. The FIRST image is the person's "
+            "government ID. The SECOND image must be a selfie of that person holding that same ID card next to their "
+            "face. verdict \"valid\" ONLY if ALL hold: the second image is a live photo of exactly one real person "
+            "(not a photo of a photo or a screen, not a printout, no mask, no sunglasses, face fully visible); they are "
+            "holding a physical ID card that is the same card as in the first image; and the face in the selfie is "
+            "plausibly the same person as the photo on the ID. Otherwise \"not_valid\". If unsure, \"not_valid\". "
+            "face_matches_id and same_id_card: your answers to those two checks. reason: one short sentence a user "
+            "can act on."
+        )
+        ai = _ask_gemini_json(prompt, [(id_bytes, id_mime), (selfie_bytes, selfie_mime)], _SelfieAnswer)
+        if ai is None or ai.verdict not in ("valid", "not_valid"):
+            return SelfieCheck(verdict=NOT_CHECKED)
+        verdict = "valid" if ai.verdict == "valid" and ai.face_matches_id and ai.same_id_card else "not_valid"
+        result = SelfieCheck(verdict=verdict, face_match=bool(ai.face_matches_id), reason=(ai.reason or "").strip()[:300])
+        if verdict == "not_valid":
+            result.message = (f"We can't accept this selfie: {result.reason or 'the check didn\'t pass'} "
+                              "Take a new photo of yourself holding the same ID next to your face — face and card "
+                              "clearly visible, good light, no mask or sunglasses.")
+        return result
+
+    key = (hashlib.sha256(id_bytes).hexdigest(), hashlib.sha256(selfie_bytes).hexdigest(), "selfie")
+    return _cached(key, compute)
 
 
 def check_business_document(doc_type: str, file_bytes: bytes, mime_type: str) -> DocumentCheck:

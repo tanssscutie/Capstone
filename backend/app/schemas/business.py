@@ -63,6 +63,10 @@ class DocumentUploadOut(BaseModel):
     # AI document check — see BusinessDocument.ai_check.
     ai_check: str = "not_checked"
     ai_check_note: Optional[str] = None
+    id_type: Optional[str] = None
+    id_name: Optional[str] = None
+    id_match: Optional[str] = None
+    face_match: Optional[str] = None
     uploaded_at: datetime
 
 
@@ -78,6 +82,13 @@ class DocumentExtractionOut(BaseModel):
     id_number: Optional[str] = None
     verdict: str = "not_checked"
     message: Optional[str] = None
+    # DTI/SEC: the business name read from the certificate, and a warning when
+    # it differs from the registered name typed in onboarding.
+    business_name: Optional[str] = None
+    name_warning: Optional[str] = None
+    # VALID_ID: the name read from the ID and how it compares with the contact person.
+    id_name: Optional[str] = None
+    id_match: Optional[str] = None
 
 
 class VerificationStatusOut(BaseModel):

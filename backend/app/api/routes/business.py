@@ -67,9 +67,26 @@ def my_change_requests(current_user: User = Depends(get_current_user)):
 async def extract_document_fields(
     doc_type: str = Form(...),
     file: UploadFile = File(...),
+    # VALID_ID: which ID it is, and the contact person whose name it must carry.
+    id_type: Optional[str] = Form(default=None),
+    person_name: Optional[str] = Form(default=None),
+    # DTI/SEC: the registered name it must carry.
+    registered_name: Optional[str] = Form(default=None),
     current_user: User = Depends(get_current_user),
 ):
-    return await business_service.extract_document_fields(doc_type=doc_type, file=file)
+    return await business_service.extract_document_fields(doc_type=doc_type, file=file, id_type=id_type,
+                                                          person_name=person_name, registered_name=registered_name)
+
+
+@router.post("/documents/check-selfie", response_model=DocumentExtractionOut)
+async def check_selfie(
+    selfie: UploadFile = File(...),
+    # The ID picked in the same form; without it, the ID already on file.
+    id_file: Optional[UploadFile] = File(default=None),
+    current_user: User = Depends(get_current_user),
+):
+    """Strict AI check: the selfie shows this person holding that same ID. Nothing is saved."""
+    return await business_service.check_selfie(current_user.id, id_file, selfie)
 
 
 @router.post("/documents", response_model=DocumentUploadOut, status_code=status.HTTP_201_CREATED)
@@ -77,12 +94,14 @@ async def upload_document(
     doc_type: str = Form(...),
     declared_owner_name: str = Form(...),
     declared_business_name: str = Form(...),
-    declared_id_number: str = Form(...),
+    declared_id_number: str = Form(default=""),  # ID and selfie: none typed; the AI reads it
     declared_expiry_date: Optional[date] = Form(default=None),
     file: UploadFile = File(...),
     # The AI check said it looks like a different document and the business
     # confirmed it's right anyway (409 otherwise).
     confirm_mismatch: bool = Form(default=False),
+    # VALID_ID only: which ID (app/core/valid_ids.py).
+    id_type: Optional[str] = Form(default=None),
     current_user: User = Depends(get_current_user),
 ):
     return await business_service.upload_document(
@@ -94,6 +113,7 @@ async def upload_document(
         declared_expiry_date=declared_expiry_date,
         file=file,
         confirm_mismatch=confirm_mismatch,
+        id_type=id_type,
     )
 
 

@@ -22,11 +22,18 @@ from app.repositories import notification_repository as notif_repo
 from app.schemas.business import OfferedItem, OnboardingSubmit, VerificationStatusOut, DocumentUploadOut, DocumentExtractionOut, DashboardStatsOut, AdminFlaggedBusinessOut, AdminStatsOut, AdminBusinessOut, PublicBusinessProfileOut
 from app.schemas.business import AdminMarketplaceOut, AdminNeedsActionOut, AdminReviewRecordOut, AdminTrustOut, LabelCount
 from app.services import document_extraction_service, profile_privacy
+from app.core import name_match
+from app.core.valid_ids import VALID_ID_NAMES
 from app.services import matching_service
 
 UPLOAD_ROOT = os.path.join("uploads", "documents")
 
-VALID_DOC_TYPES = {"DTI", "SEC", "BIR", "MAYORS_PERMIT"}
+VALID_DOC_TYPES = {"DTI", "SEC", "BIR", "MAYORS_PERMIT", "VALID_ID", "SELFIE_WITH_ID"}
+# Identity check: a valid government ID and a selfie holding it — required
+# from buyers and sellers. Buyers need nothing else (business documents are
+# optional, toward a higher tier); sellers also need DTI/SEC and BIR.
+IDENTITY_DOC_TYPES = {"VALID_ID", "SELFIE_WITH_ID"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 # Lenient identifier-format checks. These confirm the *shape* of an
 # identifier is plausible, not that it was actually issued — the system
@@ -43,6 +50,26 @@ ID_FORMAT_PATTERNS = {
 # DTI *or* SEC (sole proprietors vs corporations) plus BIR registration.
 REQUIRED_FOR_TIER_1 = {"BIR"}
 REQUIRED_ONE_OF_TIER_1 = {"DTI", "SEC"}
+
+
+def has_required_documents(role: Optional[str], doc_types: set) -> bool:
+    """Buyer: the identity check. Seller: identity + DTI/SEC + BIR."""
+    if not IDENTITY_DOC_TYPES.issubset(doc_types):
+        return False
+    if role == "buyer":
+        return True
+    return bool(doc_types & REQUIRED_ONE_OF_TIER_1) and REQUIRED_FOR_TIER_1.issubset(doc_types)
+
+
+def _mask(number: str) -> str:
+    digits = (number or "").strip()
+    return f"•••• {digits[-4:]}" if len(digits) >= 4 else ""
+
+
+def _same_business_name(a: str, b: str) -> bool:
+    import re as _re
+    norm = lambda s: _re.sub(r"[^A-Z0-9]", "", (s or "").upper())  # noqa: E731
+    return norm(a) == norm(b)
 TIER_3_AWARD_THRESHOLD = 10
 
 
@@ -191,7 +218,8 @@ class BusinessService:
 
     # ---------- document upload + validation ----------
 
-    async def extract_document_fields(self, doc_type: str, file: UploadFile) -> DocumentExtractionOut:
+    async def extract_document_fields(self, doc_type: str, file: UploadFile, id_type: Optional[str] = None,
+                                      person_name: Optional[str] = None, registered_name: Optional[str] = None) -> DocumentExtractionOut:
         """Assistive Document Extraction — see document_extraction_service.py.
         Stateless: doesn't touch the database, doesn't require onboarding to
         be complete yet (it runs *during* the DOCUMENTS step, before that's
@@ -207,10 +235,74 @@ class BusinessService:
         # thread: called directly inside this async handler it froze the whole
         # server — every other request, including the other documents' own
         # extractions, queued behind it.
+        if doc_type == "VALID_ID":
+            id_name = self._valid_id_name(id_type)
+            check = await run_in_threadpool(document_extraction_service.check_valid_id, id_name, contents, _mime(file))
+            if check.verdict == "not_valid":
+                return DocumentExtractionOut(verdict="not_a_document", message=check.message)
+            problem = self._id_problem(check, person_name or "")
+            if problem:
+                return DocumentExtractionOut(verdict="not_a_document", message=problem, id_name=check.full_name or None)
+            return DocumentExtractionOut(verdict="expected" if check.verdict == "valid" else "not_checked",
+                                         id_name=check.full_name or None,
+                                         id_match=name_match.compare(check.full_name, person_name or "") if check.full_name else None)
+        if doc_type == "SELFIE_WITH_ID":
+            raise HTTPException(status_code=400, detail="Check a selfie with POST /business/documents/check-selfie")
         check = await run_in_threadpool(
             document_extraction_service.check_business_document, doc_type, contents, _mime(file)
         )
-        return DocumentExtractionOut(id_number=check.id_number, verdict=check.verdict, message=check.message)
+        warning = None
+        if doc_type in REQUIRED_ONE_OF_TIER_1 and check.business_name and registered_name \
+                and not _same_business_name(check.business_name, registered_name):
+            warning = (f"The certificate reads \"{check.business_name}\", but you entered \"{registered_name.strip()}\" "
+                       "as your registered name. They should match exactly — fix the name in Business details, or upload "
+                       "the right certificate.")
+        return DocumentExtractionOut(id_number=check.id_number, verdict=check.verdict, message=check.message,
+                                     business_name=check.business_name, name_warning=warning)
+
+    @staticmethod
+    def _valid_id_name(id_type: Optional[str]) -> str:
+        if not id_type or id_type not in VALID_ID_NAMES:
+            raise HTTPException(status_code=422, detail="Pick which ID you're uploading from the list.")
+        return VALID_ID_NAMES[id_type]
+
+    @staticmethod
+    def _id_problem(check, person_name: str) -> Optional[str]:
+        """Why a readable ID is refused: expired, or not the contact person's name."""
+        if check.expiry_date:
+            try:
+                if date.fromisoformat(check.expiry_date) < now_ph().date():
+                    return f"This ID expired on {check.expiry_date}. Upload an ID that is still valid."
+            except ValueError:
+                pass
+        if check.full_name and name_match.compare(check.full_name, person_name) == "mismatch":
+            return (f"The name on this ID ({check.full_name}) doesn't match the contact person you entered "
+                    f"({person_name.strip()}). Upload the contact person's own ID, or correct the contact person's name.")
+        return None
+
+    async def check_selfie(self, user_id: int, id_file: Optional[UploadFile], selfie: UploadFile) -> DocumentExtractionOut:
+        """Pick-time selfie check against the ID picked in the same form (or the one on file)."""
+        selfie_bytes = await selfie.read()
+        if id_file is not None:
+            id_bytes, id_mime = await id_file.read(), _mime(id_file)
+        else:
+            id_bytes, id_mime = self._stored_id(user_id)
+        check = await run_in_threadpool(document_extraction_service.check_selfie_with_id, id_bytes, id_mime,
+                                        selfie_bytes, _mime(selfie))
+        if check.verdict == "not_valid":
+            return DocumentExtractionOut(verdict="not_a_document", message=check.message)
+        return DocumentExtractionOut(verdict="expected" if check.verdict == "valid" else "not_checked")
+
+    def _stored_id(self, user_id: int) -> tuple[bytes, str]:
+        import mimetypes
+        with Session(engine) as session:
+            docs = [d for d in repo.list_documents_for_user(session, user_id) if d.doc_type == "VALID_ID"]
+            if not docs:
+                raise HTTPException(status_code=400, detail="Upload your valid ID first, then the selfie.")
+            latest = max(docs, key=lambda d: (d.uploaded_at, d.id))
+            with open(latest.file_path, "rb") as f:
+                data = file_crypto.decrypt_bytes_lenient(f.read())
+            return data, mimetypes.guess_type(latest.file_path)[0] or "image/jpeg"
 
     async def upload_document(
         self,
@@ -222,6 +314,7 @@ class BusinessService:
         declared_expiry_date: date | None,
         file: UploadFile,
         confirm_mismatch: bool = False,
+        id_type: Optional[str] = None,
     ) -> DocumentUploadOut:
         doc_type = doc_type.strip().upper()
         if doc_type not in VALID_DOC_TYPES:
@@ -241,6 +334,10 @@ class BusinessService:
                 )
 
             contents = await file.read()
+            if doc_type in IDENTITY_DOC_TYPES:
+                ext = validate_upload(file.filename, contents, IMAGE_EXTENSIONS, 10 * 1024 * 1024)
+                return await self._upload_identity(session, user, doc_type, id_type, declared_owner_name,
+                                                   declared_business_name, contents, ext, _mime(file))
             ext = validate_upload(file.filename, contents, DOCUMENT_EXTENSIONS, 10 * 1024 * 1024)
             # The AI document check, enforced here and not only in the form: a
             # clear non-document is refused, a different document needs the
@@ -267,6 +364,12 @@ class BusinessService:
             )
 
             status_result, notes = self._validate_document(session, user, document)
+            # Seller name match: the name the AI read off the DTI/SEC certificate.
+            if doc_type in REQUIRED_ONE_OF_TIER_1 and check.business_name and user.registered_name \
+                    and not _same_business_name(check.business_name, user.registered_name):
+                status_result = "flagged"
+                notes = "; ".join(n for n in (notes, f"Certificate reads \"{check.business_name}\" — registered name is "
+                                                     f"\"{user.registered_name}\"") if n)
             document.validation_status = status_result
             document.validation_notes = notes
 
@@ -291,6 +394,46 @@ class BusinessService:
 
             return result
 
+    async def _upload_identity(self, session: Session, user: User, doc_type: str, id_type: Optional[str],
+                               person_name: str, business_name: str, contents: bytes, ext: str, mime: str) -> DocumentUploadOut:
+        """VALID_ID / SELFIE_WITH_ID. Strict: refused unless the AI passes it
+        (or the AI is unavailable — then the administrator checks it by eye)."""
+        note, flagged = "", False
+        if doc_type == "VALID_ID":
+            id_name = self._valid_id_name(id_type)
+            check = await run_in_threadpool(document_extraction_service.check_valid_id, id_name, contents, mime)
+            if check.verdict == "not_valid":
+                raise HTTPException(status_code=422, detail=check.message)
+            problem = self._id_problem(check, person_name)
+            if problem:
+                raise HTTPException(status_code=422, detail=problem)
+            match = name_match.compare(check.full_name, person_name) if check.verdict == "valid" else "unchecked"
+            if match == "partial":
+                flagged, note = True, f"Name on ID \"{check.full_name}\" only partly matches the contact person \"{person_name}\""
+            fields = dict(id_type=id_type, id_name=check.full_name or None, id_match=match,
+                          declared_id_number=_mask(check.id_number),
+                          ai_check="expected" if check.verdict == "valid" else "not_checked",
+                          ai_check_note=(check.reason if check.verdict == "valid" else
+                                         "Not auto-checked — check the ID by eye: real card, legible, not expired, the contact person's name.")[:400])
+        else:
+            id_bytes, id_mime = self._stored_id(user.id)
+            check = await run_in_threadpool(document_extraction_service.check_selfie_with_id, id_bytes, id_mime, contents, mime)
+            if check.verdict == "not_valid":
+                raise HTTPException(status_code=422, detail=check.message)
+            fields = dict(face_match="match" if check.verdict == "valid" else "unchecked", declared_id_number="",
+                          ai_check="expected" if check.verdict == "valid" else "not_checked",
+                          ai_check_note=(check.reason if check.verdict == "valid" else
+                                         "Not auto-checked — compare the selfie with the ID photo by eye.")[:400])
+        document = BusinessDocument(
+            user_id=user.id, doc_type=doc_type, file_path=self._save_bytes(user.id, doc_type, contents, ext),
+            declared_owner_name=person_name.strip(), declared_business_name=business_name.strip(),
+            validation_status="flagged" if flagged else "pass", validation_notes=note, **fields,
+        )
+        created = repo.add_document(session, document)
+        result = DocumentUploadOut(**created.model_dump())
+        self._recompute_verification(session, user)
+        return result
+
     def _save_bytes(self, user_id: int, doc_type: str, contents: bytes, ext: str) -> str:
         user_dir = os.path.join(UPLOAD_ROOT, str(user_id))
         os.makedirs(user_dir, exist_ok=True)
@@ -308,6 +451,8 @@ class BusinessService:
     def _validate_document(self, session: Session, user: User, document: BusinessDocument) -> Tuple[str, str]:
         reasons: List[str] = []
 
+        if document.doc_type in IDENTITY_DOC_TYPES:
+            return "pass", ""
         # 1. Identifier format
         pattern = ID_FORMAT_PATTERNS.get(document.doc_type)
         if pattern and not pattern.match(document.declared_id_number.strip()):
@@ -341,7 +486,9 @@ class BusinessService:
         documents = repo.list_documents_for_user(session, user.id)
         supplied = {d.doc_type for d in documents}
 
-        missing = []
+        missing = [t for t in ("VALID_ID", "SELFIE_WITH_ID") if t not in supplied]
+        if user.role == "buyer":
+            return missing
         if not (supplied & REQUIRED_ONE_OF_TIER_1):
             missing.append("DTI_OR_SEC")
         for doc_type in REQUIRED_FOR_TIER_1:
@@ -406,7 +553,7 @@ class BusinessService:
             # Permit upload working toward Tier 2/3) can only raise the trust
             # tier here, never move status backward or demand a second sign-off
             # for the original verification.
-            has_required = bool(passing_types & REQUIRED_ONE_OF_TIER_1) and REQUIRED_FOR_TIER_1.issubset(passing_types)
+            has_required = has_required_documents(user.role, passing_types)
             if has_required:
                 previous_tier = user.tier
                 user.tier = self._compute_tier(session, user, passing_types)
@@ -484,7 +631,7 @@ class BusinessService:
                 passing_types = {
                     d.doc_type for d in repo.list_documents_for_user(session, user_id) if d.validation_status == "pass"
                 }
-                has_required = bool(passing_types & REQUIRED_ONE_OF_TIER_1) and REQUIRED_FOR_TIER_1.issubset(passing_types)
+                has_required = has_required_documents(user.role, passing_types)
                 if has_required:
                     was_verified = user.verification_status == "verified"
                     previous_tier = user.tier

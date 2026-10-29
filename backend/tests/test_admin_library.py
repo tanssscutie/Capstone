@@ -136,7 +136,7 @@ class AdminLibraryTests(unittest.TestCase):
         d = self.client.get("/business/admin/datasets").json()
         self.assertTrue(any(c["name"] == "Printing" for c in d["categories"]))
         self.assertTrue(any(c["city"] == "Pasig" for c in d["ncr_addresses"]))
-        self.assertEqual({t["code"] for t in d["document_types"]}, {"DTI", "SEC", "BIR", "MAYORS_PERMIT"})
+        self.assertEqual({t["code"] for t in d["document_types"]}, {"DTI", "SEC", "BIR", "MAYORS_PERMIT", "VALID_ID", "SELFIE_WITH_ID"})
         self.assertIn("other", [r["code"] for r in d["withdrawal_reasons"]])
         self.assertEqual(d["profile_visibility"]["levels"], ["public", "verified", "only_me"])
         self.assertTrue(d["market_rules"])

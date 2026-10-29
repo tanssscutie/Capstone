@@ -32,6 +32,13 @@ def market_rules():
     return {"min_quotations": platform_settings.min_quotations(), "auto_extend_days": platform_settings.auto_extend_days()}
 
 
+@router.get("/valid-ids")
+def valid_ids():
+    """Philippine government IDs accepted for the identity check."""
+    from app.core.valid_ids import NOT_ACCEPTED, VALID_IDS
+    return {"ids": VALID_IDS, "not_accepted": NOT_ACCEPTED}
+
+
 @router.get("/banner")
 def maintenance_banner():
     """The maintenance banner a super admin set — empty when there is none."""

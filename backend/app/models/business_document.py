@@ -38,4 +38,11 @@ class BusinessDocument(SQLModel, table=True):
     # Advisory for the reviewing administrator — never verifies on its own.
     ai_check: str = Field(default="not_checked", max_length=20)
     ai_check_note: Optional[str] = Field(default=None, max_length=400)
+    # Identity check (VALID_ID / SELFIE_WITH_ID only): which ID, the name read
+    # from it, whether that name matches the contact person, and whether the
+    # selfie's face matches the ID. declared_id_number holds only the last 4.
+    id_type: Optional[str] = Field(default=None, max_length=40)
+    id_name: Optional[str] = Field(default=None, max_length=200)
+    id_match: Optional[str] = Field(default=None, max_length=10)  # match | partial | mismatch | unchecked
+    face_match: Optional[str] = Field(default=None, max_length=10)  # match | mismatch | unchecked
     uploaded_at: datetime = Field(default_factory=now_ph)

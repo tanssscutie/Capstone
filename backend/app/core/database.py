@@ -49,6 +49,10 @@ def create_db_and_tables():
     _add_column_if_missing("user", "profile_visibility", "TEXT NULL")
     _add_column_if_missing("businessdocument", "ai_check_note", "VARCHAR(400) NULL")
     _migrate_admin_roles()
+    _add_column_if_missing("businessdocument", "id_type", "VARCHAR(40) NULL")
+    _add_column_if_missing("businessdocument", "id_name", "VARCHAR(200) NULL")
+    _add_column_if_missing("businessdocument", "id_match", "VARCHAR(10) NULL")
+    _add_column_if_missing("businessdocument", "face_match", "VARCHAR(10) NULL")
 
 
 def _migrate_admin_roles():

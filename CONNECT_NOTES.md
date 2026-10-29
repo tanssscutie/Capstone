@@ -64,6 +64,33 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Identity check (backend): valid ID at selfie na hawak ang ID, strict**
+- **Bagong document types:** `VALID_ID` at `SELFIE_WITH_ID`.
+  - **Buyer:** ito lang ang required. Optional ang DTI/SEC, BIR at Mayor's permit, para sa mas mataas na tier.
+  - **Seller:** ito, at DTI o SEC, at BIR.
+  - Code: `has_required_documents` at `_missing_documents`.
+- **ID (Gemini, strict):**
+  - Kailangang totoong litrato ng mismong card: hindi screenshot, hindi litrato ng screen, hindi photocopy, hindi edited.
+  - Kita ang apat na sulok, malinaw ang pangalan, ang numero at ang litrato, at hindi expired.
+  - Kapag hindi sigurado ang AI, tinatanggihan ito, may mensaheng puwedeng sundan ng user.
+  - Binabasa ang pangalan, numero, birthdate at expiry. **Huling 4 digits lang** ng ID number ang naka-save.
+- **Pagtutugma ng pangalan** sa contact person (`app/core/name_match.py`):
+  - Hindi apektado ng malaki o maliit na titik, accent o ñ, "DELA CRUZ, JUAN", nawawalang middle name o initial, at Jr./III.
+  - Kapag hindi tugma, tinatanggihan.
+  - Kapag bahagya lang ang tugma, tinatanggap pero naka-flag para sa admin.
+- **Selfie (strict, walang "upload anyway"):** isang totoong tao na hawak ang **parehong card** sa tabi ng mukha, at kamukha ng litrato sa ID. Kailangang mauna ang ID.
+- **Kapag down ang AI:** tinatanggap ang upload bilang "not auto-checked", at ang admin ang titingin.
+- **Seller name match:** binabasa ng AI ang business name sa DTI/SEC.
+  - Sa pick-time check, ibinabalik ang `name_warning` kapag iba ito sa registered name.
+  - Sa upload, naka-flag ang dokumento kapag hindi tugma.
+- **Endpoints:**
+  - `POST /business/documents/extract`: may `id_type`, `person_name` at `registered_name` na
+  - `POST /business/documents/check-selfie`: bago
+  - `POST /business/documents`: may `id_type` na, at optional na ang `declared_id_number`
+  - `GET /meta/valid-ids`: listahan ng 16 na tinatanggap na ID (`app/core/valid_ids.py`)
+- **Bagong columns:** `BusinessDocument.id_type`, `id_name`, `id_match` at `face_match` (auto-migrate).
+- **Tests:** `backend/tests/test_identity_check.py` (naka-mock ang Gemini).
+
 **Onboarding: naka-prefill na ang pangalan at mobile number**
 - Sa unang onboarding, kusang napupunan ang **Registered business name** mula sa pangalang inilagay sa sign-up, at ang **Mobile number** mula sa login mobile ng account. Puwede pa ring palitan ang dalawa.
 - Kapag pinalitan ang numero, may link na "Use my account number (+63 …)" para maibalik ito.

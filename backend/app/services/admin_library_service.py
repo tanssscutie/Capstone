@@ -202,7 +202,9 @@ class AdminLibraryService:
         doc_labels = {"DTI": "DTI certificate of business name registration (sole proprietorship)",
                       "SEC": "SEC certificate of registration (partnership, corporation, cooperative)",
                       "BIR": "BIR certificate of registration (Form 2303)",
-                      "MAYORS_PERMIT": "Mayor's / business permit (optional, toward Tier 3)"}
+                      "MAYORS_PERMIT": "Mayor's / business permit (optional, toward Tier 3)",
+                      "VALID_ID": "Valid government ID of the contact person (required, buyers and sellers)",
+                      "SELFIE_WITH_ID": "Selfie holding that ID (required, buyers and sellers)"}
         return {
             "categories": category_tree_out(),
             "ncr_addresses": ncr_addresses_out(),
