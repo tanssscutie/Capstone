@@ -1,7 +1,7 @@
 import logging
 
 from sqlalchemy import inspect, text
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import SQLModel, Session, create_engine, select
 from app.core.config import settings
 
 logger = logging.getLogger("trustlink.startup")
@@ -48,6 +48,32 @@ def create_db_and_tables():
     _add_column_if_missing("businessdocument", "ai_check", "VARCHAR(20) NOT NULL DEFAULT 'not_checked'")
     _add_column_if_missing("user", "profile_visibility", "TEXT NULL")
     _add_column_if_missing("businessdocument", "ai_check_note", "VARCHAR(400) NULL")
+    _migrate_admin_roles()
+
+
+def _migrate_admin_roles():
+    """Adds User.admin_role. Every existing admin becomes "admin", and if no
+    super admin exists yet, the oldest active admin becomes one — so a
+    database never ends up with nobody able to manage the admin team."""
+    from app.models.user import User
+
+    _add_column_if_missing("user", "admin_role", "VARCHAR(20) NULL")
+    with Session(engine) as session:
+        admins = session.exec(select(User).where(User.is_admin == True).order_by(User.id)).all()  # noqa: E712
+        changed = False
+        for u in admins:
+            if u.admin_role not in ("admin", "super_admin"):
+                u.admin_role = "admin"
+                session.add(u)
+                changed = True
+        if admins and not any(u.admin_role == "super_admin" for u in admins):
+            first = next((u for u in admins if u.is_active), admins[0])
+            first.admin_role = "super_admin"
+            session.add(first)
+            changed = True
+            logger.info("Made %s (#%s) the first super admin.", first.business_name, first.id)
+        if changed:
+            session.commit()
 
 
 def _migrate_user_role():

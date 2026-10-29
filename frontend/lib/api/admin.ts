@@ -139,6 +139,20 @@ export interface AdminTrustOut {
   banned: number;
 }
 
+export type AdminRole = 'admin' | 'super_admin';
+
+export interface AdminMe {
+  id: number;
+  name: string;
+  email: string | null;
+  admin_role: AdminRole;
+}
+
+/** GET /business/admin/me — the signed-in administrator and their role. */
+export function getAdminMe(): Promise<AdminMe> {
+  return api.get<AdminMe>('/business/admin/me');
+}
+
 /** GET /business/admin/whoami — 204 if the current token belongs to an
  *  admin, 403 otherwise. Used as a lightweight auth guard: never throws,
  *  just resolves to whether the caller is allowed in. */

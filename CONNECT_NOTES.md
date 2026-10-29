@@ -64,6 +64,14 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Super admin (1/6): admin at super admin**
+- Bagong column na `User.admin_role`: `admin` o `super_admin`. Nananatili ang `is_admin` bilang pangunahing gate.
+- Sa startup, `admin` ang lahat ng kasalukuyang admin. Kung wala pang super admin, ang pinakaunang aktibong admin ang magiging super admin, kaya hindi kailanman mauubos ang may hawak ng admin team. Sa dev: si Trustlink Admin (#1) ang super admin.
+- Backend: `require_super_admin` sa `app/core/security.py`, `GET /business/admin/me` (pangalan at role), at "Super admins only" sa API reference.
+- Script: `venv/Scripts/python.exe scripts/create_admin.py --email ... --name "..." [--super]` para gumawa (tinatanong ang password nang dalawang beses at hindi ito ipinapakita). Gamitin ang `--promote [--super]` para palitan ang role. Bawal gawing admin ang isang business account, at bawal i-demote ang huling super admin.
+- Frontend: `useAdminAccess('super')` para sa mga page na super admin lang, at `superOnly` sa sidebar. Ang "Full access" sa sidebar ay "Super admin" o "Admin" na.
+- Tests: `backend/tests/test_admin_roles.py`.
+
 **Dalawang bagong admin menu: API reference at Documents**
 - **API reference (`/admin-api`):** listahan ng lahat ng endpoint (129), kinukuha nang live mula sa `/openapi.json`.
   - Naka-grupo ayon sa tag (auth, requirements, business, notifications, messages, meta), may search, at may link papunta sa `/docs`.

@@ -104,3 +104,10 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return current_user
+
+
+def require_super_admin(current_user: User = Depends(require_admin)) -> User:
+    """Admin team, platform rules, audit log, backups and exports."""
+    if current_user.admin_role != "super_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required")
+    return current_user

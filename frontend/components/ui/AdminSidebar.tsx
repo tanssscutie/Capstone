@@ -7,6 +7,7 @@
 import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { color, font, fontSize, letterSpacing, space, radius } from './tokens';
+import { useAdminRole } from '../../lib/useAdminRole';
 
 type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes' | 'settings' | 'api' | 'files';
 
@@ -14,6 +15,8 @@ export const ADMIN_NAV_ITEMS: {
   label: string;
   href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests' | '/admin-documents' | '/admin-api' | '/admin-settings';
   glyph: NavGlyphKind;
+  /** Shown to super admins only (the page checks it too). */
+  superOnly?: boolean;
 }[] = [
   { label: 'Dashboard', href: '/admin', glyph: 'dashboard' },
   { label: 'Businesses', href: '/admin-businesses', glyph: 'businesses' },
@@ -98,6 +101,7 @@ function NavGlyph({ kind, tone }: { kind: NavGlyphKind; tone: string }) {
 export function AdminSidebar({ onLogout }: { onLogout: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const role = useAdminRole();
   return (
     <View style={styles.sidebar}>
       <View>
@@ -113,7 +117,7 @@ export function AdminSidebar({ onLogout }: { onLogout: () => void }) {
 
         <Text style={styles.navHeading}>Manage</Text>
         <View style={styles.navSection}>
-          {ADMIN_NAV_ITEMS.map((item) => {
+          {ADMIN_NAV_ITEMS.filter((item) => !item.superOnly || role === 'super_admin').map((item) => {
             const active = pathname === item.href;
             return (
               <Pressable
@@ -139,7 +143,7 @@ export function AdminSidebar({ onLogout }: { onLogout: () => void }) {
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.identityName} numberOfLines={1}>Administrator</Text>
-            <Text style={[styles.identityRole, styles.dimmed]} numberOfLines={1}>Full access</Text>
+            <Text style={[styles.identityRole, styles.dimmed]} numberOfLines={1}>{role === 'super_admin' ? 'Super admin' : role === 'admin' ? 'Admin' : ''}</Text>
           </View>
         </View>
         <Pressable onPress={onLogout} style={({ pressed }) => [styles.logoutButton, pressed && styles.navItemActive]}>
@@ -153,6 +157,7 @@ export function AdminSidebar({ onLogout }: { onLogout: () => void }) {
 export function AdminMobileNav({ onLogout }: { onLogout: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const role = useAdminRole();
   return (
     <View style={styles.mobileBar}>
       <View style={styles.mobileTopRow}>
@@ -165,7 +170,7 @@ export function AdminMobileNav({ onLogout }: { onLogout: () => void }) {
         </Pressable>
       </View>
       <View style={styles.mobileTabs}>
-        {ADMIN_NAV_ITEMS.map((item) => {
+        {ADMIN_NAV_ITEMS.filter((item) => !item.superOnly || role === 'super_admin').map((item) => {
           const active = pathname === item.href;
           return (
             <Pressable key={item.href} onPress={() => router.push(item.href)} style={styles.mobileTab}>

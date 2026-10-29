@@ -258,6 +258,14 @@ def review_change_request(request_id: int, payload: ChangeRequestReview, admin: 
     change_request_service.review(request_id, admin.id, payload)
 
 
+@router.get("/admin/me")
+def admin_me(admin: User = Depends(require_admin)):
+    """The signed-in administrator and their role — the admin frontend shows
+    super-admin pages only to a super admin (the routes check it again)."""
+    return {"id": admin.id, "name": admin.business_name, "email": admin.email,
+            "admin_role": admin.admin_role or "admin"}
+
+
 @router.get("/admin/whoami", status_code=status.HTTP_204_NO_CONTENT)
 def admin_whoami(_admin: User = Depends(require_admin)):
     """Existence check for the admin frontend's auth guard — 204 if the

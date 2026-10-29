@@ -82,6 +82,7 @@ app.include_router(api_router)
 # Who can call each endpoint — the strictest auth dependency the route uses —
 # added to /openapi.json as "x-access", for the admin API reference page.
 _ACCESS = [
+    ("require_super_admin", "Super admins only"),
     ("require_admin", "Admins only"),
     ("require_buyer", "Verified buyers"),
     ("require_seller", "Verified sellers"),

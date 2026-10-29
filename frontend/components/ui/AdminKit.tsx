@@ -21,21 +21,24 @@ import { AdminSidebar, AdminMobileNav } from './AdminSidebar';
 import { checkAdminAccess, openAdminDocumentFile } from '../../lib/api/admin';
 import type { DocumentUploadOut } from '../../lib/api/business';
 import { logout, me } from '../../lib/api/auth';
+import { loadAdminRole } from '../../lib/useAdminRole';
 
 /* ─── Access gate ───────────────────────────────────── */
 
 export type AdminAccess = 'CHECKING' | 'GRANTED' | 'DENIED';
 
-/** Checks is_admin once on mount; a non-admin is sent to /admin-login. */
-export function useAdminAccess(): AdminAccess {
+/** Checks is_admin once on mount; a non-admin is sent to /admin-login. With
+ *  'super', an admin who isn't a super admin is sent back to the dashboard. */
+export function useAdminAccess(level: 'admin' | 'super' = 'admin'): AdminAccess {
   const router = useRouter();
   const [access, setAccess] = useState<AdminAccess>('CHECKING');
   useEffect(() => {
     let cancelled = false;
-    checkAdminAccess().then((ok) => {
+    checkAdminAccess().then(async (isAdmin) => {
+      const ok = isAdmin && (level === 'admin' || (await loadAdminRole()) === 'super_admin');
       if (cancelled) return;
       setAccess(ok ? 'GRANTED' : 'DENIED');
-      if (!ok) router.replace('/admin-login');
+      if (!ok) router.replace(isAdmin ? '/admin' : '/admin-login');
       // The app layout skips admin routes, so the admin's own Light/Dark
       // choice (admin Settings) is applied here.
       if (ok) me().then((u) => !cancelled && applyTheme(u.theme)).catch(() => {});
@@ -43,7 +46,7 @@ export function useAdminAccess(): AdminAccess {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, level]);
   return access;
 }
 

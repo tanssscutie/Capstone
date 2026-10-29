@@ -24,6 +24,11 @@ class User(SQLModel, table=True):
     email: Optional[str] = Field(default=None, index=True, unique=True)
     is_active: bool = True
     is_admin: bool = False
+    # Admins only: "admin" or "super_admin" (null for businesses). A super
+    # admin also manages the admin team, platform rules, the audit log and
+    # backups — see security.require_super_admin. is_admin stays the gate for
+    # every admin page; this only narrows some of them further.
+    admin_role: Optional[str] = Field(default=None, max_length=20)
     # Account type, fixed at sign-up: a "buyer" posts requirements and awards
     # them, a "seller" (supplier) browses open requirements and submits
     # quotations — never both on one account. Admins are is_admin accounts and
