@@ -28,6 +28,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from app.core import platform_settings
 from app.core.categories import item_name
 from app.core.clock import now_ph
 from app.core.config import settings
@@ -278,7 +279,7 @@ def draft(requirement_id: int, seller_id: int) -> QuotationDraftOut:
             raise AlreadyQuoted()
         seller = session.get(User, seller_id)
         specs = _specs(req)
-        if not settings.GEMINI_API_KEY:
+        if not platform_settings.ai_enabled():
             return _template(req, specs, "AI drafting isn't set up, so this is a template without prices.")
         prompt = build_prompt(req, specs, seller, _own_past_prices(session, seller_id, req))
 

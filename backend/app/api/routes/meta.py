@@ -2,6 +2,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends
 
+from app.core import platform_settings
 from app.core.addresses import ncr_addresses_out
 from app.core.config import settings
 from app.core.categories import ATTRIBUTES, category_tree_out
@@ -28,7 +29,13 @@ def list_attributes():
 # Platform rules the UI explains (minimum quotations etc.) — from .env.
 @router.get("/rules")
 def market_rules():
-    return {"min_quotations": settings.MIN_QUOTATIONS_TO_RELEASE, "auto_extend_days": settings.AUTO_EXTEND_DAYS}
+    return {"min_quotations": platform_settings.min_quotations(), "auto_extend_days": platform_settings.auto_extend_days()}
+
+
+@router.get("/banner")
+def maintenance_banner():
+    """The maintenance banner a super admin set — empty when there is none."""
+    return {"message": platform_settings.maintenance_banner()}
 
 
 # Metro Manila cities -> barangays -> ZIP codes, for the delivery address form.

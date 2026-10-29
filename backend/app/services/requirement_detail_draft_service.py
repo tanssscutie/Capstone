@@ -20,6 +20,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.core import platform_settings
 from app.core.config import settings
 from app.schemas.requirement import DetailDraftOut, DetailDraftRequest
 
@@ -123,7 +124,7 @@ def _ask_gemini(prompt: str) -> Optional[_AiDetail]:
 
 
 def draft(data: DetailDraftRequest) -> DetailDraftOut:
-    if not settings.GEMINI_API_KEY:
+    if not platform_settings.ai_enabled():
         return DetailDraftOut(text=template(data), source="template",
                               message="AI writing isn't set up, so this is a starting template. Edit it to fit.")
     ai = _ask_gemini(build_prompt(data))

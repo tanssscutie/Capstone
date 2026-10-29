@@ -2,8 +2,8 @@
 // Admin Settings: the admin's own account (appearance — light/dark/system —
 // and password), and a read-only view of the platform rules in force and
 // which services are switched on (GET /business/admin/system-status). The
-// rules themselves live in the server's .env, so they're shown, not edited
-// here. Same shell as the other admin pages.
+// rules default to the server's .env; super admins change them on the
+// Platform rules page (admin-rules.tsx), so they're only shown here. Same shell as the other admin pages.
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -105,7 +105,7 @@ export default function AdminSettingsRoute() {
             <>
               <AdminCard>
                 <Text style={styles.sectionLabel}>Platform rules</Text>
-                <Text style={styles.muted}>In force for every business. Set in the server configuration (.env), so they're shown here, not edited.</Text>
+                <Text style={styles.muted}>In force for every business. The defaults come from the server configuration (.env); a super admin can change them under Platform rules.</Text>
                 <InfoGrid
                   items={[
                     { label: 'Quotations needed to open', value: `${status.min_quotations_to_release}` },

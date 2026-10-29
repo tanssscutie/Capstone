@@ -17,6 +17,7 @@ import time
 
 from pydantic import BaseModel
 
+from app.core import platform_settings
 from app.core.categories import CATEGORIES
 from app.core.config import settings
 
@@ -40,7 +41,7 @@ class _CategorySuggestion(BaseModel):
 
 
 def suggest_category(title: str, scope: str) -> str | None:
-    if not settings.GEMINI_API_KEY:
+    if not platform_settings.ai_enabled():
         return None
     title = (title or "").strip()
     scope = (scope or "").strip()

@@ -9,11 +9,11 @@ import { usePathname, useRouter } from 'expo-router';
 import { color, font, fontSize, letterSpacing, space, radius } from './tokens';
 import { useAdminRole } from '../../lib/useAdminRole';
 
-type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes' | 'settings' | 'api' | 'files' | 'team';
+type NavGlyphKind = 'dashboard' | 'businesses' | 'requirements' | 'reports' | 'changes' | 'settings' | 'api' | 'files' | 'team' | 'rules';
 
 export const ADMIN_NAV_ITEMS: {
   label: string;
-  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests' | '/admin-documents' | '/admin-api' | '/admin-team' | '/admin-settings';
+  href: '/admin' | '/admin-businesses' | '/admin-requirements' | '/admin-reports' | '/admin-change-requests' | '/admin-documents' | '/admin-api' | '/admin-team' | '/admin-rules' | '/admin-settings';
   glyph: NavGlyphKind;
   /** Shown to super admins only (the page checks it too). */
   superOnly?: boolean;
@@ -26,6 +26,7 @@ export const ADMIN_NAV_ITEMS: {
   { label: 'Documents', href: '/admin-documents', glyph: 'files' },
   { label: 'API reference', href: '/admin-api', glyph: 'api' },
   { label: 'Admin team', href: '/admin-team', glyph: 'team', superOnly: true },
+  { label: 'Platform rules', href: '/admin-rules', glyph: 'rules', superOnly: true },
   { label: 'Settings', href: '/admin-settings', glyph: 'settings' },
 ];
 
@@ -66,6 +67,18 @@ function NavGlyph({ kind, tone }: { kind: NavGlyphKind; tone: string }) {
       <View style={[glyph.box, glyph.codeRow]}>
         <View style={[glyph.chevron, glyph.chevronLeft, { borderColor: tone }]} />
         <View style={[glyph.chevron, glyph.chevronRight, { borderColor: tone }]} />
+      </View>
+    );
+  }
+  if (kind === 'rules') {
+    // Two sliders: a line each, with a knob at a different spot.
+    return (
+      <View style={[glyph.box, { gap: 4 }]}>
+        {[3, 8].map((left) => (
+          <View key={left} style={[glyph.sliderLine, { backgroundColor: tone }]}>
+            <View style={[glyph.sliderKnob, { borderColor: tone, left }]} />
+          </View>
+        ))}
       </View>
     );
   }
@@ -214,6 +227,8 @@ const glyph = StyleSheet.create({
   cogTooth: { position: 'absolute', width: 15, height: 3, borderRadius: 1 },
   cogRing: { width: 11, height: 11, borderRadius: 6, borderWidth: 2.5, backgroundColor: color.primary },
   codeRow: { flexDirection: 'row', gap: 3 },
+  sliderLine: { width: 14, height: 1.5, borderRadius: 1, justifyContent: 'center' },
+  sliderKnob: { position: 'absolute', width: 5, height: 5, borderRadius: 3, borderWidth: 1.5, backgroundColor: color.primary },
   teamRow: { flexDirection: 'row', gap: 1, alignItems: 'flex-end' },
   teamHead: { width: 5, height: 5, borderRadius: 3, borderWidth: 1.5, marginBottom: 1 },
   teamBody: { width: 7, height: 5, borderWidth: 1.5, borderBottomWidth: 0, borderTopLeftRadius: 4, borderTopRightRadius: 4 },

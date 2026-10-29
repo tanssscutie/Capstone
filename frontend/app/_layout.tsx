@@ -11,6 +11,7 @@ import {
 } from '@expo-google-fonts/dm-sans';
 import { DMMono_400Regular, DMMono_500Medium } from '@expo-google-fonts/dm-mono';
 import AppHeader, { APP_HEADER_RESERVED_HEIGHT } from '../components/ui/AppHeader';
+import { MaintenanceBanner } from '../components/ui/MaintenanceBanner';
 import { me, isLoggedIn } from '../lib/api/auth';
 import { getVerificationStatus, getDashboardStats } from '../lib/api/business';
 import { notificationsApi } from '../lib/api/notifications';
@@ -112,6 +113,7 @@ export default function RootLayout() {
        *  content while scrolling — this reserves its expanded height so page content
        *  starts below it instead of sliding under it. */}
       <View style={{ flex: 1, paddingTop: headerShown ? APP_HEADER_RESERVED_HEIGHT : 0 }}>
+        {headerShown && <MaintenanceBanner />}
         <Stack screenOptions={{ headerShown: false }} />
       </View>
     </View>

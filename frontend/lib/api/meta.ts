@@ -57,3 +57,9 @@ export async function listCategories(): Promise<CategoryOut[]> {
 export async function suggestAttribute(label: string, category: string, itemCode: string): Promise<SpecSuggestionOut> {
   return api.post<SpecSuggestionOut>('/meta/suggest-attribute', { label, category, item_code: itemCode || null });
 }
+
+/** GET /meta/banner — the maintenance banner a super admin set; empty when none. */
+export async function getMaintenanceBanner(): Promise<string> {
+  const r = await api.get<{ message: string }>('/meta/banner', { auth: false });
+  return r.message ?? '';
+}

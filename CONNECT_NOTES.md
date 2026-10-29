@@ -64,6 +64,21 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Super admin (3/6): Platform rules na nae-edit (`/admin-rules`, super admin lang)**
+- Mga rule:
+  - quotations needed to release (1–20)
+  - auto-extension days (1–30)
+  - withdrawal window days (7–365)
+  - AI features on/off
+  - maintenance banner (hanggang 300 characters)
+- Ang naka-save na value (bagong table na `PlatformSetting`) ang nananaig sa `.env` default. Ibinabalik ng "Reset to default" ang `.env`. Ipinapakita ng page ang default at kung binago na ito ("Changed").
+- Saan ginagamit:
+  - `app/core/platform_settings.py` (`min_quotations()`, `auto_extend_days()`, `withdrawal_window_days()`, `ai_enabled()`, `maintenance_banner()`) ang ginagamit na ngayon ng requirement_service, withdrawal_policy, meta rules, system-status at mga data set.
+  - Ang AI ay gumagana lang kapag may Gemini key **at** naka-On ang switch.
+  - May 5 segundong cache, at kapag nag-error ang database, babalik ito sa default.
+- Ang maintenance banner ay galing sa public na `GET /meta/banner`, at lumalabas sa ilalim ng header ng bawat page para sa naka-login (`components/ui/MaintenanceBanner.tsx`).
+- Tests: `backend/tests/test_platform_rules.py`.
+
 **Super admin (2/6): Admin team page (`/admin-team`, super admin lang)**
 - Listahan ng lahat ng admin. Puwedeng gumawa ng bago (pangalan, email, password, role), Make super admin / Make admin, Disable / Enable, at Reset password. Ang temporary password ay ipinapakita nang isang beses lang, para iabot sa admin nang pribado.
 - Mga proteksyon: hindi puwedeng i-demote o i-disable ang huling aktibong super admin, at walang admin na makakapag-disable ng sarili niyang account. Ang disabled na super admin ay hindi binibilang.

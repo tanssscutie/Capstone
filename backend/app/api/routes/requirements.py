@@ -12,6 +12,7 @@ from app.services import category_suggestion_service
 from app.services import quotation_draft_service
 from app.services import requirement_detail_draft_service
 from app.services.document_request_service import document_request_service
+from app.core import platform_settings
 from app.services.closeout_service import closeout_service
 from app.services.delivery_schedule_service import delivery_schedule_service
 from app.services.fulfillment_service import fulfillment_service
@@ -117,7 +118,7 @@ def _handle_service_errors(exc: Exception):
     if isinstance(exc, E.NotEnoughQuotations):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"At least {settings.MIN_QUOTATIONS_TO_RELEASE} quotations are needed before awarding",
+            detail=f"At least {platform_settings.min_quotations()} quotations are needed before awarding",
         )
     if isinstance(exc, E.QuestionNotFound):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")

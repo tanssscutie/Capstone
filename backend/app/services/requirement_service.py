@@ -6,6 +6,7 @@ from typing import List
 from fastapi import HTTPException, UploadFile
 from sqlmodel import Session, select
 
+from app.core import platform_settings
 from app.core import addresses, file_crypto
 from app.core.file_validation import check_contents, validate_upload
 from app.core.categories import ATTRIBUTES, OTHER_ITEM_CODE, get_item_specs, item_name, validate_item_specs
@@ -1061,7 +1062,7 @@ class RequirementService:
                 # of the minimum, quotations are never opened — the closing
                 # is extended once, then the requirement is archived.
                 active = repo.list_active_quotations(session, req.id)
-                if len(active) >= settings.MIN_QUOTATIONS_TO_RELEASE:
+                if len(active) >= platform_settings.min_quotations():
                     self._release_one(session, req)
                     released_count += 1
                 elif req.auto_extended_at is None:
@@ -1072,8 +1073,8 @@ class RequirementService:
         return released_count
 
     def _auto_extend(self, session: Session, req: Requirement, active: list) -> None:
-        minimum = settings.MIN_QUOTATIONS_TO_RELEASE
-        req.closes_at = max(req.closes_at, now_ph()) + timedelta(days=settings.AUTO_EXTEND_DAYS)
+        minimum = platform_settings.min_quotations()
+        req.closes_at = max(req.closes_at, now_ph()) + timedelta(days=platform_settings.auto_extend_days())
         req.auto_extended_at = now_ph()
         repo.update_requirement(session, req)
         _log(session, "AUTO_EXTENDED", req.id, None, None, {
@@ -1100,7 +1101,7 @@ class RequirementService:
     def _archive_insufficient(self, session: Session, req: Requirement, active: list) -> None:
         """Still short after the extension: archived, every quotation voided
         unopened — no price is ever revealed."""
-        minimum = settings.MIN_QUOTATIONS_TO_RELEASE
+        minimum = platform_settings.min_quotations()
         for q in active:
             q.status = "voided"
             repo.update_quotation(session, q)
@@ -1447,7 +1448,7 @@ class RequirementService:
             if not quotation or quotation.requirement_id != requirement_id or quotation.status != "released":
                 raise InvalidQuotation()
             released = [q for q in repo.list_all_quotations_for_requirement(session, requirement_id) if q.status == "released"]
-            if len(released) < settings.MIN_QUOTATIONS_TO_RELEASE:
+            if len(released) < platform_settings.min_quotations():
                 raise NotEnoughQuotations()
 
             req.status = "award_pending"

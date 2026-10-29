@@ -426,3 +426,30 @@ export function setAdminActive(id: number, active: boolean): Promise<AdminTeamMe
 export function resetAdminPassword(id: number): Promise<{ id: number; temporary_password: string }> {
   return api.post<{ id: number; temporary_password: string }>(`/business/admin/team/${id}/reset-password`, {});
 }
+
+/* ─── Platform rules (super admins only) ─── */
+
+export interface PlatformRule {
+  key: string;
+  label: string;
+  type: 'int' | 'bool' | 'text';
+  help: string;
+  min: number | null;
+  max: number | null;
+  max_length: number | null;
+  value: number | boolean | string;
+  default: number | boolean | string;
+  overridden: boolean;
+}
+
+export function listPlatformRules(): Promise<PlatformRule[]> {
+  return api.get<PlatformRule[]>('/business/admin/platform-rules');
+}
+
+export function setPlatformRule(key: string, value: number | boolean | string): Promise<PlatformRule[]> {
+  return api.put<PlatformRule[]>(`/business/admin/platform-rules/${key}`, { value });
+}
+
+export function resetPlatformRule(key: string): Promise<PlatformRule[]> {
+  return api.delete<PlatformRule[]>(`/business/admin/platform-rules/${key}`);
+}

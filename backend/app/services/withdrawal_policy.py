@@ -23,6 +23,7 @@ from typing import List, Optional
 
 from sqlmodel import Session, func, select
 
+from app.core import platform_settings
 from app.core import file_crypto
 from app.core.clock import now_ph
 from app.core.file_validation import validate_upload
@@ -32,7 +33,7 @@ from app.models.user import User
 from app.models.withdrawal_strike import WithdrawalStrike
 from app.repositories import notification_repository as notif_repo
 
-WINDOW_DAYS = 90
+WINDOW_DAYS = 90  # default; the rule in force is platform_settings.withdrawal_window_days()
 AUTO_REPORT_PREFIX = "Automatic:"
 REPORT_REASON = "WITHDRAWALS"
 
@@ -69,13 +70,13 @@ def reason_label(code: str) -> str:
 
 
 def _recent(session: Session, user_id: int) -> int:
-    since = now_ph() - timedelta(days=WINDOW_DAYS)
+    since = now_ph() - timedelta(days=platform_settings.withdrawal_window_days())
     return session.exec(select(func.count()).select_from(WithdrawalStrike).where(
         WithdrawalStrike.user_id == user_id, WithdrawalStrike.created_at >= since)).one()
 
 
 def recent_strikes(session: Session, user_id: int) -> List[WithdrawalStrike]:
-    since = now_ph() - timedelta(days=WINDOW_DAYS)
+    since = now_ph() - timedelta(days=platform_settings.withdrawal_window_days())
     return list(session.exec(select(WithdrawalStrike).where(
         WithdrawalStrike.user_id == user_id, WithdrawalStrike.created_at >= since,
     ).order_by(WithdrawalStrike.created_at.desc())).all())
@@ -86,7 +87,7 @@ def preview(session: Session, user_id: int) -> dict:
     so_far = _recent(session, user_id)
     kind, text = CONSEQUENCES[min(so_far + 1, 3)]
     return {"withdrawals_so_far": so_far, "next_number": so_far + 1, "next": kind, "message": text,
-            "window_days": WINDOW_DAYS,
+            "window_days": platform_settings.withdrawal_window_days(),
             "reasons": [{"code": c, "label": l} for c, l in REASONS.items()]}
 
 
@@ -139,14 +140,14 @@ def record(session: Session, req: Requirement, quotation_id: int, user_id: int, 
         moderation_service.apply(
             session, admin_id, user_id, "warn",
             f"{AUTO_REPORT_PREFIX} you withdrew your sealed quotation on {where} (reason: {why}). "
-            f"A second withdrawal within {WINDOW_DAYS} days flags your account as subject for suspension.",
+            f"A second withdrawal within {platform_settings.withdrawal_window_days()} days flags your account as subject for suspension.",
             always_notify=True,
         )
         return n
 
     stage = "suspension" if n == 2 else "ban"
     recommended = RECOMMENDED[min(n, 3)]
-    details = (f"{AUTO_REPORT_PREFIX} {n} quotations withdrawn within {WINDOW_DAYS} days "
+    details = (f"{AUTO_REPORT_PREFIX} {n} quotations withdrawn within {platform_settings.withdrawal_window_days()} days "
                f"(latest: {req.ref_code}, reason: {why}). Subject for {stage} — review the withdrawals "
                "and decide: dismiss, warn, suspend or ban.")
     report = session.exec(select(BusinessReport).where(
@@ -166,7 +167,7 @@ def record(session: Session, req: Requirement, quotation_id: int, user_id: int, 
         session, user_id=user_id, type_="VERIFICATION", category="activity",
         title=f"Your account is subject for {stage}",
         detail=(f"You withdrew your sealed quotation on {where} (reason: {why}) — {n} withdrawals within "
-                f"{WINDOW_DAYS} days. An administrator will review your account and decide."),
+                f"{platform_settings.withdrawal_window_days()} days. An administrator will review your account and decide."),
         urgent=True, related_requirement_id=req.id, always=True,
     )
     return n

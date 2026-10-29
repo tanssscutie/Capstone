@@ -278,14 +278,14 @@ def admin_system_status(_admin: User = Depends(require_admin)):
     """Admin Settings: the platform rules in force and which services are
     switched on — read-only, they're set in the server configuration (.env).
     Booleans only: no key or password ever leaves the server."""
+    from app.core import platform_settings
     from app.core.config import settings
-    from app.services import withdrawal_policy
 
     return {
-        "min_quotations_to_release": settings.MIN_QUOTATIONS_TO_RELEASE,
-        "auto_extend_days": settings.AUTO_EXTEND_DAYS,
-        "withdrawal_window_days": withdrawal_policy.WINDOW_DAYS,
-        "ai_enabled": bool(settings.GEMINI_API_KEY),
+        "min_quotations_to_release": platform_settings.min_quotations(),
+        "auto_extend_days": platform_settings.auto_extend_days(),
+        "withdrawal_window_days": platform_settings.withdrawal_window_days(),
+        "ai_enabled": platform_settings.ai_enabled(),
         "email_enabled": bool(settings.SMTP_HOST),
         "files_encrypted": bool(settings.FILE_ENCRYPTION_KEY),
     }

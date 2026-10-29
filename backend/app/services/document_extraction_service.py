@@ -46,6 +46,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.core import platform_settings
 from app.core.config import settings
 
 logger = logging.getLogger("trustlink.document_extraction")
@@ -145,7 +146,7 @@ def _shrink_image(file_bytes: bytes, mime_type: str) -> tuple[bytes, str]:
 
 
 def extract_id_number(doc_type: str, file_bytes: bytes, mime_type: str) -> str | None:
-    if not settings.GEMINI_API_KEY:
+    if not platform_settings.ai_enabled():
         return None
     hint = DOC_TYPE_ID_HINT.get(doc_type)
     if not hint:
@@ -248,7 +249,7 @@ def _ask_gemini(prompt: str, file_bytes: bytes, mime_type: str) -> Optional[_Doc
 
 def _check(expected: str, short: str, noun: str, id_hint: Optional[str], file_bytes: bytes, mime_type: str) -> DocumentCheck:
     mime_type = (mime_type or "").lower()
-    if not settings.GEMINI_API_KEY or mime_type not in CHECKABLE_MIME:
+    if not platform_settings.ai_enabled() or mime_type not in CHECKABLE_MIME:
         return DocumentCheck(verdict=NOT_CHECKED)
     key = (hashlib.sha256(file_bytes).hexdigest(), expected, id_hint)
     if key in _CACHE:

@@ -22,7 +22,7 @@ from sqlmodel import Session, select
 from app.core import file_crypto
 from app.core.addresses import ncr_addresses_out
 from app.core.categories import category_tree_out
-from app.core.config import settings
+from app.core import platform_settings
 from app.core.database import engine
 from app.core.file_validation import validate_upload
 from app.models.admin_document import AdminDocument
@@ -207,9 +207,9 @@ class AdminLibraryService:
             "categories": category_tree_out(),
             "ncr_addresses": ncr_addresses_out(),
             "market_rules": [
-                {"label": "Quotations needed to release", "value": str(settings.MIN_QUOTATIONS_TO_RELEASE)},
-                {"label": "Auto-extension when fewer arrive", "value": f"{settings.AUTO_EXTEND_DAYS} days"},
-                {"label": "Withdrawal window counted", "value": f"{withdrawal_policy.WINDOW_DAYS} days"},
+                {"label": "Quotations needed to release", "value": str(platform_settings.min_quotations())},
+                {"label": "Auto-extension when fewer arrive", "value": f"{platform_settings.auto_extend_days()} days"},
+                {"label": "Withdrawal window counted", "value": f"{platform_settings.withdrawal_window_days()} days"},
                 {"label": "Order auto-confirms after marked completed",
                  "value": f"{fulfillment_service.AUTO_CONFIRM_DAYS} days"},
                 {"label": "Order marked Unconfirmed after no updates",
