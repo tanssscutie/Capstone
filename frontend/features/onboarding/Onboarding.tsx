@@ -1203,6 +1203,10 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
   // The file each slot holds now — a slow check for a file that's since been
   // replaced or removed must not act on the new one.
   const currentFile = useRef<Partial<Record<DocKind, string>>>({});
+  // What each number field holds right now, for a suggestion landing after a
+  // slow read — a state updater runs later, so it can't report back in time.
+  const idNumbers = useRef<Record<DocKind, string>>({ registration: '', bir: '', permit: '' });
+  idNumbers.current = { registration: registrationIdNumber, bir: birIdNumber, permit: mayorsPermitIdNumber };
 
   function resetCheck(kind: DocKind) {
     setRejected((prev) => ({ ...prev, [kind]: undefined }));
@@ -1251,29 +1255,19 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
         return;
       }
       const setValue = kind === 'registration' ? setRegistrationIdNumber : kind === 'bir' ? setBirIdNumber : setMayorsPermitIdNumber;
-      // Functional form, not a closed-over value — the extraction request can
-      // take a couple seconds, and if the business typed something into the
-      // field themselves while it was in flight, this must see THAT, not a
-      // stale snapshot from when the request started. Only ever fills a field
-      // that's still blank by the time the suggestion actually lands.
-      let applied = false;
-      setValue((current) => {
-        if (current.trim()) return current;
-        applied = true;
-        return suggestion;
-      });
-      // If the field already had text by the time the suggestion landed, the
-      // business typed it themselves — leave their caption alone rather than
-      // reporting an outcome about a value they didn't ask for.
-      if (applied) {
-        setExtractionStatus((prev) => ({ ...prev, [kind]: 'found' }));
-      } else {
+      // Only ever fills a field that's still blank when the suggestion lands.
+      // If the business typed something meanwhile, leave it and their caption
+      // alone rather than reporting an outcome about a value they didn't ask for.
+      if (idNumbers.current[kind].trim()) {
         setExtractionStatus((prev) => {
           const next = { ...prev };
           delete next[kind];
           return next;
         });
+        return;
       }
+      setValue(suggestion);
+      setExtractionStatus((prev) => ({ ...prev, [kind]: 'found' }));
     } catch {
       setExtractionStatus((prev) => ({ ...prev, [kind]: 'not_found' }));
     }

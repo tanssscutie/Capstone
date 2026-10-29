@@ -191,7 +191,7 @@ class AdminFlaggedBusinessOut(BaseModel):
     user_id: int
     role: Optional[str] = None  # buyer | seller
     business_name: str
-    mobile_number: str
+    mobile_number: Optional[str] = None  # null for a Google sign-up
     registered_name: Optional[str]
     business_type: Optional[str]
     industry_category: Optional[str]
@@ -209,7 +209,7 @@ class AdminBusinessOut(BaseModel):
     user_id: int
     role: Optional[str] = None  # buyer | seller
     business_name: str
-    mobile_number: str
+    mobile_number: Optional[str] = None  # null for a Google sign-up
     registered_name: Optional[str]
     business_type: Optional[str]
     industry_category: Optional[str]

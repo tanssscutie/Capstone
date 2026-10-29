@@ -64,6 +64,15 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**AI document check sa onboarding: na-test na sa browser + 2 bug fix**
+- Na-test ang DOCUMENTS screen gamit ang pansamantalang seller na "Demo Test Shop" (binura na pagkatapos):
+  - drawing sa DTI → tinanggihan, may paliwanag
+  - BIR image sa DTI → babala na mukhang BIR 2303 ito, may button na "Yes, this is my …"
+  - BIR image sa BIR → napuno ang TIN
+  - submit → sa admin, lumalabas ang resulta ng AI sa bawat dokumento
+- **Bug 1:** hindi lumalabas ang caption na "Suggested from your document" kahit napuno ang number. Sine-set ang `applied` sa loob ng state updater, na tumatakbo lang mamaya, kaya laging nabubura ang caption. Ngayon, ref na ng kasalukuyang value ang tinitingnan. Code: `features/onboarding/Onboarding.tsx` (`runExtraction`).
+- **Bug 2:** 500 at "Failed to fetch" ang Admin → Businesses kapag may account na walang login mobile (Google sign-up). Ginawang optional ang `mobile_number` sa `AdminBusinessOut` at `AdminFlaggedBusinessOut` (pati sa `lib/api/admin.ts`). Test: `backend/tests/test_admin_businesses.py`.
+
 **Home feed: tamang Location sa bawat post**
 - Bug: ang "Location" sa feed card ay `buyer.city` (city ng account ng nag-post), kaya lahat ng post ni Artz Works ay "Muntinlupa". Ngayon, `requirement.deliverySite.name` na (ang city ng post mismo). Pati ang "Why this matches" ay gumagamit na ng city ng post.
 - Ganoon din sa Requirement Detail (desktop): ang "Location" ay "Muntinlupa, Metro Manila" (city ng buyer) dati. Ngayon, city ng post + "Metro Manila". Tama na noon pa man ang phone layout ("Delivery site").

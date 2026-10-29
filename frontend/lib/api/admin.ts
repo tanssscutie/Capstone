@@ -9,7 +9,7 @@ export interface AdminFlaggedBusinessOut {
   user_id: number;
   role: AccountRole | null;
   business_name: string;
-  mobile_number: string;
+  mobile_number: string | null;
   registered_name: string | null;
   business_type: string | null;
   industry_category: string | null;
@@ -30,7 +30,7 @@ export interface AdminBusinessOut {
   user_id: number;
   role: AccountRole | null;
   business_name: string;
-  mobile_number: string;
+  mobile_number: string | null;
   registered_name: string | null;
   business_type: string | null;
   industry_category: string | null;
