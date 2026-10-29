@@ -498,3 +498,21 @@ export function getAuditLog(f: AuditFilters): Promise<AuditLogOut> {
 export function auditLogCsvPath(f: AuditFilters): string {
   return `/business/admin/audit-log.csv${auditQuery(f)}`;
 }
+
+/* ─── Backups & exports (super admins only) ─── */
+
+export interface BackupFolder {
+  name: string;
+  files: string[];
+  size_bytes: number;
+}
+
+export function listBackups(): Promise<BackupFolder[]> {
+  return api.get<BackupFolder[]>('/business/admin/backups');
+}
+
+export function runBackup(): Promise<{ name: string; uploaded_files: number; size_mb: number; finished_at: string }> {
+  return api.post('/business/admin/backups', {});
+}
+
+export type ExportKind = 'users' | 'requirements' | 'ledger';

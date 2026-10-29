@@ -64,6 +64,15 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Super admin (5/6): Backups & exports (`/admin-data`, super admin lang)**
+- **"Run backup now":** pinapatakbo ang `scripts/backup.py` (database at encrypted uploads, papunta sa `backend/backups/<petsa_oras>/`). Nakalista ang mga backup folder pero **hindi kailanman nada-download** mula sa app, dahil may personal data ang mga ito. Kapag pumalya (halimbawa, walang mysqldump), 503 ito at ipinapakita ang mensahe ng script. Sa dev, gumana: `2026-10-29_110635`, 11.7 MB.
+- **CSV exports:**
+  - users: walang password
+  - requirements: bilang ng quotation at kung sino ang nanalo kapag awarded na, pero **walang presyo o laman ng quotation**
+  - ledger: event, requirement, actor, oras at hash chain, **walang payload**
+- Nakatala sa audit log ang bawat backup at export.
+- Code: `services/admin_data_service.py`, `api/routes/admin_data.py`, `app/admin-data.tsx`. Tests: `backend/tests/test_admin_data.py` (walang sealed figure o password hash sa CSV, at hindi pinapatakbo ng test ang totoong backup).
+
 **Super admin (4/6): Admin audit log (`/admin-audit`, super admin lang)**
 - Nakatala kung sinong admin, ano ang ginawa, kanino, at kailan (bagong table na `AdminAction`). Ito ang mga itinatala:
   - approve o reject ng verification
