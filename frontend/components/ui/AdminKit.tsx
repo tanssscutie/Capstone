@@ -298,6 +298,8 @@ export function InfoGrid({ items }: { items: { label: string; value: string }[] 
 /* ─── Documents + review ────────────────────────────── */
 
 export const DOC_TYPE_LABELS: Record<string, string> = {
+  VALID_ID: 'Valid ID',
+  SELFIE_WITH_ID: 'Selfie with ID',
   DTI: 'DTI Certificate',
   SEC: 'SEC Certificate',
   BIR: 'BIR Certificate',
@@ -335,6 +337,15 @@ export function DocumentRow({ doc, onError }: { doc: DocumentUploadOut; onError:
         <Text style={styles.docType}>{DOC_TYPE_LABELS[doc.doc_type] ?? doc.doc_type}</Text>
         <Text style={styles.docMeta}>Uploaded {formatDate(doc.uploaded_at)}</Text>
         {!passed && !!doc.validation_notes && <Text style={styles.docNotes}>{doc.validation_notes}</Text>}
+        {doc.doc_type === 'VALID_ID' && (
+          <Text style={styles.docNotes}>
+            {doc.id_type ?? 'ID'}{doc.declared_id_number ? ` · ${doc.declared_id_number}` : ''}
+            {doc.id_name ? ` · Name on ID: ${doc.id_name} (contact person: ${doc.declared_owner_name}) — ${doc.id_match === 'match' ? 'matches' : doc.id_match === 'partial' ? 'PARTLY matches, check it' : 'not checked, compare by eye'}` : ' · Name not read — compare with the contact person by eye'}
+          </Text>
+        )}
+        {doc.doc_type === 'SELFIE_WITH_ID' && (
+          <Text style={styles.docNotes}>Face vs ID photo: {doc.face_match === 'match' ? 'matches (AI)' : 'not checked — compare by eye'}</Text>
+        )}
         {doc.ai_check !== 'expected' && (
           <Text style={[styles.docNotes, { color: doc.ai_check === 'other_document' ? color.warning : color.inkMuted }]}>
             {doc.ai_check === 'other_document' ? 'AI check: may be a different document' : 'AI check: not auto-checked'}

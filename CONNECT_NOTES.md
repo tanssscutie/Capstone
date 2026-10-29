@@ -64,6 +64,22 @@ npx expo start --web
 
 # Round 2 bago ang defense (branch `trustlink-updates`, base: `b91dffb`)
 
+**Identity check (frontend): magkaiba na ang Documents step ng buyer at seller**
+- **Buyer ("Verify your identity"):**
+  1. **Your identity:** pipili ng ID mula sa 16 na tinatanggap (may listahan din ng hindi tinatanggap), mag-a-upload ng litrato ng ID, mag-a-upload ng selfie na hawak ang parehong ID, at magche-check ng consent.
+  2. **Business documents (optional):** DTI/SEC, BIR at permit. Hindi ito kailangan para ma-verify, pero nakakataas ng tier.
+- **Seller ("Verify your business"):**
+  1. **Business documents:** malinaw kung alin ang required (DTI o SEC ayon sa business type, at BIR 2303) at alin ang optional (permit para sa Tier 3). Kapag iba ang pangalang nabasa sa DTI/SEC kaysa sa registered name, may babala.
+  2. **Your identity:** pareho ng sa buyer.
+- **Habang pumipili ng file:** sinusuri agad ang ID at ang selfie. Ang tinanggihan ay tinatanggal, at ipinapakita ang dahilan galing sa AI. Kapag pumasa ang ID, lumalabas ang "Name on the ID: …". Kapag down ang AI, nakasulat na admin ang titingin.
+- **Pagkakasunod ng upload:** ID, selfie, tapos business documents.
+- **Iba pang binago:**
+  - Arrival screen: tamang listahan ng na-submit.
+  - Verification status: may label na para sa ID at selfie.
+  - Admin document row: ID type, huling 4 digits, pangalan sa ID kumpara sa contact person, at face match.
+  - Privacy Notice: idinagdag ang ID at selfie check. Hindi itinaas ang `PRIVACY_POLICY_VERSION`, para hindi mag-consent ulit ang lahat. May hiwalay at tahasang consent checkbox ang ID check.
+- **Na-test sa totoong Gemini:** tinanggihan ang pekeng PhilSys na drawing ("a digital template or sample card, not an actual photo of a physical ID").
+
 **Identity check (backend): valid ID at selfie na hawak ang ID, strict**
 - **Bagong document types:** `VALID_ID` at `SELFIE_WITH_ID`.
   - **Buyer:** ito lang ang required. Optional ang DTI/SEC, BIR at Mayor's permit, para sa mas mataas na tier.

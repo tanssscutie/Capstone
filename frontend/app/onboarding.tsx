@@ -110,6 +110,21 @@ export default function OnboardingRoute() {
       // typed in for it on the DOCUMENTS step — validated client-side against the
       // same per-doc-type format the backend checks (see Onboarding.tsx's
       // ID_FORMAT_PATTERNS), so what lands here always passes that check.
+      // The identity check first: the selfie is compared with the ID on file.
+      for (const [doc, docType] of [[draft.idDoc, 'VALID_ID'], [draft.selfieDoc, 'SELFIE_WITH_ID']] as const) {
+        const file = doc ? pickedDocumentFiles.get(doc.id) : undefined;
+        if (!doc || !file) continue;
+        await uploadDocument({
+          docType,
+          declaredOwnerName: identityDraft.contactPerson,
+          declaredBusinessName: identityDraft.registeredName,
+          declaredIdNumber: '',
+          file,
+          fileName: doc.filename,
+          idType: docType === 'VALID_ID' ? draft.idType : undefined,
+        });
+      }
+
       const regKind = identityDraft.businessType === 'SOLE_PROP' ? 'DTI' : 'SEC';
       const uploads: Array<[typeof draft.registrationDoc, string, string, 'registration' | 'bir' | 'permit']> = [
         [draft.registrationDoc, regKind, draft.registrationIdNumber, 'registration'],
@@ -202,14 +217,15 @@ export default function OnboardingRoute() {
         )}
         <Onboarding
           step="DOCUMENTS"
+          role={role === 'buyer' || role === 'seller' ? role : null}
           identity={identity}
           operations={operations}
           onSubmit={(draft) => handleDocumentsSubmit(draft, identity, operations)}
           onBack={() => setStep('OPERATIONS')}
           onExtractDocument={async (docType, file) => {
             try {
-              const result = await extractDocumentFields(docType, file, file.name);
-              return { idNumber: result.id_number, verdict: result.verdict, message: result.message };
+              const result = await extractDocumentFields(docType, file, file.name, { registeredName: identity.registeredName });
+              return { idNumber: result.id_number, verdict: result.verdict, message: result.message, nameWarning: result.name_warning ?? null };
             } catch {
               // Assistive extraction is a convenience only — a failed call
               // (no key configured, network hiccup, etc.) just means no

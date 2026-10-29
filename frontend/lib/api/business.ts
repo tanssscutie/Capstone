@@ -17,6 +17,11 @@ export interface DocumentUploadOut {
    *  mismatch) | not_checked. Advisory for the admin; never verifies on its own. */
   ai_check: 'expected' | 'other_document' | 'not_checked';
   ai_check_note: string | null;
+  /** Identity check (VALID_ID / SELFIE_WITH_ID) only. */
+  id_type?: string | null;
+  id_name?: string | null;
+  id_match?: 'match' | 'partial' | 'mismatch' | 'unchecked' | null;
+  face_match?: 'match' | 'mismatch' | 'unchecked' | null;
   uploaded_at: string;
 }
 
@@ -141,6 +146,8 @@ export interface UploadDocumentInput {
   fileName: string;
   /** The AI check said it's a different document and the business confirmed it. */
   confirmMismatch?: boolean;
+  /** VALID_ID only: which ID (GET /meta/valid-ids). */
+  idType?: string;
 }
 
 /** POST /business/documents — multipart/form-data. */
@@ -153,6 +160,7 @@ export async function uploadDocument(input: UploadDocumentInput): Promise<Docume
   if (input.declaredExpiryDate) form.append('declared_expiry_date', input.declaredExpiryDate);
   form.append('file', input.file, input.fileName);
   if (input.confirmMismatch) form.append('confirm_mismatch', 'true');
+  if (input.idType) form.append('id_type', input.idType);
   return api.postForm<DocumentUploadOut>('/business/documents', form);
 }
 
@@ -162,6 +170,11 @@ export interface DocumentExtractionOut {
   verdict: DocumentVerdict;
   /** What to tell the business when it isn't (null when fine). */
   message: string | null;
+  /** DTI/SEC: when the name on the certificate differs from the registered name. */
+  name_warning?: string | null;
+  /** VALID_ID: the name read from the ID, and how it compares with the contact person. */
+  id_name?: string | null;
+  id_match?: 'match' | 'partial' | 'mismatch' | 'unchecked' | null;
 }
 
 /** POST /business/documents/extract — Assistive Document Extraction. A
@@ -169,11 +182,26 @@ export interface DocumentExtractionOut {
  *  never submits it directly. `id_number: null` just means nothing was
  *  confidently found (no Gemini key configured, unreadable image, etc.) —
  *  never surfaced as an error, the field is just left for manual entry. */
-export async function extractDocumentFields(docType: string, file: File | Blob, fileName: string): Promise<DocumentExtractionOut> {
+export async function extractDocumentFields(
+  docType: string, file: File | Blob, fileName: string,
+  extra: { idType?: string; personName?: string; registeredName?: string } = {},
+): Promise<DocumentExtractionOut> {
   const form = new FormData();
   form.append('doc_type', docType);
   form.append('file', file, fileName);
+  if (extra.idType) form.append('id_type', extra.idType);
+  if (extra.personName) form.append('person_name', extra.personName);
+  if (extra.registeredName) form.append('registered_name', extra.registeredName);
   return api.postForm<DocumentExtractionOut>('/business/documents/extract', form);
+}
+
+/** POST /business/documents/check-selfie — strict AI check that the selfie
+ *  shows this person holding the same ID. Nothing is saved. */
+export async function checkSelfie(selfie: File, idFile: File | null): Promise<DocumentExtractionOut> {
+  const form = new FormData();
+  form.append('selfie', selfie, selfie.name || 'selfie.jpg');
+  if (idFile) form.append('id_file', idFile, idFile.name || 'id.jpg');
+  return api.postForm<DocumentExtractionOut>('/business/documents/check-selfie', form);
 }
 
 /** POST /business/submit-for-verification */

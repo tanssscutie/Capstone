@@ -76,6 +76,7 @@ const SECTIONS: Section[] = [
     title: '6. Outside services that process your data',
     bullets: [
       'Google Gemini (Google LLC): when you upload a verification document, the image is sent to Google so the document number can be read and suggested to you. When you post a requirement, its title and detail may be sent to suggest a category, and if you press Write with AI, what you filled in on the Details step (category, item, title, specifications, quantity and budget) is sent to draft the Detail text. TrustLink does not save that draft; suggestions are optional and you always review them.',
+      'Google Gemini also checks the identity photos you upload at verification: the photo of your government ID (to confirm it is a real, current ID and to read the name, number, birthdate and expiry) and your selfie holding it (to confirm it shows you with that same ID). You agree to this check on the form before uploading. TrustLink keeps only the last four digits of the ID number; the photos are stored encrypted, seen only by TrustLink administrators, and used only to verify your account.',
       'Our email provider delivers verification codes and alert emails to your email address.',
       'Google Sign-In, if you choose to use it, shares your name and email address with us.',
     ],

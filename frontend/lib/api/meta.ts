@@ -63,3 +63,13 @@ export async function getMaintenanceBanner(): Promise<string> {
   const r = await api.get<{ message: string }>('/meta/banner', { auth: false });
   return r.message ?? '';
 }
+
+export interface ValidIdOut {
+  code: string;
+  name: string;
+}
+
+/** GET /meta/valid-ids — Philippine government IDs accepted for the identity check. */
+export async function listValidIds(): Promise<{ ids: ValidIdOut[]; not_accepted: string }> {
+  return api.get<{ ids: ValidIdOut[]; not_accepted: string }>('/meta/valid-ids', { auth: false });
+}

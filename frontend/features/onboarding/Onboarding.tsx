@@ -37,6 +37,8 @@ import type { Business, BusinessType, OnboardingStep, Attachment } from '../../l
 import { NCR_CITIES, NCR_PROVINCE } from '../../lib/data/philippines';
 import { OTHER_ITEM_CODE, itemsFor, useCategoryTree } from '../../lib/data/categories';
 import { isWebFilePickerSupported, pickWebFile } from '../../lib/pickWebFile';
+import { checkSelfie, extractDocumentFields } from '../../lib/api/business';
+import { listValidIds, type ValidIdOut } from '../../lib/api/meta';
 import { VALIDATION_ERROR_MARK, scrollToFirstError } from '../../lib/scrollToFirstError';
 
 /* ─── Draft shapes ──────────────────────────────────────
@@ -90,6 +92,10 @@ export interface DocumentsDraft {
   /** Slots where the AI check said "a different document" and the business
    *  confirmed it's right anyway — sent as confirm_mismatch on upload. */
   confirmedMismatch?: DocKind[];
+  /** Identity check (buyers and sellers): which ID, its photo, and a selfie holding it. */
+  idType?: string;
+  idDoc?: Attachment | null;
+  selfieDoc?: Attachment | null;
 }
 
 /** The three document slots on the DOCUMENTS step. */
@@ -101,6 +107,8 @@ export interface DocumentReading {
   idNumber: string | null;
   verdict: 'expected' | 'other_document' | 'not_a_document' | 'not_checked';
   message: string | null;
+  /** DTI/SEC: the certificate's name differs from the registered name. */
+  nameWarning?: string | null;
 }
 
 interface IdentityProps {
@@ -151,6 +159,8 @@ interface DocumentsProps {
    *  never submitted without the business seeing it first. Optional so this
    *  screen still works exactly as before if the route doesn't wire it up. */
   onExtractDocument?: (docType: string, file: File) => Promise<DocumentReading | null>;
+  /** A buyer needs only the identity check; business documents are optional. */
+  role?: 'buyer' | 'seller' | null;
 }
 
 interface ArrivalProps {
@@ -1200,7 +1210,163 @@ function DocumentUploadRow({
   );
 }
 
-function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument }: DocumentsProps & { reportContinue: (fn: () => void) => void }) {
+
+/* ─── Identity check: a valid ID and a selfie holding it ─── */
+
+interface IdentityCheckValue {
+  idType: string;
+  idDoc: Attachment | null;
+  selfieDoc: Attachment | null;
+  consent: boolean;
+  busy: boolean;
+}
+
+type CheckState = { status: 'idle' | 'checking' | 'ok' | 'unchecked' | 'refused'; message?: string | null };
+
+function PhotoSlot({ title, help, doc, state, disabledHint, onPick, onRemove }: {
+  title: string; help: string; doc: Attachment | null; state: CheckState; disabledHint: string | null;
+  onPick: () => void; onRemove: () => void;
+}) {
+  return (
+    <View>
+      <View style={styles.cardHeaderRow}>
+        <Text style={styles.fieldLabel}>{title}</Text>
+        <View style={[styles.tag, styles.tagRequired]}><Text style={[styles.tagLabel, styles.tagLabelRequired]}>Required</Text></View>
+      </View>
+      <Text style={styles.fieldCaption}>{help}</Text>
+      {doc ? (
+        <View style={styles.docFileCard}>
+          <View style={styles.docFileIcon} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.docFileName} numberOfLines={1}>{doc.filename}</Text>
+            <Text style={styles.docFileMeta}>Photo · {(doc.sizeBytes / 1_000_000).toFixed(1)} MB</Text>
+          </View>
+          <Pressable onPress={onRemove} style={styles.docFileRemove} hitSlop={8}><XGlyph tone={color.inkFaint} /></Pressable>
+        </View>
+      ) : disabledHint ? (
+        <Text style={styles.quietNote}>{disabledHint}</Text>
+      ) : (
+        <Pressable onPress={onPick} style={styles.docAddButton}><Text style={styles.docAddButtonLabel}>+ Add a photo</Text></Pressable>
+      )}
+      {state.status === 'checking' && <Text style={styles.fieldCaption}>Checking your photo…</Text>}
+      {state.status === 'ok' && !!state.message && <Text style={styles.checkOk}>✓ {state.message}</Text>}
+      {state.status === 'unchecked' && <Text style={styles.fieldCaption}>{state.message}</Text>}
+      {state.status === 'refused' && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>{state.message}</Text>}
+    </View>
+  );
+}
+
+function IdentityCheckSection({ index, personName, attempted, onChange }: {
+  index: number; personName: string; attempted: boolean; onChange: (v: IdentityCheckValue) => void;
+}) {
+  const [ids, setIds] = useState<ValidIdOut[]>([]);
+  const [notAccepted, setNotAccepted] = useState('');
+  const [idType, setIdType] = useState('');
+  const [idDoc, setIdDoc] = useState<Attachment | null>(null);
+  const [selfieDoc, setSelfieDoc] = useState<Attachment | null>(null);
+  const [consent, setConsent] = useState(false);
+  const [idState, setIdState] = useState<CheckState>({ status: 'idle' });
+  const [selfieState, setSelfieState] = useState<CheckState>({ status: 'idle' });
+  const unchecked = "Couldn't check it automatically — a TrustLink administrator will look at it during review.";
+
+  useEffect(() => {
+    listValidIds().then((r) => { setIds(r.ids); setNotAccepted(r.not_accepted); }).catch(() => {});
+  }, []);
+  useEffect(() => {
+    onChange({ idType, idDoc, selfieDoc, consent, busy: idState.status === 'checking' || selfieState.status === 'checking' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idType, idDoc, selfieDoc, consent, idState.status, selfieState.status]);
+
+  function clearSelfie() {
+    if (selfieDoc) pickedDocumentFiles.delete(selfieDoc.id);
+    setSelfieDoc(null);
+    setSelfieState({ status: 'idle' });
+  }
+  function clearId() {
+    if (idDoc) pickedDocumentFiles.delete(idDoc.id);
+    setIdDoc(null);
+    setIdState({ status: 'idle' });
+    clearSelfie();
+  }
+
+  async function pick(kind: 'id' | 'selfie') {
+    if (!isWebFilePickerSupported()) return;
+    const file = await pickWebFile('image/jpeg,image/png,image/webp');
+    if (!file) return;
+    const id = `${kind}-${Date.now()}`;
+    pickedDocumentFiles.set(id, file);
+    const att: Attachment = { id, filename: file.name || `${kind}.jpg`, sizeBytes: file.size, mimeType: file.type, uri: '', documentLabel: null };
+    const setDoc = kind === 'id' ? setIdDoc : setSelfieDoc;
+    const setState = kind === 'id' ? setIdState : setSelfieState;
+    if (kind === 'id') clearSelfie(); // a new ID means a new selfie
+    setDoc(att);
+    setState({ status: 'checking' });
+    try {
+      const r = kind === 'id'
+        ? await extractDocumentFields('VALID_ID', file, att.filename, { idType, personName })
+        : await checkSelfie(file, idDoc ? pickedDocumentFiles.get(idDoc.id) ?? null : null);
+      if (r.verdict === 'not_a_document') {
+        pickedDocumentFiles.delete(id);
+        setDoc(null);
+        setState({ status: 'refused', message: r.message });
+      } else if (r.verdict === 'expected') {
+        const msg = kind === 'selfie' ? 'Your selfie matches the ID.'
+          : r.id_name ? `Name on the ID: ${r.id_name}${r.id_match === 'partial' ? ' — only partly matches the contact person; an administrator will check it.' : ''}`
+            : 'Your ID looks genuine.';
+        setState({ status: 'ok', message: msg });
+      } else {
+        setState({ status: 'unchecked', message: unchecked });
+      }
+    } catch {
+      setState({ status: 'unchecked', message: unchecked });
+    }
+  }
+
+  return (
+    <FormSection index={index} heading="Your identity"
+      caption={`A valid government ID of the contact person${personName.trim() ? ` (${personName.trim()})` : ''}, and a selfie holding it. Checked automatically, then by a TrustLink administrator. Never shown to other businesses.`}>
+      <View style={{ gap: space.lg }}>
+        <View>
+          <Text style={styles.fieldLabel}>Which ID will you use?</Text>
+          <View style={styles.optionGrid}>
+            {ids.map((i) => (
+              <View key={i.code} style={styles.optionGridItem}>
+                <Pill label={i.name} active={idType === i.code} onPress={() => { if (idType !== i.code) { clearId(); setIdType(i.code); } }} />
+              </View>
+            ))}
+          </View>
+          {!!notAccepted && <Text style={styles.quietNote}>Not accepted: {notAccepted}.</Text>}
+          {attempted && !idType && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick the ID you'll upload.</Text>}
+        </View>
+        <PhotoSlot
+          title="Photo of the front of your ID"
+          help="The card itself, flat, all four corners in view, no glare. Not a screenshot, photocopy or edited image. The name must be the contact person's."
+          doc={idDoc} state={idState} disabledHint={idType ? null : 'Pick your ID above first.'}
+          onPick={() => pick('id')} onRemove={clearId}
+        />
+        <FormDivider />
+        <PhotoSlot
+          title="Selfie holding the same ID"
+          help="Hold the ID next to your face. Face and card clearly visible, good light, no mask or sunglasses."
+          doc={selfieDoc} state={selfieState} disabledHint={idDoc ? null : 'Add the photo of your ID first.'}
+          onPick={() => pick('selfie')} onRemove={clearSelfie}
+        />
+        <Pressable onPress={() => setConsent((v) => !v)} style={styles.consentRow} accessibilityRole="checkbox" accessibilityState={{ checked: consent }}>
+          <View style={[styles.consentBox, consent ? styles.consentBoxOn : null]}>{consent && <Text style={styles.consentTick}>✓</Text>}</View>
+          <Text style={[styles.fieldCaption, { flex: 1 }]}>
+            I agree that TrustLink checks my ID and selfie with an AI service (Google Gemini) to confirm they are genuine and carry my name. They are stored encrypted, seen only by TrustLink administrators, and used only to verify this account.
+          </Text>
+        </Pressable>
+        {attempted && !consent && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Agree to the ID check to continue.</Text>}
+      </View>
+    </FormSection>
+  );
+}
+
+function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument, role }: DocumentsProps & { reportContinue: (fn: () => void) => void }) {
+  const isBuyer = role === 'buyer';
+  const [idCheck, setIdCheck] = useState<IdentityCheckValue>({ idType: '', idDoc: null, selfieDoc: null, consent: false, busy: false });
+  const [nameWarning, setNameWarning] = useState<string | null>(null);
   const regSpec = registrationDocSpec(identity.businessType);
   const [registrationDoc, setRegistrationDoc] = useState<Attachment | null>(null);
   const [registrationIdNumber, setRegistrationIdNumber] = useState('');
@@ -1264,6 +1430,7 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
         setRejected((prev) => ({ ...prev, [kind]: reading.message ?? 'That doesn\'t look like the right document. Upload a scan or clear photo of it.' }));
         return;
       }
+      if (kind === 'registration') setNameWarning(reading?.nameWarning ?? null);
       if (reading?.verdict === 'other_document') {
         setMismatch((prev) => ({ ...prev, [kind]: reading.message ?? 'This looks like a different document.' }));
         setExtractionStatus((prev) => ({ ...prev, [kind]: undefined }));
@@ -1332,9 +1499,15 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
   const mayorsPermitIdBad = !!mayorsPermit && !isValidIdNumber('MAYORS_PERMIT', mayorsPermitIdNumber);
 
   const missing: string[] = [];
-  if (!registrationDoc) missing.push(`your ${regSpec.key} certificate`);
+  if (!idCheck.idType) missing.push('which ID you are using');
+  if (!idCheck.idDoc) missing.push('a photo of your ID');
+  if (!idCheck.selfieDoc) missing.push('a selfie holding your ID');
+  if (!idCheck.consent) missing.push('your consent to the ID check');
+  if (idCheck.busy) missing.push('a moment while your photos are checked');
+  // Buyers: business documents are optional — only a number typed wrong blocks.
+  if (!registrationDoc) { if (!isBuyer) missing.push(`your ${regSpec.key} certificate`); }
   else if (registrationIdBad) missing.push(`a valid ${regSpec.key} certificate number`);
-  if (!birDoc) missing.push('your BIR registration');
+  if (!birDoc) { if (!isBuyer) missing.push('your BIR registration'); }
   else if (birIdBad) missing.push('a valid BIR TIN');
   if (mayorsPermitIdBad) missing.push("a valid Mayor's permit number");
   const docNames: Record<DocKind, string> = { registration: `${regSpec.key} certificate`, bir: 'BIR registration', permit: "Mayor's permit" };
@@ -1349,21 +1522,26 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
       scrollToFirstError();
       return;
     }
-    onSubmit({ registrationDoc, registrationIdNumber, birDoc, birIdNumber, mayorsPermit, mayorsPermitIdNumber, confirmedMismatch });
+    onSubmit({ registrationDoc, registrationIdNumber, birDoc, birIdNumber, mayorsPermit, mayorsPermitIdNumber, confirmedMismatch,
+      idType: idCheck.idType, idDoc: idCheck.idDoc, selfieDoc: idCheck.selfieDoc });
   };
 
   reportContinue(handleSubmit);
 
   return (
     <View style={styles.stepContent}>
-      <ScreenTitle step="DOCUMENTS" title="Verify your business" />
+      <ScreenTitle step="DOCUMENTS" title={isBuyer ? 'Verify your identity' : 'Verify your business'} />
       {attempted && missing.length > 0 && <SummaryBanner message={`Add ${listOut(missing)} to submit.`} />}
-      <FormSection index={1} heading="Documents">
+      {isBuyer && <IdentityCheckSection index={1} personName={identity.contactPerson} attempted={attempted} onChange={setIdCheck} />}
+      <FormSection index={isBuyer ? 2 : 1} heading={isBuyer ? 'Business documents (optional)' : 'Business documents'}
+        caption={isBuyer
+          ? 'Not needed to get verified as a buyer. Adding them shows suppliers more about your business and can raise your trust tier.'
+          : `Required: your ${regSpec.key} certificate and BIR 2303 — they prove the business is registered. Optional: Mayor's permit, toward Tier 3. Names must match the registered name you entered.`}>
         <View style={{ gap: space.lg }}>
           <DocumentUploadRow
             name={regSpec.name}
             help={regSpec.help}
-            required
+            required={!isBuyer}
             file={registrationDoc}
             onCapture={() => capture('registration')}
             onRemove={() => removeDoc('registration')}
@@ -1379,11 +1557,14 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
             mismatchConfirmed={confirmedMismatch.includes('registration')}
             onConfirmMismatch={() => setConfirmedMismatch((prev) => [...prev, 'registration'])}
           />
+          {!!nameWarning && !!registrationDoc && (
+            <View style={styles.mismatchBox}><Text style={styles.mismatchText}>{nameWarning}</Text></View>
+          )}
           <FormDivider />
           <DocumentUploadRow
             name="BIR certificate of registration"
             help="Form 2303. Enter your TIN exactly as printed."
-            required
+            required={!isBuyer}
             file={birDoc}
             onCapture={() => capture('bir')}
             onRemove={() => removeDoc('bir')}
@@ -1421,6 +1602,7 @@ function DocumentsScreen({ identity, onSubmit, reportContinue, onExtractDocument
           />
         </View>
       </FormSection>
+      {!isBuyer && <IdentityCheckSection index={2} personName={identity.contactPerson} attempted={attempted} onChange={setIdCheck} />}
 
       <Text style={styles.quietNote}>
         Your documents are seen by the Trustlink team who check them, and by nobody else. They are never shown on your profile — only the fact that you were verified, and the date.
@@ -1449,13 +1631,16 @@ interface ArrivalTimelineStep {
 
 function ArrivalScreen({ business, documents, onEnterApp }: ArrivalProps) {
   const regSpec = registrationDocSpec(business.businessType);
-  const docNames = [`${regSpec.key} certificate`, 'BIR certificate'];
+  const docNames: string[] = [];
+  if (documents.idDoc) docNames.push('ID', 'selfie');
+  if (documents.registrationDoc) docNames.push(`${regSpec.key} certificate`);
+  if (documents.birDoc) docNames.push('BIR certificate');
   if (documents.mayorsPermit) docNames.push("Mayor's permit");
   const docsLine = `${listOut(docNames)} · submitted just now`;
 
   const timeline: ArrivalTimelineStep[] = [
-    { title: 'Documents submitted', when: 'Just now', done: true, body: 'Both are with the Trustlink team. You do not need to do anything else.' },
-    { title: 'We check them', when: 'Within 1 working day', done: false, body: `Against ${regSpec.key} and BIR records. If something cannot be read or does not match, we tell you exactly what to replace.` },
+    { title: 'Documents submitted', when: 'Just now', done: true, body: 'They are with the Trustlink team. You do not need to do anything else.' },
+    { title: 'We check them', when: 'Within 1 working day', done: false, body: 'An administrator checks your ID, your selfie and any business documents. If something cannot be read or does not match, we tell you exactly what to replace.' },
     { title: 'Verified', when: 'After the check', done: false, body: 'Your profile gains the verified badge and its date, and posting and quoting open. Trust tier is separate — it comes from requirements awarded to you.' },
   ];
 
@@ -1695,6 +1880,11 @@ export default function Onboarding(props: OnboardingProps) {
 /* ─── Styles ─────────────────────────────────────────── */
 
 const styles = StyleSheet.create({
+  checkOk: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeight.sm, color: color.primary, marginTop: space.xs },
+  consentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  consentBox: { width: 20, height: 20, borderRadius: radius.sm, borderWidth: 1.5, borderColor: color.borderStrong, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  consentBoxOn: { backgroundColor: color.primary, borderColor: color.primary },
+  consentTick: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.onPrimary, lineHeight: 16 },
   useAccountNumber: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.primary, marginTop: space.xs },
   root: { flex: 1, backgroundColor: color.surfaceSunken },
 

@@ -36,6 +36,8 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 
 const MISSING_LABELS: Record<string, string> = {
   DTI_OR_SEC: 'DTI or SEC registration',
+  VALID_ID: 'a valid ID',
+  SELFIE_WITH_ID: 'a selfie holding your ID',
   DTI: 'DTI Certificate',
   SEC: 'SEC Certificate',
   BIR: 'BIR Certificate',
