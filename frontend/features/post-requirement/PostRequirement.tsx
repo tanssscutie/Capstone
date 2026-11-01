@@ -1474,12 +1474,20 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
   // until the buyer types over it.
   const [autoZip, setAutoZip] = useState<string | null>(null);
   const cityData = city ? byCity[city] : undefined;
+  // Barangay comes before city in the form: before a city is picked it searches
+  // every Metro Manila barangay (with its city, since names repeat across cities),
+  // and picking one fills in the city.
+  const addressDataReady = Object.keys(byCity).length > 0;
   const barangayMatches = useMemo(() => {
-    if (!cityData) return [];
     const q = foldName(barangayQuery);
-    const all = q ? cityData.barangays.filter((b) => foldName(b.name).includes(q)) : cityData.barangays;
+    const pool = cityData
+      ? cityData.barangays.map((b) => ({ ...b, city }))
+      : !q
+      ? []
+      : Object.values(byCity).flatMap((c) => c.barangays.map((b) => ({ ...b, city: c.city })));
+    const all = q ? pool.filter((b) => foldName(b.name).includes(q)) : pool;
     return all.slice(0, BARANGAY_MATCHES_SHOWN);
-  }, [cityData, barangayQuery]);
+  }, [byCity, cityData, city, barangayQuery]);
   const zipSuggestions = useMemo(
     () => (cityData?.zips ?? []).filter((z) => z.zip.startsWith(zipCode)).slice(0, BARANGAY_MATCHES_SHOWN),
     [cityData, zipCode],
@@ -1496,7 +1504,8 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
     setZipCode('');
     setAutoZip(null);
   };
-  const pickBarangay = (b: { name: string; zip: string | null }) => {
+  const pickBarangay = (b: { name: string; zip: string | null; city: string }) => {
+    if (b.city !== city) setCity(b.city);
     setBarangay(b.name);
     setBarangayQuery('');
     setAutoZip(b.zip);
@@ -1521,10 +1530,10 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
   const windowPast = windowFromPast || windowToPast;
 
   const missing: string[] = [];
-  if (!city) missing.push('a delivery city');
-  else if (!barangayValid) missing.push('a barangay');
-  if (city && !zipValid) missing.push('a 4-digit ZIP code');
   if (!address.trim()) missing.push('the street, building or unit number');
+  if (!barangayValid) missing.push('a barangay');
+  if (!city) missing.push('a delivery city');
+  if (city && !zipValid) missing.push('a 4-digit ZIP code');
   if (!windowFrom || !windowTo) missing.push('a delivery window');
 
   const ready = missing.length === 0 && !windowBad && !windowPast && !windowFromInvalid && !windowToInvalid;
@@ -1573,15 +1582,18 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
 
       <SectionCard index={1} title="Delivery location" caption="TrustLink currently covers Metro Manila.">
         <View>
-          <FieldLabel>City</FieldLabel>
-          <View style={styles.pillGroupWrap}>
-            {NCR_CITIES.map((c) => (
-              <Pill key={c} label={c} active={city === c} onPress={() => pickCity(c)} />
-            ))}
-          </View>
-          {attempted && !city && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick the city the delivery goes to.</Text>}
+          <FieldLabel>Street / Building / Unit Number</FieldLabel>
+          <FormInput
+            value={address}
+            onChangeText={setAddress}
+            maxLength={SITE_ADDRESS_MAX}
+            placeholder="e.g. Unit 4B, Tektite Tower, Exchange Rd."
+            style={[styles.input, attempted && !address.trim() ? styles.inputError : null]}
+          />
+          {attempted && !address.trim() && (
+            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Add the street, building or unit number.</Text>
+          )}
         </View>
-
         <View>
           <FieldLabel>Barangay</FieldLabel>
           {barangayValid ? (
@@ -1596,35 +1608,45 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
               <FormInput
                 value={barangayQuery}
                 onChangeText={setBarangayQuery}
-                editable={!!cityData}
+                editable={addressDataReady}
                 maxLength={120}
                 placeholder={
-                  !city ? 'Pick a city first'
+                  addressDataError ? "Couldn't load the barangay list — reload the page"
+                  : !addressDataReady ? 'Loading barangays…'
                   : cityData ? `Search ${cityData.barangays.length} barangays in ${city}`
-                  : addressDataError ? "Couldn't load the barangay list — reload the page"
-                  : 'Loading barangays…'
+                  : 'Search a barangay in Metro Manila'
                 }
-                style={[styles.input, attempted && city && !barangayValid ? styles.inputError : null]}
+                style={[styles.input, attempted && !barangayValid ? styles.inputError : null]}
               />
-              {!!cityData && (
+              {(!!cityData || !!barangayQuery.trim()) && addressDataReady && (
                 <View style={styles.optionList}>
                   {barangayMatches.length === 0 ? (
-                    <Text style={styles.optionEmpty}>No barangay in {city} matches "{barangayQuery}".</Text>
+                    <Text style={styles.optionEmpty}>No barangay {city ? `in ${city} ` : ''}matches "{barangayQuery}".</Text>
                   ) : (
                     barangayMatches.map((b) => (
-                      <Pressable key={b.name} onPress={() => pickBarangay(b)} style={({ pressed }) => [styles.optionRow, pressed ? styles.optionRowPressed : null]}>
-                        <Text style={styles.optionName}>{b.name}</Text>
+                      <Pressable key={`${b.city}-${b.name}`} onPress={() => pickBarangay(b)} style={({ pressed }) => [styles.optionRow, pressed ? styles.optionRowPressed : null]}>
+                        <Text style={styles.optionName}>{b.name}{cityData ? '' : ` · ${b.city}`}</Text>
                         {b.zip && <Text style={styles.optionMeta}>{b.zip}</Text>}
                       </Pressable>
                     ))
                   )}
                 </View>
               )}
-              {attempted && city && !barangayValid && (
+              {attempted && !barangayValid && (
                 <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick the barangay from the list.</Text>
               )}
             </>
           )}
+        </View>
+
+        <View>
+          <FieldLabel>City</FieldLabel>
+          <View style={styles.pillGroupWrap}>
+            {NCR_CITIES.map((c) => (
+              <Pill key={c} label={c} active={city === c} onPress={() => pickCity(c)} />
+            ))}
+          </View>
+          {attempted && !city && <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick the city the delivery goes to.</Text>}
         </View>
 
         <View>
@@ -1660,19 +1682,6 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
           )}
         </View>
 
-        <View>
-          <FieldLabel>Street / Building / Unit Number</FieldLabel>
-          <FormInput
-            value={address}
-            onChangeText={setAddress}
-            maxLength={SITE_ADDRESS_MAX}
-            placeholder="e.g. Unit 4B, Tektite Tower, Exchange Rd."
-            style={[styles.input, attempted && !address.trim() ? styles.inputError : null]}
-          />
-          {attempted && !address.trim() && (
-            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Add the street, building or unit number.</Text>
-          )}
-        </View>
       </SectionCard>
 
       <SectionCard index={2} title="Delivery window" caption="The dates respondents should plan their delivery around.">

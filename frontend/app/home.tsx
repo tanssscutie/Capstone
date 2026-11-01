@@ -146,6 +146,7 @@ export default function HomeRoute() {
             quantity: source.quantity,
             budgetMin: source.budgetMin,
             budgetMax: source.budgetMax,
+            strictBudget: source.strictBudget ?? false,
             requiredDocuments: source.requiredDocuments,
           },
           { city: source.deliverySite.name, address: source.deliverySite.address },
