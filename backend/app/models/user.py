@@ -101,6 +101,9 @@ class User(SQLModel, table=True):
     # see app/core/account_access.py.
     suspended_until: Optional[datetime] = None
     banned_at: Optional[datetime] = None
+    # Sealed quotations this supplier withdrew (withdrawal_policy): 1 warning,
+    # 2 a 7-day suspension, 3 a ban pending an admin investigation.
+    withdrawal_count: int = 0
     # Last change of each login credential — a new change waits
     # CREDENTIAL_CHANGE_COOLDOWN_DAYS (auth_service._check_cooldown).
     password_changed_at: Optional[datetime] = None

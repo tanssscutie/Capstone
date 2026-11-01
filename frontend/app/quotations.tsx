@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useWithdrawConfirm } from '../components/ui/WithdrawConfirm';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import MyQuotations from '../features/my-quotations/MyQuotations';
@@ -11,6 +12,7 @@ import { errorMessage } from '../lib/api/client';
 
 export default function MyQuotationsRoute() {
   const router = useRouter();
+  const withdrawConfirm = useWithdrawConfirm();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -66,6 +68,7 @@ export default function MyQuotationsRoute() {
   }
 
   return (
+    <>
     <MyQuotations
       quotations={quotations}
       requirements={requirements}
@@ -92,7 +95,7 @@ export default function MyQuotationsRoute() {
         }
       }}
       onOpenChat={(threadId) => router.push({ pathname: '/home', params: { openThread: threadId } })}
-      onWithdraw={async (quotationId) => {
+      onWithdraw={(quotationId) => withdrawConfirm.confirm(async () => {
         const quotation = quotations.find((q) => q.id === quotationId);
         if (!quotation) return;
         // Optimistic update, then reload from the server so outcome/status stay accurate
@@ -106,7 +109,9 @@ export default function MyQuotationsRoute() {
         } catch (e: any) {
           setError(errorMessage(e, 'Could not withdraw this quotation.'));
         }
-      }}
+      })}
     />
+    {withdrawConfirm.modal}
+    </>
   );
 }

@@ -905,6 +905,16 @@ class RequirementService:
                 raise NoActiveQuotation()
 
             self._withdraw_row(session, existing, business_id)
+            # Supplier-initiated, so it's a strike (warning / suspension / ban).
+            from app.services import withdrawal_policy
+            withdrawal_policy.record(session, business_id, req.id, req.ref_code)
+
+    def withdrawal_preview(self, business_id: int) -> dict:
+        """What withdrawing one more quotation would do — shown before confirming."""
+        from app.services import withdrawal_policy
+        with Session(engine) as session:
+            user = session.get(User, business_id)
+            return withdrawal_policy.next_consequence(user.withdrawal_count or 0 if user else 0)
 
     def _withdraw_row(self, session: Session, quotation: Quotation, actor_id: int) -> None:
         quotation.status = "withdrawn"

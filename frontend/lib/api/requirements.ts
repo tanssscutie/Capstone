@@ -320,6 +320,14 @@ export interface QuotationDraftOut {
   over_budget_reason?: string | null;
 }
 
+/** GET /requirements/withdrawal-preview — what one more withdrawal would do. */
+export interface WithdrawalPreviewOut {
+  withdrawals_so_far: number;
+  next_number: number;
+  next: 'warning' | 'suspension' | 'ban';
+  message: string;
+}
+
 export const requirementsApi = {
   listOpen: () => api.get<RequirementOut[]>('/requirements'),
   suggestCategory: (title: string, scope: string) =>
@@ -351,6 +359,7 @@ export const requirementsApi = {
       site_access_notes: siteAccessNotes,
     }),
 
+  withdrawalPreview: () => api.get<WithdrawalPreviewOut>('/requirements/withdrawal-preview'),
   quotationDraft: (requirementId: number) =>
     api.post<QuotationDraftOut>(`/requirements/${requirementId}/quotation-draft`, {}),
   submitQuotation: (requirementId: number, data: QuotationCreateInput) =>

@@ -116,6 +116,12 @@ def _handle_service_errors(exc: Exception):
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Something went wrong")
 
 
+@router.get("/withdrawal-preview")
+def withdrawal_preview(current_user=Depends(require_seller)):
+    """What one more withdrawn quotation would do: warning, suspension or ban."""
+    return requirement_service.withdrawal_preview(current_user.id)
+
+
 @router.get("", response_model=List[RequirementOut])
 def list_requirements(current_user=Depends(get_current_user)):
     return requirement_service.list_open(current_user.id)

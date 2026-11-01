@@ -43,6 +43,7 @@ def create_db_and_tables():
     _add_column_if_missing("user", "theme", "VARCHAR(10) NOT NULL DEFAULT 'system'")
     _add_column_if_missing("requirement", "strict_budget", "BOOLEAN NOT NULL DEFAULT 0")
     _add_column_if_missing("quotation", "over_budget_reason", "VARCHAR(300) NULL")
+    _add_column_if_missing("user", "withdrawal_count", "INTEGER NOT NULL DEFAULT 0")
 
 
 def _migrate_user_role():

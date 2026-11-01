@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useWithdrawConfirm } from '../components/ui/WithdrawConfirm';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import QuotationSubmission, { pickedQuotationFiles } from '../features/quotation/QuotationSubmission';
@@ -13,6 +14,7 @@ import { color, font, fontSize, space } from '../components/ui/tokens';
 import { errorMessage } from '../lib/api/client';
 
 export default function QuotationRoute() {
+  const withdrawConfirm = useWithdrawConfirm();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
 
@@ -100,6 +102,7 @@ export default function QuotationRoute() {
 
   if (submission) {
     return (
+      <>
       <QuotationSubmission
         state="SEALED_RECEIPT"
         requirement={requirement}
@@ -107,7 +110,7 @@ export default function QuotationRoute() {
         quotation={submission.quotation}
         ledgerEntry={submission.ledgerEntry}
         notice={receiptNotice}
-        onWithdraw={async () => {
+        onWithdraw={() => withdrawConfirm.confirm(async () => {
           try {
             await requirementsApi.withdrawQuotation(Number(id));
             setSubmission(null);
@@ -116,10 +119,12 @@ export default function QuotationRoute() {
           } catch (e: any) {
             setError(errorMessage(e, 'Could not withdraw this quotation.'));
           }
-        }}
+        })}
         onBack={() => router.back()}
         onTrack={() => router.push('/quotations')}
       />
+      {withdrawConfirm.modal}
+      </>
     );
   }
 

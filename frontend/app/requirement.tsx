@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useWithdrawConfirm } from '../components/ui/WithdrawConfirm';
 import type { ReactNode } from 'react';
 import { View, Text, ActivityIndicator, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -31,6 +32,7 @@ import { errorMessage } from '../lib/api/client';
 type Respondent = Pick<Business, 'id' | 'registeredName' | 'city' | 'province' | 'credibility'>;
 
 export default function RequirementRoute() {
+  const withdrawConfirm = useWithdrawConfirm();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
 
@@ -391,6 +393,7 @@ export default function RequirementRoute() {
   if (hasSubmitted && ownQuotation && ledgerEntry) {
     const ownQuotationId = ownQuotation.id;
     return withActionErrorBanner(
+      <>
       <RequirementDetail
         state="RESPONDENT"
         requirement={requirement}
@@ -400,14 +403,14 @@ export default function RequirementRoute() {
         ledgerEntry={ledgerEntry}
         questions={questions}
         onAskQuestion={onAskQuestion}
-        onWithdraw={async () => {
+        onWithdraw={() => withdrawConfirm.confirm(async () => {
           try {
             await requirementsApi.withdrawQuotation(Number(id));
             await load(true);
           } catch (e: any) {
             setActionError(errorMessage(e, 'Could not withdraw this quotation.'));
           }
-        }}
+        })}
         onAcceptAward={async () => {
           try {
             await requirementsApi.acceptAward(Number(id));
@@ -440,6 +443,8 @@ export default function RequirementRoute() {
         }}
         onOpenRequestedDocument={onOpenRequestedDocument}
       />
+      {withdrawConfirm.modal}
+      </>
     );
   }
 
