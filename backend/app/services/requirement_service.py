@@ -7,6 +7,7 @@ from fastapi import HTTPException, UploadFile
 from sqlmodel import Session, select
 
 from app.core import addresses, file_crypto
+from app.core.file_validation import check_contents, validate_upload
 from app.core.categories import ATTRIBUTES, OTHER_ITEM_CODE, get_item_specs, item_name, validate_item_specs
 from app.core.units import normalize as normalize_units
 from app.core.config import settings
@@ -49,6 +50,11 @@ from app.schemas.requirement import (
 )
 
 logger = logging.getLogger("trustlink.requirements")
+
+
+# Buyer drawings/specs and supplier certificates: same as the pickers allow.
+ATTACHMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png"}
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
 
 class RequirementNotFound(Exception):
@@ -476,13 +482,13 @@ class RequirementService:
             import os
             import uuid
 
+            contents = await file.read()
+            ext = validate_upload(file.filename, contents, ATTACHMENT_EXTENSIONS, MAX_ATTACHMENT_BYTES)
             upload_dir = os.path.join("uploads", "requirements", str(requirement_id))
             os.makedirs(upload_dir, exist_ok=True)
-            ext = os.path.splitext(file.filename or "")[1] or ".bin"
             saved_name = f"{uuid.uuid4().hex}{ext}"
             full_path = os.path.join(upload_dir, saved_name)
 
-            contents = await file.read()
             # Encrypted at rest, same as business documents (file_crypto);
             # read back only through the access-checked *_file methods below.
             with open(full_path, "wb") as f:
@@ -789,13 +795,13 @@ class RequirementService:
             import os
             import uuid
 
+            contents = await file.read()
+            ext = validate_upload(file.filename, contents, ATTACHMENT_EXTENSIONS, MAX_ATTACHMENT_BYTES)
             upload_dir = os.path.join("uploads", "quotations", str(quotation_id))
             os.makedirs(upload_dir, exist_ok=True)
-            ext = os.path.splitext(file.filename or "")[1] or ".bin"
             saved_name = f"{uuid.uuid4().hex}{ext}"
             full_path = os.path.join(upload_dir, saved_name)
 
-            contents = await file.read()
             # Encrypted at rest, same as business documents (file_crypto);
             # read back only through the access-checked *_file methods below.
             with open(full_path, "wb") as f:

@@ -29,7 +29,9 @@ from app.models.quotation_document_request import QuotationDocumentRequest
 from app.models.requirement import Requirement
 from app.models.user import User
 
-PDF = b"%PDF-1.4 sample certificate"
+from pdf_fixtures import make_pdf
+PDF = make_pdf("sample certificate")
+NEWER = make_pdf("newer")
 
 
 class DocumentRequestTests(unittest.TestCase):
@@ -132,10 +134,10 @@ class DocumentRequestTests(unittest.TestCase):
         self.upload(request_id)
         with Session(self.engine) as session:
             first_path = session.get(QuotationDocumentRequest, request_id).file_path
-        self.upload(request_id, content=b"%PDF-1.4 newer", name="cert-v2.pdf")
+        self.upload(request_id, content=NEWER, name="cert-v2.pdf")
         self.assertFalse(os.path.exists(first_path))
         downloaded = self.as_(self.buyer).get(f"/requirements/{self.req.id}/document-requests/{request_id}/file")
-        self.assertEqual(downloaded.content, b"%PDF-1.4 newer")
+        self.assertEqual(downloaded.content, NEWER)
 
     def test_only_shortlisted_and_undecided(self):
         plain = self.save(Quotation(requirement_id=self.req.id, business_id=self.other.id, submission_hash="h",

@@ -26,8 +26,9 @@ from app.models.requirement import Requirement
 from app.models.requirement_attachment import RequirementAttachment
 from app.models.user import User
 
-DRAWING = b"%PDF-1.4 layout drawing"
-CERT = b"%PDF-1.4 FDA certificate"
+from pdf_fixtures import make_pdf
+DRAWING = make_pdf("layout drawing")
+CERT = make_pdf("FDA certificate")
 
 
 class AttachmentDownloadTests(unittest.TestCase):

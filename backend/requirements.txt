@@ -13,3 +13,4 @@ google-genai
 fastembed
 qdrant-client
 Pillow  # downscales document photos before AI extraction
+pypdf==5.4.0  # upload validation: refuses damaged or password-protected PDFs

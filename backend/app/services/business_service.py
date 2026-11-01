@@ -3,6 +3,7 @@ import os
 import re
 import uuid
 from datetime import date, datetime, timedelta
+from app.core.file_validation import check_contents, validate_upload
 from app.core.clock import now_ph
 from typing import List, Optional, Tuple
 
@@ -230,14 +231,14 @@ class BusinessService:
             return result
 
     async def _save_file(self, user_id: int, doc_type: str, file: UploadFile) -> str:
+        contents = await file.read()
+        # Scans and photos of permits/IDs (the picker allows images and PDF).
+        ext = validate_upload(file.filename, contents, {".pdf", ".jpg", ".jpeg", ".png", ".webp"}, 10 * 1024 * 1024)
         user_dir = os.path.join(UPLOAD_ROOT, str(user_id))
         os.makedirs(user_dir, exist_ok=True)
-
-        ext = os.path.splitext(file.filename or "")[1] or ".bin"
         filename = f"{doc_type}_{uuid.uuid4().hex}{ext}"
         full_path = os.path.join(user_dir, filename)
 
-        contents = await file.read()
         # Encrypted at rest (Fernet) — the file on disk is never the raw upload.
         # See app.core.file_crypto and get_document_bytes_for_admin, which
         # decrypts it back on the one path that ever reads it again.

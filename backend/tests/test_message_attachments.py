@@ -25,7 +25,8 @@ from app.models.requirement import Requirement
 from app.models.user import User
 from app.repositories import message_repository as msg_repo
 
-ARTWORK = b"%PDF-1.4 tarp layout"
+from pdf_fixtures import make_pdf, make_png
+ARTWORK = make_pdf("tarp layout")
 
 
 class MessageAttachmentTests(unittest.TestCase):
@@ -99,7 +100,7 @@ class MessageAttachmentTests(unittest.TestCase):
         self.assertEqual(listed[0]["attachment_filename"], "layout.pdf")
 
     def test_file_only_message_previews_the_filename(self):
-        self.upload(self.supplier, name="proof.png")
+        self.upload(self.supplier, name="proof.png", content=make_png())
         thread = self.as_(self.buyer).get("/messages/threads").json()[0]
         self.assertEqual(thread["last_message_preview"], "Sent a file: proof.png")
         self.assertTrue(thread["unread"])

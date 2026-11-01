@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session
 
+from app.core.file_validation import check_contents, validate_upload
 from app.core import file_crypto
 from app.core.database import engine
 from app.models.user import User
@@ -72,6 +73,7 @@ class ProfileMediaService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That file is empty")
         if len(contents) > MAX_FILE_BYTES:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Photos can be up to 5 MB")
+        check_contents(ext, contents)
         image = _fit(contents, SIZES[kind])
 
         with Session(engine) as session:

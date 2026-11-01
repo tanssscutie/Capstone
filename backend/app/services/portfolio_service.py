@@ -14,6 +14,7 @@ from typing import List, Optional, Tuple
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session, select
 
+from app.core.file_validation import check_contents, validate_upload
 from app.core import file_crypto
 from app.core.categories import find_item, item_name
 from app.core.database import engine
@@ -82,6 +83,7 @@ class PortfolioService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That file is empty")
         if len(contents) > MAX_FILE_BYTES:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Photos can be up to 5 MB")
+        check_contents(ext, contents)
 
         with Session(engine) as session:
             user = session.get(User, user_id)

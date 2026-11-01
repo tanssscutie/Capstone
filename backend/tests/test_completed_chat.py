@@ -24,6 +24,7 @@ from app.models.quotation import Quotation
 from app.models.requirement import Requirement
 from app.models.transaction_closeout import TransactionCloseout
 from app.models.user import User
+from pdf_fixtures import make_pdf
 
 
 class CompletedChatTests(unittest.TestCase):
@@ -72,7 +73,7 @@ class CompletedChatTests(unittest.TestCase):
     def attach(self, user):
         self.current = user
         return self.client.post(f"/messages/threads/{self.thread.id}/attachments",
-                                files={"file": ("po.pdf", b"%PDF-1.4 test", "application/pdf")})
+                                files={"file": ("po.pdf", make_pdf("po"), "application/pdf")})
 
     def test_open_while_awarded(self):
         self.assertEqual(self.send(self.buyer).status_code, 201)

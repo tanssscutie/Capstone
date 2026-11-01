@@ -76,6 +76,19 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Validation ng attachments (laman ng file, hindi lang pangalan)**
+- **Dati:** extension lang ang tinitingnan, kaya pumapasa ang program na pinangalanang `permit.pdf`. Walang anumang check ang requirement attachments, quotation attachments at verification documents, kahit sa laki.
+- **Ngayon, sa bawat upload** (messages, requirement, quotation, document requests, verification documents, portfolio at profile photos):
+  1. **Pirma ng file:** dapat tugma ang unang bytes sa extension (PDF `%PDF`, PNG, JPEG, WebP, DOCX/XLSX zip, DOC/XLS, AI, PSD). Kung hindi: *"This file isn't really a PDF…"*
+  2. **Nabubuksan ba:**
+     - tinatanggihan ang PDF na sira, walang pages, o **may password**; pasado ang may "owner" restriction lang (bawal mag-print o kumopya), dahil nabubuksan pa rin
+     - tinatanggihan ang image na hindi ma-decode
+     - tinatanggihan ang DOCX/XLSX na may password
+- **Bagong limit:**
+  - requirement at quotation attachments: PDF, DOC, DOCX, JPG, PNG, hanggang 10 MB
+  - verification documents: PDF, JPG, PNG, WebP, hanggang 10 MB
+- Code: `app/core/file_validation.py` (`validate_upload`, `check_contents`). Bagong dependency: **`pypdf==5.4.0`**, kaya patakbuhin ang `pip install -r requirements.txt` sa ibang PC. Tests: `backend/tests/test_file_validation.py`; tunay na PDF/PNG na ang ginagamit ng mga lumang upload test (`tests/pdf_fixtures.py`).
+
 **Dark mode (Account Settings → Appearance)**
 - Tatlong pagpipilian: **System** (sumusunod sa device; ito ang default), **Light**, at **Dark**. Agad itong nag-a-apply, at naka-save sa account (`user.theme`), kaya nasusundan nito ang user sa ibang device. Hindi ito gumagamit ng localStorage.
 - **Paano:** sa web, CSS variable (`var(--tl-…)`) na ang bawat kulay sa `tokens.ts`. May light at dark na palette na ini-inject sa `<style id="tl-theme">`, kaya hindi kinailangang galawin ang bawat screen. Pinapalitan lang ng `applyTheme()` ang `data-theme` sa `<html>`. Sa native, light pa rin.

@@ -8,6 +8,7 @@ from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session
 
 from app.core import file_crypto
+from app.core.file_validation import check_contents, validate_upload
 from app.core.database import engine
 from app.models.message import Message
 from app.models.message_thread import MessageThread
@@ -167,6 +168,7 @@ class MessageService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That file is empty")
         if len(contents) > MAX_ATTACHMENT_BYTES:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Files can be up to 10 MB")
+        check_contents(ext, contents)
         text = (body or "").strip()[:2000]
 
         with Session(engine) as session:

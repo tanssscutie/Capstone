@@ -25,6 +25,7 @@ from typing import List, Optional, Tuple
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session, select
 
+from app.core.file_validation import check_contents, validate_upload
 from app.core import file_crypto
 from app.core.clock import now_ph
 from app.core.database import engine
@@ -190,6 +191,7 @@ class DocumentRequestService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That file is empty")
         if len(contents) > MAX_FILE_BYTES:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Files can be up to 10 MB")
+        check_contents(ext, contents)
         note = response_note.strip()[:500] if response_note and response_note.strip() else None
 
         with Session(engine) as session:
