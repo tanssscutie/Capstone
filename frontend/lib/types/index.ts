@@ -130,6 +130,8 @@ export interface Requirement {
   quantity: string; 
   budgetMin: number | null;   // PHP, indicative
   budgetMax: number | null;
+  /** The buyer set a strict maximum: quotations above budgetMax are refused. */
+  strictBudget?: boolean;
   deliverySite: DeliverySite;
   deliveryWindow: string;
   attachments: Attachment[];
@@ -204,6 +206,8 @@ export interface Quotation {
   paymentTerms: string;
   validityDays: number;
   notesToBuyer: string;
+  /** Why the price is above the buyer's indicative budget (sealed with it). */
+  overBudgetReason?: string | null;
   attachments: Attachment[];
   submittedAt: ISODateTime;
   hashTruncated: string;      // server-computed, display only

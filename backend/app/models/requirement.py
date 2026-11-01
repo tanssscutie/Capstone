@@ -46,6 +46,9 @@ class Requirement(SQLModel, table=True):
 
     price_min: Optional[float] = None
     price_max: Optional[float] = None
+    # The buyer chose "strict maximum": quotations above price_max are refused.
+    # Off (the default), the budget is indicative and going above it needs a reason.
+    strict_budget: bool = False
 
     city: str = ""
     # The full address line, composed at creation (addresses.compose_site_address):

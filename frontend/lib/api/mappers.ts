@@ -121,6 +121,7 @@ export function mapRequirement(r: RequirementOut): Requirement {
     quantity: r.quantity,
     budgetMin: r.price_min,
     budgetMax: r.price_max,
+    strictBudget: r.strict_budget ?? false,
     autoExtendedAt: r.auto_extended_at ?? null,
     deliverySite: {
       name: r.city,
@@ -374,6 +375,7 @@ export function mapMyQuotation(q: MyQuotationOut): Quotation {
     paymentTerms: q.payment_terms ?? '',
     validityDays: parseLeadingInt(q.validity_period),
     notesToBuyer: q.notes,
+    overBudgetReason: q.over_budget_reason ?? null,
     attachments: q.attachments.map((a) => ({
       id: String(a.id),
       filename: a.filename,
@@ -538,6 +540,7 @@ export function mapQuotationDetail(q: QuotationDetailOut, requirementId: string)
     paymentTerms: q.payment_terms ?? '',
     validityDays: parseLeadingInt(q.validity_period),
     notesToBuyer: q.notes,
+    overBudgetReason: q.over_budget_reason ?? null,
     attachments: q.attachments.map((a) => ({
       id: String(a.id),
       filename: a.filename,

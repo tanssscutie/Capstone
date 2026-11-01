@@ -194,6 +194,7 @@ class RequirementService:
             quantity=req.quantity,
             price_min=req.price_min,
             price_max=req.price_max,
+            strict_budget=req.strict_budget,
             city=req.city,
             site_address=req.site_address,
             barangay=req.barangay,
@@ -364,6 +365,7 @@ class RequirementService:
                 quantity=data.quantity.strip(),
                 price_min=data.price_min,
                 price_max=data.price_max,
+                strict_budget=data.strict_budget,
                 city=data.city.strip(),
                 site_address=site_address or None,
                 barangay=barangay,
@@ -656,6 +658,27 @@ class RequirementService:
     # ---------- sealed submission ----------
 
     @staticmethod
+    def _checked_budget(req: Requirement, data: QuotationCreate) -> str | None:
+        """Above the buyer's maximum: refused when the buyer set a strict
+        maximum, otherwise allowed with a reason (kept, sealed, shown to the
+        buyer at release). At or under the budget, no reason is stored."""
+        if not req.price_max or data.total_price <= req.price_max:
+            return None
+        ceiling = f"₱{req.price_max:,.0f}"
+        if req.strict_budget:
+            raise HTTPException(
+                status_code=422,
+                detail=f"This buyer set a strict maximum of {ceiling}. Quotations above it aren't accepted.",
+            )
+        reason = (data.over_budget_reason or "").strip()
+        if len(reason) < 10:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Your price is above the buyer's budget of up to {ceiling}. Tell them why (at least 10 characters).",
+            )
+        return reason[:300]
+
+    @staticmethod
     def _checked_spec_responses(req: Requirement, responses: List[SpecResponseIn]) -> list[dict]:
         """The rows to seal: exactly one answer per specification row of the
         requirement, in its order, attribute_id copied from the requirement
@@ -711,6 +734,7 @@ class RequirementService:
 
             line_items_json = json.dumps([li.model_dump() for li in data.line_items]) if data.line_items else ""
             spec_responses = self._checked_spec_responses(req, data.spec_responses)
+            over_budget_reason = self._checked_budget(req, data)
 
             payload = {
                 "requirement_id": requirement_id,
@@ -725,6 +749,8 @@ class RequirementService:
             # Only when there are any — _release_one recomputes it the same way.
             if spec_responses:
                 payload["spec_responses"] = spec_responses
+            if over_budget_reason:
+                payload["over_budget_reason"] = over_budget_reason
             prev_hash = ledger_repo.get_last_hash(session)
             entry_hash = ledger_service.compute_hash(prev_hash, payload)
 
@@ -738,6 +764,7 @@ class RequirementService:
                 validity_period=data.validity_period,
                 notes=data.notes or "",
                 spec_responses=json.dumps(spec_responses) if spec_responses else None,
+                over_budget_reason=over_budget_reason,
                 status="sealed",
                 submission_hash=entry_hash,
             )
@@ -1064,6 +1091,8 @@ class RequirementService:
             # edited or deleted spec_responses column flags it.
             if q.spec_responses:
                 payload["spec_responses"] = json.loads(q.spec_responses)
+            if q.over_budget_reason:
+                payload["over_budget_reason"] = q.over_budget_reason
             submitted_entry = ledger_repo.get_entry(session, q.ledger_entry_id) if q.ledger_entry_id else None
             if submitted_entry:
                 recomputed = ledger_service.compute_hash(submitted_entry.prev_hash, payload)
@@ -1154,6 +1183,7 @@ class RequirementService:
                     payment_terms=q.payment_terms,
                     validity_period=q.validity_period,
                     notes=q.notes,
+                    over_budget_reason=q.over_budget_reason,
                     spec_responses=self._spec_responses_out(q),
                     status=self._owner_view_status(req, q),
                     shortlisted=q.shortlisted,
@@ -1312,6 +1342,7 @@ class RequirementService:
                     payment_terms=q.payment_terms,
                     validity_period=q.validity_period,
                     notes=q.notes,
+                    over_budget_reason=q.over_budget_reason,
                     spec_responses=self._spec_responses_out(q),
                     submitted_at=q.created_at,
                     integrity_status=q.integrity_status,

@@ -722,7 +722,7 @@ function QuantityBudgetRow({ requirement }: { requirement: Requirement }) {
         <Text style={styles.bodyText}>{requirement.quantity}</Text>
       </View>
       <View style={styles.blockHalf}>
-        <SectionLabel>Indicative budget</SectionLabel>
+        <SectionLabel>{requirement.strictBudget ? 'Budget (strict maximum)' : 'Indicative budget'}</SectionLabel>
         <Text style={styles.bodyText}>{formatBudget(requirement.budgetMin, requirement.budgetMax)}</Text>
       </View>
     </View>
@@ -1321,6 +1321,13 @@ function QuotationCard({
         <LabelValueRow label="Validity" value={`${quotation.validityDays} days`} />
       </View>
 
+      {!!quotation.overBudgetReason && (
+        <View style={styles.block}>
+          <SectionLabel>Above your budget — supplier's reason</SectionLabel>
+          <Text style={styles.bodyText}>{quotation.overBudgetReason}</Text>
+        </View>
+      )}
+
       {quotation.notesToBuyer.length > 0 && (
         <View style={styles.block}>
           <SectionLabel>Notes</SectionLabel>
@@ -1833,7 +1840,7 @@ function WideInfoBand({
               </Text>
             </View>
             <View style={styles.factsGridItem}>
-              <SectionLabel>Indicative budget</SectionLabel>
+              <SectionLabel>{requirement.strictBudget ? 'Budget (strict maximum)' : 'Indicative budget'}</SectionLabel>
               <Text style={styles.factValue}>
                 {formatBudget(requirement.budgetMin, requirement.budgetMax)}
                 {'\n'}
@@ -2380,6 +2387,13 @@ function WideQuotationCard({
             </View>
           ))}
         </View>
+      )}
+
+      {!!quotation.overBudgetReason && (
+        <Text style={styles.bodyText}>
+          <Text style={{ fontFamily: font.bodySemi, color: color.warning }}>Above your budget: </Text>
+          {quotation.overBudgetReason}
+        </Text>
       )}
 
       {quotation.notesToBuyer.length > 0 && (

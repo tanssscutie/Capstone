@@ -1331,7 +1331,7 @@ function RequirementCard({
 
       <View style={styles.factsRow}>
         <View style={styles.factItem}>
-          <Text style={styles.microLabel}>Budget</Text>
+          <Text style={styles.microLabel}>{requirement.strictBudget ? 'Budget · strict max' : 'Budget'}</Text>
           <Text style={styles.factValue}>{formatBudget(requirement.budgetMin, requirement.budgetMax)}</Text>
         </View>
         <View style={styles.factItem}>

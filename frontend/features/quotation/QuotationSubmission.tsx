@@ -66,6 +66,8 @@ export interface QuotationDraftInput {
   paymentTerms: string;
   validityDays: number;
   notesToBuyer: string;
+  /** Required when totalPrice is above the buyer's budget (see overBudget). */
+  overBudgetReason: string;
   attachments: Attachment[];
 }
 
@@ -475,7 +477,7 @@ function ScopeSidebarCard({
       <BuyerIdentityRow buyer={buyer} onOpenBuyer={onOpenBuyer} />
 
       <View style={styles.sidebarFacts}>
-        <FactBlock label="Indicative budget" value={formatBudget(requirement.budgetMin, requirement.budgetMax)} />
+        <FactBlock label={requirement.strictBudget ? 'Budget (strict maximum)' : 'Indicative budget'} value={formatBudget(requirement.budgetMin, requirement.budgetMax)} />
         <FactBlock label="Needed by" value={requirement.deliveryWindow} />
         <FactBlock label="Location" value={requirement.deliverySite.address} />
       </View>
@@ -624,14 +626,20 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
 
   const hasBudget = requirement.budgetMin !== null || requirement.budgetMax !== null;
   const overBudget = requirement.budgetMax !== null && total > requirement.budgetMax;
+  const strict = !!requirement.strictBudget;
+  const [overReason, setOverReason] = useState('');
   const budgetNote =
     total === 0
       ? 'Enter your price to continue.'
       : !hasBudget
       ? ''
+      : overBudget && strict
+      ? `This buyer set a strict maximum of ${formatPHP(requirement.budgetMax ?? 0)} — lower your price to seal.`
       : overBudget
-      ? `Above the buyer's indicative range of ${formatBudget(requirement.budgetMin, requirement.budgetMax)}.`
+      ? `Above the buyer's indicative range of ${formatBudget(requirement.budgetMin, requirement.budgetMax)} — tell them why below.`
       : `Within the buyer's indicative range of ${formatBudget(requirement.budgetMin, requirement.budgetMax)}.`;
+  // Above the budget: refused when strict, otherwise needs a reason the buyer sees.
+  const budgetOk = !overBudget || (!strict && overReason.trim().length >= 10);
 
   const patchItem = (id: string, key: 'desc' | 'qty' | 'unit', val: string) =>
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, [key]: val } : i)));
@@ -666,7 +674,7 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
   };
 
   const validUntilDate = new Date(Date.now() + validity * 86_400_000).toISOString();
-  const ready = ack1 && ack2 && total > 0 && specsDone;
+  const ready = ack1 && ack2 && total > 0 && specsDone && budgetOk;
 
   const handleSeal = () => {
     if (!ready) return;
@@ -686,6 +694,7 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
       paymentTerms: term,
       validityDays: validity,
       notesToBuyer: note,
+      overBudgetReason: overBudget ? overReason.trim() : '',
       attachments: files,
     });
   };
@@ -702,7 +711,7 @@ function useQuotationForm(requirement: Requirement, onSubmit?: (input: Quotation
     ack1, setAck1, ack2, setAck2,
     specAnswer, setSpecComplies, setSpecOffered, specAnsweredCount, specsDone,
     aiDraft, applyDraft, undoDraft,
-    total, budgetNote,
+    total, budgetNote, overBudget, strict, overReason, setOverReason, budgetOk,
     validUntilDate,
     ready,
     handleSeal,
@@ -887,7 +896,24 @@ function PriceSection({ requirement, st }: { requirement: Requirement; st: FormS
         <SectionLabel>Quotation total</SectionLabel>
         <Text style={styles.grandTotalValue}>{formatPHP(st.total)}</Text>
       </View>
-      {!!st.budgetNote && <Text style={styles.budgetNote}>{st.budgetNote}</Text>}
+      {!!st.budgetNote && (
+        <Text style={[styles.budgetNote, st.overBudget ? { color: st.strict ? color.danger : color.warning } : null]}>{st.budgetNote}</Text>
+      )}
+      {st.overBudget && !st.strict && (
+        <View style={{ gap: space.xs }}>
+          <Text style={styles.overLabel}>Why is your price above the buyer's budget?</Text>
+          <FormInput
+            value={st.overReason}
+            onChangeText={st.setOverReason}
+            maxLength={300}
+            multiline
+            placeholder="e.g. Includes delivery to Caloocan and matte lamination; 13 oz tarpaulin instead of 10 oz."
+            placeholderTextColor={color.inkFaint}
+            style={[styles.noteInput, { minHeight: 64 }]}
+          />
+          <Text style={styles.overHint}>Sealed with your quotation — the buyer reads it when quotations open. At least 10 characters.</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -1141,6 +1167,8 @@ function SealSection({
             ? 'Answer every specification above to submit.'
             : st.total === 0
             ? 'Enter your price above to submit.'
+            : !st.budgetOk
+            ? (st.strict ? 'Lower your price to the buyer\'s strict maximum to submit.' : 'Say why your price is above the budget to submit.')
             : 'Confirm both statements above to submit.'}
         </Text>
         <ActionButton
@@ -1584,6 +1612,8 @@ const styles = StyleSheet.create({
 
   grandTotalRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space.md, marginTop: space.xs, paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.lg, backgroundColor: color.primaryFaint },
   grandTotalValue: { fontFamily: font.display, fontSize: fontSize.display, lineHeight: lineHeight.display, letterSpacing: letterSpacing.tight, color: color.ink },
+  overLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink, marginTop: space.sm },
+  overHint: { fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
   budgetNote: { textAlign: 'right', fontFamily: font.body, fontSize: fontSize.sm, color: color.inkMuted },
 
   /* terms */

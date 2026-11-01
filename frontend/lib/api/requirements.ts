@@ -40,6 +40,7 @@ export interface RequirementOut {
   quantity: string;
   price_min: number | null;
   price_max: number | null;
+  strict_budget?: boolean;
   city: string;
   site_address: string | null;
   barangay?: string | null;
@@ -195,6 +196,7 @@ export interface MyQuotationOut {
   payment_terms: string | null;
   validity_period: string | null;
   notes: string;
+  over_budget_reason?: string | null;
   spec_responses: SpecResponseOut[];
   submitted_at: string;
   integrity_status: string | null;
@@ -219,6 +221,7 @@ export interface QuotationDetailOut {
   payment_terms: string | null;
   validity_period: string | null;
   notes: string;
+  over_budget_reason?: string | null;
   /** Empty on quotations submitted before spec responses existed. */
   spec_responses: SpecResponseOut[];
   status: string; // released | withdrawn | voided | shortlisted | awarded | not_selected
@@ -248,6 +251,7 @@ export interface RequirementCreateInput {
   quantity: string;
   price_min?: number | null;
   price_max?: number | null;
+  strict_budget?: boolean;
   city: string;
   /** Street / building / unit number — the server composes the full line. */
   site_address?: string | null;
@@ -267,6 +271,7 @@ export interface QuotationCreateInput {
   payment_terms?: string | null;
   validity_period?: string | null;
   notes?: string | null;
+  over_budget_reason?: string | null;
   /** One per specification row of the requirement — the backend 422s on a missing one. */
   spec_responses?: { label: string; complies: boolean; offered: string | null }[];
 }
@@ -312,6 +317,7 @@ export interface QuotationDraftOut {
   payment_terms: string;
   validity_days: number;
   notes: string;
+  over_budget_reason?: string | null;
 }
 
 export const requirementsApi = {

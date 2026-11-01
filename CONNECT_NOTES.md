@@ -76,6 +76,15 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
+**Presyong lampas sa budget: may paliwanag, o strict maximum**
+- **Default (indicative):** puwedeng lumampas sa budget ng buyer, pero **kailangan ng dahilan** (10+ characters) bago makapag-seal: *"Why is your price above the buyer's budget?"*
+  - **sealed ito** kasama ng quotation, at kasama sa hash (`over_budget_reason`), kaya nade-detect ng integrity check kapag binago pagkatapos
+  - pagka-release, nakikita ito ng buyer bilang **"Above your budget — supplier's reason"**
+- **Strict maximum** (checkbox sa Post a Requirement, sa ilalim ng budget): kapag naka-on, **422** ang quotation na lampas sa maximum, at hindi ito ma-seal sa form ("lower your price to seal").
+  - may label na "Budget (strict maximum)" o "Budget · strict max" sa feed card, Requirement Detail at Submit Quotation, kaya alam na ng supplier bago mag-quote
+- Bakit hindi laging bawal: indicative ang budget. Kapag laging bawal, mas kaunti ang quotation, at mapipilitang magbaba ng presyo (o magdagdag ng singil pagkatapos) ang supplier. Kung itanong ng panel ang RA 9184 (ABC bilang kisame): private B2B ang TrustLink, at pinipili ng buyer kung strict ang budget niya.
+- Code: `requirement_service._checked_budget`, bagong columns na `requirement.strict_budget` at `quotation.over_budget_reason` (auto-migrate), `strictBudget` / `overBudgetReason` (optional) sa `lib/types`. Tests: `backend/tests/test_budget_rules.py`.
+
 **Validation ng attachments (laman ng file, hindi lang pangalan)**
 - **Dati:** extension lang ang tinitingnan, kaya pumapasa ang program na pinangalanang `permit.pdf`. Walang anumang check ang requirement attachments, quotation attachments at verification documents, kahit sa laki.
 - **Ngayon, sa bawat upload** (messages, requirement, quotation, document requests, verification documents, portfolio at profile photos):

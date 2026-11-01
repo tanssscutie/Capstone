@@ -72,6 +72,8 @@ export interface RequirementDetailsDraft {
   quantity: string;
   budgetMin: number | null;
   budgetMax: number | null;
+  /** Quotations above budgetMax are refused (off = indicative). */
+  strictBudget?: boolean;
   requiredDocuments: string[];
 }
 
@@ -102,6 +104,7 @@ export interface RequirementDraftInput {
   quantity: string;
   budgetMin: number | null;
   budgetMax: number | null;
+  strictBudget?: boolean;
   requiredDocuments: string[];
   deliveryCity: string;
   deliveryAddress: string;
@@ -389,6 +392,7 @@ function buildDraftInput(details: RequirementDetailsDraft, delivery: Requirement
     quantity: details.quantity,
     budgetMin: details.budgetMin,
     budgetMax: details.budgetMax,
+    strictBudget: details.strictBudget ?? false,
     requiredDocuments: details.requiredDocuments,
     deliveryCity: delivery.city,
     deliveryAddress: delivery.address,
@@ -980,6 +984,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   const quantity = qtyNumber.trim() ? `${qtyNumber.trim()} ${qtyUnit}`.trim() : '';
   const [budgetMinText, setBudgetMinText] = useState(initial?.budgetMin != null ? String(initial.budgetMin) : '');
   const [budgetMaxText, setBudgetMaxText] = useState(initial?.budgetMax != null ? String(initial.budgetMax) : '');
+  const [strictBudget, setStrictBudget] = useState(initial?.strictBudget ?? false);
   const [requiredDocuments, setRequiredDocuments] = useState<string[]>(initial?.requiredDocuments ?? []);
   const [docInput, setDocInput] = useState('');
   const [attempted, setAttempted] = useState(false);
@@ -1143,6 +1148,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
       quantity: quantity.trim(),
       budgetMin,
       budgetMax,
+      strictBudget,
       requiredDocuments,
     });
   };
@@ -1339,6 +1345,24 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
             ) : (
               <Text style={styles.fieldCaption}>Shown to respondents so their quotations land in a realistic range.</Text>
             )}
+            <Pressable
+              onPress={() => setStrictBudget((v) => !v)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: strictBudget }}
+              style={styles.strictRow}
+            >
+              <View style={[styles.strictBox, strictBudget ? styles.strictBoxOn : null]}>
+                {strictBudget && <Text style={styles.strictCheck}>✓</Text>}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.strictLabel}>Strict maximum — don't accept quotations above it</Text>
+                <Text style={styles.fieldCaption}>
+                  {strictBudget
+                    ? 'Suppliers see "Strict maximum" and can\'t seal a higher price. Some may not quote at all.'
+                    : 'Off: suppliers may quote above it, but must tell you why. You see the reason when quotations open.'}
+                </Text>
+              </View>
+            </Pressable>
           </View>
         </View>
       </SectionCard>
@@ -1961,7 +1985,7 @@ function ReviewScreen({
           <SummaryBlock label="Scope" value={draft.scope} />
           {!!specText && <SummaryBlock label="Specifications" value={specText} />}
           <SummaryLine label="Quantity" value={draft.quantity} />
-          <SummaryLine label="Indicative budget" value={formatBudget(draft.budgetMin, draft.budgetMax)} />
+          <SummaryLine label={draft.strictBudget ? "Budget (strict maximum)" : "Indicative budget"} value={formatBudget(draft.budgetMin, draft.budgetMax)} />
           <SummaryLine label="Required documents" value={draft.requiredDocuments.length > 0 ? draft.requiredDocuments.join(', ') : 'None'} />
         </SummaryGroup>
 
@@ -2138,6 +2162,11 @@ export default function PostRequirement(props: PostRequirementProps) {
 /* ─── Styles ─────────────────────────────────────────── */
 
 const styles = StyleSheet.create({
+  strictRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm, marginTop: space.md },
+  strictBox: { width: 20, height: 20, marginTop: 1, borderRadius: radius.sm, borderWidth: 1.5, borderColor: color.borderStrong, alignItems: 'center', justifyContent: 'center' },
+  strictBoxOn: { backgroundColor: color.primary, borderColor: color.primary },
+  strictCheck: { fontFamily: font.bodySemi, fontSize: fontSize.sm, color: color.onPrimary, lineHeight: fontSize.sm + 2 },
+  strictLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
   root: { flex: 1, backgroundColor: color.surfaceSunken },
 
   shellHeader: { width: '100%', paddingHorizontal: layout.screenPadding, paddingVertical: space.lg, backgroundColor: color.surface, borderBottomWidth: 1, borderBottomColor: color.border },

@@ -54,6 +54,8 @@ class RequirementCreate(BaseModel):
     # Indicative budget — required on create (both ends, above zero).
     price_min: float = Field(gt=0)
     price_max: float = Field(gt=0)
+    # Off = indicative budget (suppliers may go above it, with a reason).
+    strict_budget: bool = False
 
     city: str = Field(min_length=2, max_length=120)
     # Street / building / unit number. With barangay + zip_code the server
@@ -142,6 +144,7 @@ class RequirementOut(BaseModel):
     quantity: str
     price_min: Optional[float]
     price_max: Optional[float]
+    strict_budget: bool = False
 
     city: str
     site_address: Optional[str]
@@ -210,6 +213,8 @@ class QuotationCreate(BaseModel):
     payment_terms: Optional[str] = Field(default=None, max_length=100)
     validity_period: Optional[str] = Field(default=None, max_length=100)
     notes: Optional[str] = Field(default=None, max_length=500)
+    # Required when total_price is above the buyer's indicative budget.
+    over_budget_reason: Optional[str] = Field(default=None, max_length=300)
     # One answer per specification row of the requirement — all of them, no
     # more (checked in requirement_service.submit_quotation). Empty for a
     # requirement with no specifications.
@@ -265,6 +270,7 @@ class QuotationDetailOut(BaseModel):
     payment_terms: Optional[str]
     validity_period: Optional[str]
     notes: str
+    over_budget_reason: Optional[str] = None
     # Empty on quotations submitted before spec responses existed.
     spec_responses: List[SpecResponseOut] = []
     status: str  # released | withdrawn | voided | shortlisted | award_pending | awarded | not_selected
@@ -496,6 +502,7 @@ class MyQuotationOut(BaseModel):
     payment_terms: Optional[str]
     validity_period: Optional[str]
     notes: str
+    over_budget_reason: Optional[str] = None
     spec_responses: List[SpecResponseOut] = []
     submitted_at: datetime
     integrity_status: Optional[str]

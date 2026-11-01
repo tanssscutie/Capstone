@@ -31,6 +31,9 @@ class Quotation(SQLModel, table=True):
     payment_terms: Optional[str] = None
     validity_period: Optional[str] = None
     notes: str = ""
+    # Why the price is above the buyer's indicative budget — required then,
+    # sealed with the quotation (part of its hash when present).
+    over_budget_reason: Optional[str] = Field(default=None, max_length=300)
     # Sealed too: the respondent's answer to each of the requirement's
     # specification rows — JSON list of {"label": str, "attribute_id": str | null,
     # "complies": bool, "offered": str | null}, in the requirement's row order

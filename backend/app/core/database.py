@@ -41,6 +41,8 @@ def create_db_and_tables():
     _add_column_if_missing("user", "email_changed_at", "DATETIME NULL")
     _add_column_if_missing("user", "mobile_changed_at", "DATETIME NULL")
     _add_column_if_missing("user", "theme", "VARCHAR(10) NOT NULL DEFAULT 'system'")
+    _add_column_if_missing("requirement", "strict_budget", "BOOLEAN NOT NULL DEFAULT 0")
+    _add_column_if_missing("quotation", "over_budget_reason", "VARCHAR(300) NULL")
 
 
 def _migrate_user_role():

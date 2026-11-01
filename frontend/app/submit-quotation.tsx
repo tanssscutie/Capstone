@@ -167,6 +167,7 @@ export default function QuotationRoute() {
             payment_terms: input.paymentTerms,
             validity_period: `${input.validityDays} days`,
             notes: input.notesToBuyer,
+            over_budget_reason: input.overBudgetReason || null,
             spec_responses: input.specResponses.map((r) => ({ label: r.label, complies: r.complies, offered: r.offered })),
           });
         } catch (e: any) {

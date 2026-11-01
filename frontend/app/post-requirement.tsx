@@ -156,6 +156,7 @@ export default function PostRequirementRoute() {
               quantity: input.quantity,
               price_min: input.budgetMin,
               price_max: input.budgetMax,
+              strict_budget: input.strictBudget ?? false,
               city: input.deliveryCity,
               site_address: input.deliveryAddress || null,
               barangay: input.deliveryBarangay || null,
