@@ -756,7 +756,7 @@ function ClosingBanner({ requirement }: { requirement: Requirement }) {
       </Text>
       <Text style={styles.closingNoteText}>
         · Closes {formatDateTime(requirement.closingAt)} · Stays private until then — buyer and other businesses
-        can't see it. Check it before sealing — withdrawing counts against your account.
+        can't see it; withdraw and resend any time before closing.
       </Text>
     </View>
   );
@@ -1149,7 +1149,7 @@ function SealSection({
           <Text style={styles.ackBold}>{formatDateTime(requirement.closingAt)}</Text>, when all quotations open.
         </AckCheckbox>
         <AckCheckbox checked={st.ack2} onToggle={() => st.setAck2((v) => !v)}>
-          Withdrawing before closing counts against my account (1st warning, 2nd 7-day suspension, 3rd ban pending review). After closing, no withdrawing, changing, or new prices.
+          Withdraw and resend anytime before closing. A withdrawal I don't replace counts on my record (2nd: warning, 3rd: admin review). After closing, no withdrawing, changing, or new prices.
         </AckCheckbox>
       </View>
 

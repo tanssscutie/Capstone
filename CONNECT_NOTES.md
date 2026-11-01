@@ -76,17 +76,17 @@ npx expo start --web
 - Code: `report_service.suggestions`, `GET /business/reports/suggestions`, at `features/reports/Reports.tsx`. Tests: `backend/tests/test_report_suggestions.py`.
 - **Bagong pagkakasunod ng `/reports`:** Search ("Report a business") → "Businesses you've dealt with" → button na **"Your reports (N)"**, na bumubukas sa bagong page na **`/my-reports`** (listahan ng mga report mo at ang status ng bawat isa). Code: `MyReports` sa `Reports.tsx` at `app/my-reports.tsx`.
 
-**Parusa sa pag-withdraw ng quotation (supplier)**
-- Bago mag-withdraw, may confirmation na **"Withdraw this quotation?"** na nagsasabi kung ano ang mangyayari sa account: *"This would be your 2nd withdrawal — Your account will be suspended for 7 days."* May "Keep my quotation" at "Withdraw anyway". Nasa My Quotations, sa sealed receipt, at sa Requirement Detail.
-- **Kapag itinuloy:**
-  - **1st:** warning (naitatala sa moderation history, may alert at email)
-  - **2nd:** suspended nang **7 araw**
-  - **3rd:** **banned**, at may **report sa admin Reports queue** para imbestigahan ("Automatic: 3 sealed quotations withdrawn…")
-- Kapag mali pala ang ban, puwede itong i-lift ng admin sa Businesses. Gaya ng ibang ban, wini-withdraw din nito ang iba pang sealed quotation ng account.
-- Supplier-initiated withdraw lang ang binibilang. Hindi kasama ang mga withdraw ng system (ban wind-down, cancelled requirement).
-- Sa ngayon, panghabambuhay ang bilang, at **kasama ang withdraw na sinundan ng resubmit**. Kaya nakasulat na sa form na "Check it before sealing — withdrawing counts against your account."
-- Ang "system" na nagpapataw ng parusa ay ang unang admin account, at may "Automatic:" sa unahan ng dahilan.
-- Code: `services/withdrawal_policy.py`, `user.withdrawal_count` (auto-migrate), `GET /requirements/withdrawal-preview`, at `components/ui/WithdrawConfirm.tsx` (`useWithdrawConfirm`). Tests: `backend/tests/test_withdrawal_strikes.py`.
+**Withdrawn quotations na hindi pinalitan (supplier)**
+- Bago mag-withdraw, may confirmation na **"Withdraw this quotation?"**, na nagsasabi kung ano ang mangyayari kapag **hindi** nag-resubmit bago magsara. Halimbawa: *"If you don't resubmit before closing, this is your 2nd withdrawal in 90 days — You'll receive a formal warning."* May "Keep my quotation" at "Withdraw anyway". Nasa My Quotations, sa sealed receipt, at sa Requirement Detail.
+- **Hindi kailanman binibilang ang withdraw na sinundan ng resubmit**, dahil ganito itinatama ang mali sa sealed quotation. Ang binibilang lang: withdraw na **walang ipinalit pagsara** ng requirement (na-release man o na-archive). Hindi pa ito binibilang habang naka-extend pa ang requirement.
+- **Bilang sa loob ng 90 araw:**
+  - **1st:** nakatala sa Track record, may alert
+  - **2nd:** pormal na **Warning** (nasa moderation history, may alert at email)
+  - **3rd pataas:** **report sa admin Reports queue** ("Automatic: 3 quotations withdrawn and not replaced…") at alert na "Your account is under review". **Ang admin ang magdedesisyon** (dismiss, warn, suspend o ban). **Walang automatic na suspend o ban.** Isang bukas na automatic report lang kada account.
+- Hindi kasama ang mga withdraw ng system (hal. kapag na-ban ang account).
+- Ang "system" na nagbibigay ng warning o report ay ang unang admin account, at may "Automatic:" sa unahan.
+- Code: `services/withdrawal_policy.py` (`preview` at `record_closing`, tinatawag ng `release_due_requirements`), bagong table na `withdrawalstrike` (`models/withdrawal_strike.py`), `GET /requirements/withdrawal-preview`, at `components/ui/WithdrawConfirm.tsx` (`useWithdrawConfirm`). Tests: `backend/tests/test_withdrawal_strikes.py`.
+- Tala: may naiwang `user.withdrawal_count` column sa dev DB mula sa naunang bersyon. Hindi na ito ginagamit.
 
 **Presyong lampas sa budget: may paliwanag, o strict maximum**
 - **Default (indicative):** puwedeng lumampas sa budget ng buyer, pero **kailangan ng dahilan** (10+ characters) bago makapag-seal: *"Why is your price above the buyer's budget?"*

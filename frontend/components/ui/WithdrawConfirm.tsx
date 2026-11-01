@@ -1,8 +1,9 @@
 // components/ui/WithdrawConfirm.tsx
 // "Withdraw this quotation?" — shown before every supplier withdrawal, with
-// what this one would do to the account (backend withdrawal_policy):
-// 1st = warning, 2nd = 7-day suspension, 3rd = ban pending an admin
-// investigation. Used by My Quotations, the sealed receipt and Requirement Detail.
+// what it would do if it isn't replaced before closing (backend
+// withdrawal_policy, last 90 days): 1st recorded, 2nd a formal warning, 3rd an
+// administrator reviews the account. Withdraw + resubmit (fixing a mistake)
+// never counts. Used by My Quotations, the sealed receipt and Requirement Detail.
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { View, Text, Pressable, Modal, ActivityIndicator, StyleSheet } from 'react-native';
@@ -21,7 +22,7 @@ function WithdrawConfirmModal({ onConfirm, onClose }: { onConfirm: () => Promise
     requirementsApi.withdrawalPreview().then(setPreview).catch(() => setPreview(null));
   }, []);
 
-  const severe = preview && preview.next !== 'warning';
+  const severe = preview && preview.next === 'review';
   const tone = severe ? { bg: color.dangerFaint, border: color.dangerBorder, ink: color.danger } : { bg: color.warningFaint, border: color.warningBorder, ink: color.warning };
 
   const confirm = async () => {
@@ -44,14 +45,14 @@ function WithdrawConfirmModal({ onConfirm, onClose }: { onConfirm: () => Promise
           ) : (
             <View style={[styles.consequence, { backgroundColor: tone.bg, borderColor: tone.border }]}>
               <Text style={[styles.consequenceTitle, { color: tone.ink }]}>
-                This would be your {ordinal(preview.next_number)} withdrawal
+                If you don't resubmit before closing, this is your {ordinal(preview.next_number)} withdrawal in {preview.window_days} days
               </Text>
               <Text style={styles.body}>{preview.message}</Text>
             </View>
           )}
           <Text style={styles.muted}>
-            Withdrawing a sealed quotation counts against your account: 1st — warning · 2nd — 7-day suspension · 3rd — ban
-            pending an administrator's investigation. It also shows on your profile's Track record.
+            Fixing a mistake? Withdraw and resubmit before closing — that never counts. Only a withdrawal with nothing in its
+            place at closing does: 1st — on your Track record · 2nd — formal warning · 3rd — an administrator reviews your account.
           </Text>
           <View style={styles.actions}>
             <Pressable onPress={onClose} disabled={busy} style={[styles.button, { borderColor: color.border }]}>

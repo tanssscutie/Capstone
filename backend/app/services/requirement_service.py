@@ -26,6 +26,7 @@ from app.repositories import ledger_repository as ledger_repo
 from app.repositories import notification_repository as notif_repo
 from app.repositories import message_repository as msg_repo
 from app.services import ledger_service
+from app.services import withdrawal_policy  # also registers the WithdrawalStrike table
 from app.services import matching_service
 from app.schemas.requirement import (
     RequirementCreate,
@@ -905,16 +906,13 @@ class RequirementService:
                 raise NoActiveQuotation()
 
             self._withdraw_row(session, existing, business_id)
-            # Supplier-initiated, so it's a strike (warning / suspension / ban).
-            from app.services import withdrawal_policy
-            withdrawal_policy.record(session, business_id, req.id, req.ref_code)
+            # Not a strike yet: resubmitting before closing (fixing a mistake)
+            # doesn't count. withdrawal_policy.record_closing decides at closing.
 
     def withdrawal_preview(self, business_id: int) -> dict:
-        """What withdrawing one more quotation would do — shown before confirming."""
-        from app.services import withdrawal_policy
+        """What withdrawing (and not resubmitting) one more would do — shown before confirming."""
         with Session(engine) as session:
-            user = session.get(User, business_id)
-            return withdrawal_policy.next_consequence(user.withdrawal_count or 0 if user else 0)
+            return withdrawal_policy.preview(session, business_id)
 
     def _withdraw_row(self, session: Session, quotation: Quotation, actor_id: int) -> None:
         quotation.status = "withdrawn"
@@ -1019,13 +1017,17 @@ class RequirementService:
                 # of the minimum, quotations are never opened — the closing
                 # is extended once, then the requirement is archived.
                 active = repo.list_active_quotations(session, req.id)
+                active_ids = [q.business_id for q in active]
                 if len(active) >= settings.MIN_QUOTATIONS_TO_RELEASE:
                     self._release_one(session, req)
                     released_count += 1
                 elif req.auto_extended_at is None:
                     self._auto_extend(session, req, active)
+                    continue  # still open — a withdrawn supplier can resubmit
                 else:
                     self._archive_insufficient(session, req, active)
+                # Closed for good: withdrawn quotations nobody replaced are strikes.
+                withdrawal_policy.record_closing(session, req, active_ids)
         return released_count
 
     def _auto_extend(self, session: Session, req: Requirement, active: list) -> None:

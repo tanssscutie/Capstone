@@ -320,12 +320,14 @@ export interface QuotationDraftOut {
   over_budget_reason?: string | null;
 }
 
-/** GET /requirements/withdrawal-preview — what one more withdrawal would do. */
+/** GET /requirements/withdrawal-preview — what one more withdrawal (not replaced
+ *  before closing) would do, counted over the last window_days. */
 export interface WithdrawalPreviewOut {
   withdrawals_so_far: number;
   next_number: number;
-  next: 'warning' | 'suspension' | 'ban';
+  next: 'recorded' | 'warning' | 'review';
   message: string;
+  window_days: number;
 }
 
 export const requirementsApi = {

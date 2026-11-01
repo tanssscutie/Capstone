@@ -1,6 +1,7 @@
-"""Withdrawal strikes (withdrawal_policy): 1st withdrawn quotation = warning,
-2nd = 7-day suspension, 3rd = ban + a report for an admin to investigate.
-Withdrawals the system makes don't count. Isolated SQLite.
+"""Withdrawn quotations that weren't replaced (withdrawal_policy): counted at
+closing over 90 days — 1st recorded, 2nd a formal warning, 3rd a report for
+an administrator to review. Withdraw + resubmit (fixing a mistake) never
+counts, and nothing is suspended or banned automatically. Isolated SQLite.
 
 Run from backend: venv/Scripts/python.exe -m unittest discover -s tests -v
 """
@@ -21,9 +22,11 @@ from app.core.clock import now_ph
 from app.core.security import get_current_user
 from app.models.business_report import BusinessReport
 from app.models.moderation_action import ModerationAction
-from app.models.quotation import Quotation
+from app.models.notification import Notification
 from app.models.requirement import Requirement
 from app.models.user import User
+from app.models.withdrawal_strike import WithdrawalStrike
+from app.services.requirement_service import requirement_service
 
 
 class WithdrawalStrikeTests(unittest.TestCase):
@@ -34,19 +37,19 @@ class WithdrawalStrikeTests(unittest.TestCase):
             p = patch(target, self.engine)
             p.start()
             self.addCleanup(p.stop)
+        p = patch("app.services.requirement_service.settings.MIN_QUOTATIONS_TO_RELEASE", 1)
+        p.start()
+        self.addCleanup(p.stop)
         self.addCleanup(self.engine.dispose)
 
         self.admin = self.save(User(business_name="Admin", is_admin=True))
         self.buyer = self.save(User(business_name="Buyer", role="buyer", is_verified=True))
         self.seller = self.save(User(business_name="Seller", role="seller", is_verified=True))
-        self.reqs = [
-            self.save(Requirement(ref_code=f"REQ-{i}", title="Tarps", owner_id=self.buyer.id, location="Pasig",
-                                  status="open", closes_at=now_ph() + timedelta(days=2)))
-            for i in range(4)
-        ]
+        self.other = self.save(User(business_name="Other", role="seller", is_verified=True))
+        self.current = self.seller
         app = FastAPI()
         app.include_router(requirements_router, prefix="/requirements")
-        app.dependency_overrides[get_current_user] = lambda: self.seller
+        app.dependency_overrides[get_current_user] = lambda: self.current
         self.client = TestClient(app)
 
     def save(self, record):
@@ -57,54 +60,94 @@ class WithdrawalStrikeTests(unittest.TestCase):
             session.expunge(record)
             return record
 
-    def quote(self, req):
-        self.assertEqual(self.client.post(f"/requirements/{req.id}/quotations", json={"total_price": 1000}).status_code, 201)
+    def requirement(self, i):
+        return self.save(Requirement(ref_code=f"REQ-{i}", title="Tarps", owner_id=self.buyer.id, location="Pasig",
+                                     status="open", closes_at=now_ph() + timedelta(days=2)))
+
+    def quote(self, req, user=None):
+        self.current = user or self.seller
+        r = self.client.post(f"/requirements/{req.id}/quotations", json={"total_price": 1000})
+        self.assertEqual(r.status_code, 201, r.text)
 
     def withdraw(self, req):
-        r = self.client.post(f"/requirements/{req.id}/quotations/withdraw")
-        self.assertIn(r.status_code, (200, 204), r.text)
+        self.current = self.seller
+        self.assertEqual(self.client.post(f"/requirements/{req.id}/quotations/withdraw").status_code, 204)
 
-    def user(self):
+    def close(self, req):
         with Session(self.engine) as session:
-            return session.get(User, self.seller.id)
+            r = session.get(Requirement, req.id)
+            r.closes_at = now_ph() - timedelta(minutes=1)
+            r.auto_extended_at = now_ph()  # no second chance: release or archive now
+            session.add(r)
+            session.commit()
+        requirement_service.release_due_requirements()
+
+    def backed_out(self, i):
+        req = self.requirement(i)
+        self.quote(req, self.other)  # someone else keeps it alive
+        self.quote(req)
+        self.withdraw(req)
+        self.close(req)
+        return req
+
+    def strikes(self):
+        with Session(self.engine) as session:
+            return len(session.exec(select(WithdrawalStrike).where(WithdrawalStrike.user_id == self.seller.id)).all())
 
     def actions(self):
         with Session(self.engine) as session:
-            return [a.action for a in session.exec(select(ModerationAction).where(
-                ModerationAction.user_id == self.seller.id).order_by(ModerationAction.id)).all()]
+            return [a.action for a in session.exec(select(ModerationAction).where(ModerationAction.user_id == self.seller.id)).all()]
 
-    def test_preview_then_warning_suspension_ban(self):
+    def test_withdraw_and_resubmit_never_counts(self):
+        req = self.requirement(0)
+        self.quote(req)
+        self.withdraw(req)
+        self.assertEqual(self.strikes(), 0)  # nothing at withdraw time
+        self.quote(req)  # fixed and resubmitted
+        self.close(req)
+        self.assertEqual(self.strikes(), 0)
+
+    def test_escalation_is_recorded_warning_then_admin_review(self):
+        self.current = self.seller
+        self.assertEqual(self.client.get("/requirements/withdrawal-preview").json()["next"], "recorded")
+
+        self.backed_out(1)
+        self.assertEqual(self.strikes(), 1)
+        self.assertEqual(self.actions(), [])
+        self.current = self.seller
         self.assertEqual(self.client.get("/requirements/withdrawal-preview").json()["next"], "warning")
 
-        self.quote(self.reqs[0])
-        self.withdraw(self.reqs[0])
-        self.assertEqual(self.user().withdrawal_count, 1)
+        self.backed_out(2)
         self.assertEqual(self.actions(), ["warn"])
-        self.assertEqual(self.client.get("/requirements/withdrawal-preview").json()["next"], "suspension")
+        self.current = self.seller
+        self.assertEqual(self.client.get("/requirements/withdrawal-preview").json()["next"], "review")
 
-        self.quote(self.reqs[1])
-        self.withdraw(self.reqs[1])
-        u = self.user()
-        self.assertEqual(self.actions(), ["warn", "suspend"])
-        self.assertIsNotNone(u.suspended_until)
-        self.assertGreater(u.suspended_until, now_ph() + timedelta(days=6))
-        self.assertEqual(self.client.get("/requirements/withdrawal-preview").json()["next"], "ban")
-
-        # A sealed quotation elsewhere: the ban withdraws it, and that one doesn't count.
-        self.quote(self.reqs[3])
-        self.quote(self.reqs[2])
-        self.withdraw(self.reqs[2])
-        u = self.user()
-        self.assertEqual(self.actions(), ["warn", "suspend", "ban"])
-        self.assertIsNotNone(u.banned_at)
-        self.assertFalse(u.is_active)
-        self.assertEqual(u.withdrawal_count, 3)
+        self.backed_out(3)
+        self.assertEqual(self.actions(), ["warn"])  # no automatic suspension or ban
         with Session(self.engine) as session:
-            report = session.exec(select(BusinessReport).where(BusinessReport.reported_id == self.seller.id)).one()
-            self.assertEqual(report.status, "open")
-            self.assertIn("investigation", report.details)
-            other = session.exec(select(Quotation).where(Quotation.requirement_id == self.reqs[3].id)).one()
-            self.assertEqual(other.status, "withdrawn")
+            u = session.get(User, self.seller.id)
+            self.assertIsNone(u.suspended_until)
+            self.assertIsNone(u.banned_at)
+            reports = session.exec(select(BusinessReport).where(BusinessReport.reported_id == self.seller.id)).all()
+            self.assertEqual(len(reports), 1)
+            self.assertEqual(reports[0].status, "open")
+            titles = [n.title for n in session.exec(select(Notification).where(Notification.user_id == self.seller.id)).all()]
+        self.assertIn("Withdrawn quotation recorded", titles)
+        self.assertIn("Your account is under review", titles)
+
+        self.backed_out(4)  # still under review: no second open report
+        with Session(self.engine) as session:
+            self.assertEqual(len(session.exec(select(BusinessReport).where(BusinessReport.reported_id == self.seller.id)).all()), 1)
+
+    def test_old_strikes_fall_out_of_the_window(self):
+        req = self.backed_out(5)
+        with Session(self.engine) as session:
+            s = session.exec(select(WithdrawalStrike)).one()
+            s.created_at = now_ph() - timedelta(days=91)
+            session.add(s)
+            session.commit()
+        self.current = self.seller
+        self.assertEqual(self.client.get("/requirements/withdrawal-preview").json()["next"], "recorded")
 
 
 if __name__ == "__main__":

@@ -1,34 +1,52 @@
-"""Strikes for withdrawing a sealed quotation (supplier-initiated only).
+"""Withdrawn quotations that weren't replaced.
 
-1st withdrawal: warning. 2nd: suspended for 7 days. 3rd: banned and referred
-to an administrator for investigation (a report lands in the admin Reports
-queue; the admin can lift the ban from the Businesses page).
+Withdrawing and resubmitting before closing is how a supplier fixes a mistake
+in a sealed quotation, so that never counts. What counts is a withdrawal with
+nothing in its place when the requirement closes (released or archived) —
+the supplier backed out. Those are recorded at closing (record_closing) and
+counted over the last 90 days:
 
-Withdrawals the system makes — a ban winding down, a cancelled requirement —
-don't count; only RequirementService.withdraw_quotation calls record().
-Every sanction goes through moderation_service, so it's on the account's
-moderation history and the supplier is alerted (and emailed).
+1st: recorded (shows on the profile's Track record), with an alert.
+2nd: a formal warning on the account (moderation history, alert + email).
+3rd and on: a report in the admin Reports queue; an administrator reviews the
+     account and decides — dismiss, warn, suspend or ban. Nothing is
+     suspended or banned automatically.
 """
-from typing import Optional
+from datetime import timedelta
+from typing import Iterable
 
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
+from app.core.clock import now_ph
 from app.models.business_report import BusinessReport
+from app.models.quotation import Quotation
+from app.models.requirement import Requirement
 from app.models.user import User
+from app.models.withdrawal_strike import WithdrawalStrike
+from app.repositories import notification_repository as notif_repo
 
-SUSPEND_ACTION = "suspend_7"
+WINDOW_DAYS = 90
+AUTO_REPORT_PREFIX = "Automatic:"
+
 CONSEQUENCES = {
-    1: ("warning", "Warning — recorded on your account."),
-    2: ("suspension", "Your account will be suspended for 7 days."),
-    3: ("ban", "Your account will be banned and referred to an administrator for investigation. "
-               "Your other sealed quotations will be withdrawn."),
+    1: ("recorded", "It's recorded on your profile's Track record."),
+    2: ("warning", "You'll receive a formal warning on your account."),
+    3: ("review", "Your account will be sent to an administrator for review — they decide whether to warn, suspend or ban."),
 }
 
 
-def next_consequence(withdrawals_so_far: int) -> dict:
-    n = min(withdrawals_so_far + 1, 3)
-    kind, text = CONSEQUENCES[n]
-    return {"withdrawals_so_far": withdrawals_so_far, "next_number": withdrawals_so_far + 1, "next": kind, "message": text}
+def _recent(session: Session, user_id: int) -> int:
+    since = now_ph() - timedelta(days=WINDOW_DAYS)
+    return session.exec(select(func.count()).select_from(WithdrawalStrike).where(
+        WithdrawalStrike.user_id == user_id, WithdrawalStrike.created_at >= since)).one()
+
+
+def preview(session: Session, user_id: int) -> dict:
+    """What withdrawing (and not resubmitting) one more quotation would do."""
+    so_far = _recent(session, user_id)
+    kind, text = CONSEQUENCES[min(so_far + 1, 3)]
+    return {"withdrawals_so_far": so_far, "next_number": so_far + 1, "next": kind, "message": text,
+            "window_days": WINDOW_DAYS}
 
 
 def _system_admin_id(session: Session, fallback: int) -> int:
@@ -36,37 +54,59 @@ def _system_admin_id(session: Session, fallback: int) -> int:
     return admin.id if admin else fallback
 
 
-def record(session: Session, user_id: int, requirement_id: Optional[int], ref_code: str) -> None:
-    """Count one withdrawal and apply its sanction. Commits."""
+def record_closing(session: Session, req: Requirement, active_business_ids: Iterable[int]) -> int:
+    """At closing: a strike for every supplier with a withdrawn quotation here
+    and no active one in its place. Returns how many were recorded."""
     from app.services.moderation_service import moderation_service  # local: avoids an import cycle
 
-    user = session.get(User, user_id)
-    if not user:
-        return
-    user.withdrawal_count = (user.withdrawal_count or 0) + 1
-    session.add(user)
-    session.commit()
-    n = user.withdrawal_count
-    admin_id = _system_admin_id(session, user_id)
-    where = f" on {ref_code}" if ref_code else ""
-
-    if n == 1:
-        moderation_service.apply(session, admin_id, user_id, "warn",
-                                 f"Automatic: you withdrew a sealed quotation{where}. "
-                                 "A second withdrawal suspends your account for 7 days; a third bans it.")
-    elif n == 2:
-        moderation_service.apply(session, admin_id, user_id, SUSPEND_ACTION,
-                                 f"Automatic: second withdrawn quotation{where}. A third withdrawal bans your account.")
-    else:
-        report = BusinessReport(
-            reporter_id=admin_id, reported_id=user_id, reason="MANIPULATION",
-            details=f"Automatic: {n} sealed quotations withdrawn (latest{where}). "
-                    "The account was banned pending investigation — lift it from Businesses if it was legitimate.",
-            related_requirement_id=requirement_id,
-        )
-        session.add(report)
+    active = set(active_business_ids)
+    withdrawn = session.exec(select(Quotation.business_id).where(
+        Quotation.requirement_id == req.id, Quotation.status == "withdrawn")).all()
+    recorded = 0
+    for user_id in sorted(set(withdrawn) - active):
+        user = session.get(User, user_id)
+        if not user or user.banned_at:  # a ban's own wind-down withdrew it
+            continue
+        if session.exec(select(WithdrawalStrike).where(
+                WithdrawalStrike.user_id == user_id, WithdrawalStrike.requirement_id == req.id)).first():
+            continue
+        session.add(WithdrawalStrike(user_id=user_id, requirement_id=req.id))
         session.commit()
-        session.refresh(report)
-        moderation_service.apply(session, admin_id, user_id, "ban",
-                                 f"Automatic: {n} withdrawn quotations. An administrator will investigate.",
-                                 report_id=report.id)
+        recorded += 1
+        n = _recent(session, user_id)
+        where = f"{req.ref_code} · {req.title}"
+
+        if n == 1:
+            notif_repo.create_if_allowed(
+                session, user_id=user_id, type_="VERIFICATION", category="activity",
+                title="Withdrawn quotation recorded",
+                detail=(f"{where} closed without a quotation from you after you withdrew. It's on your Track record. "
+                        f"A second within {WINDOW_DAYS} days brings a formal warning."),
+                related_requirement_id=req.id,
+            )
+        elif n == 2:
+            moderation_service.apply(
+                session, _system_admin_id(session, user_id), user_id, "warn",
+                f"{AUTO_REPORT_PREFIX} 2 quotations withdrawn and not replaced within {WINDOW_DAYS} days "
+                f"(latest: {req.ref_code}). A third sends your account to an administrator for review.",
+            )
+        else:
+            already_open = session.exec(select(BusinessReport).where(
+                BusinessReport.reported_id == user_id, BusinessReport.status == "open",
+                BusinessReport.details.startswith(AUTO_REPORT_PREFIX))).first()
+            if not already_open:
+                session.add(BusinessReport(
+                    reporter_id=_system_admin_id(session, user_id), reported_id=user_id, reason="OTHER",
+                    details=(f"{AUTO_REPORT_PREFIX} {n} quotations withdrawn and not replaced within {WINDOW_DAYS} days "
+                             f"(latest: {req.ref_code}). Review the account and decide: dismiss, warn, suspend or ban."),
+                    related_requirement_id=req.id,
+                ))
+                session.commit()
+            notif_repo.create_if_allowed(
+                session, user_id=user_id, type_="VERIFICATION", category="activity",
+                title="Your account is under review",
+                detail=(f"{n} quotations withdrawn and not replaced within {WINDOW_DAYS} days. "
+                        "An administrator will review your account."),
+                urgent=True, related_requirement_id=req.id,
+            )
+    return recorded
