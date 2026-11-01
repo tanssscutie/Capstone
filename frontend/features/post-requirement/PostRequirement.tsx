@@ -26,7 +26,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
-import { View, Text, Pressable, TextInput, StyleSheet, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import type { TextInputProps, ViewStyle } from 'react-native';
 import ScreenScroll from '../../components/ui/ScreenScroll';
 import type { LayoutChangeEvent } from 'react-native';
@@ -185,6 +185,8 @@ const SPEC_VALUE_MAX = 200;
 const SITE_ADDRESS_MAX = 200;
 /** Barangay matches listed under the search field at once. */
 const BARANGAY_MATCHES_SHOWN = 8;
+/** Searching all of Metro Manila (no city yet) — enough to scroll through, not 1,700 rows. */
+const BARANGAY_SEARCH_MAX = 60;
 
 /** One example label/value pair per category, shown as the Specifications
  *  row's placeholder text once a category is picked — before that, the
@@ -1486,7 +1488,8 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
       ? []
       : Object.values(byCity).flatMap((c) => c.barangays.map((b) => ({ ...b, city: c.city })));
     const all = q ? pool.filter((b) => foldName(b.name).includes(q)) : pool;
-    return all.slice(0, BARANGAY_MATCHES_SHOWN);
+    // Within a city: every barangay, in a scrolling list. Across Metro Manila: capped.
+    return cityData ? all : all.slice(0, BARANGAY_SEARCH_MAX);
   }, [byCity, cityData, city, barangayQuery]);
   const zipSuggestions = useMemo(
     () => (cityData?.zips ?? []).filter((z) => z.zip.startsWith(zipCode)).slice(0, BARANGAY_MATCHES_SHOWN),
@@ -1619,7 +1622,7 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
                 style={[styles.input, attempted && !barangayValid ? styles.inputError : null]}
               />
               {(!!cityData || !!barangayQuery.trim()) && addressDataReady && (
-                <View style={styles.optionList}>
+                <ScrollView style={styles.optionList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
                   {barangayMatches.length === 0 ? (
                     <Text style={styles.optionEmpty}>No barangay {city ? `in ${city} ` : ''}matches "{barangayQuery}".</Text>
                   ) : (
@@ -1630,7 +1633,7 @@ function DeliveryScreen({ initial, onContinue, reportContinue }: DeliveryProps &
                       </Pressable>
                     ))
                   )}
-                </View>
+                </ScrollView>
               )}
               {attempted && !barangayValid && (
                 <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Pick the barangay from the list.</Text>
@@ -2258,7 +2261,7 @@ const styles = StyleSheet.create({
 
   pillGroupWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginTop: space.sm },
   /* barangay search + picked value */
-  optionList: { marginTop: space.xs, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, backgroundColor: color.surface, overflow: 'hidden' },
+  optionList: { maxHeight: 280, marginTop: space.xs, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, backgroundColor: color.surface, overflow: 'hidden' },
   optionRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.md, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.borderFaint },
   optionRowPressed: { backgroundColor: color.surfaceSunken },
   optionName: { flex: 1, fontFamily: font.body, fontSize: fontSize.sm, color: color.ink },
