@@ -250,7 +250,7 @@ const CLOSING_PRESETS: { label: string; days: number }[] = [
 
 /** Matches RequirementDetail.tsx's OWNER_SEALED EditabilityList exactly. */
 const LOCK_ITEMS = [
-  { name: 'Scope and specifications', body: 'Respondents price against exactly what you posted — changing it after publish would invalidate quotations already sealed against it.' },
+  { name: 'Description and specifications', body: 'Respondents price against exactly what you posted — changing it after publish would invalidate quotations already sealed against it.' },
   { name: 'Quantity', body: 'A different quantity is a different job. Post a new requirement instead of changing this one underneath respondents.' },
   { name: 'Indicative budget', body: 'Shown to every respondent before they price. Moving it after publish would be moving the target they already aimed at.' },
   { name: 'Closing date and time', body: 'The only field that alerts the platform. It fires that event once, on publish, and cannot be moved afterward.' },
@@ -1121,8 +1121,8 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
   else if (!itemCode) missing.push('an item');
   if (!title.trim()) missing.push('a title');
   else if (titleTooShort) missing.push(`a title of at least ${TITLE_MIN} characters`);
-  if (!scope.trim()) missing.push('scope');
-  else if (scopeTooShort) missing.push(`scope of at least ${SCOPE_MIN} characters`);
+  if (!scope.trim()) missing.push('a description');
+  else if (scopeTooShort) missing.push(`a description of at least ${SCOPE_MIN} characters`);
   if (validSpecRows.length === 0) missing.push('at least one real specification');
   else if (badSpecRows.length > 0) missing.push('a fix to the specification row marked below');
   if (partialSpecRows.length > 0) missing.push('both a label and a value on every specification row');
@@ -1214,7 +1214,7 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
         </View>
 
         <View>
-          <FieldLabel>Scope</FieldLabel>
+          <FieldLabel>Description</FieldLabel>
           <FormInput
             value={scope}
             onChangeText={setScope}
@@ -1226,11 +1226,11 @@ function DetailsScreen({ poster, initial, onContinue, reportContinue, onSuggestC
             style={[styles.textareaLarge, attempted && (scopeTooShort || !scope.trim()) ? styles.inputError : null]}
           />
           {attempted && !scope.trim() ? (
-            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Describe the scope of the work.</Text>
+            <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Describe what you need.</Text>
           ) : attempted && scopeTooShort ? (
             <Text style={styles.errorText} {...VALIDATION_ERROR_MARK}>Needs at least {SCOPE_MIN} characters ({scope.trim().length}/{SCOPE_MIN}).</Text>
           ) : (
-            <Text style={styles.fieldCaption}>Vague scope produces quotations you cannot compare.</Text>
+            <Text style={styles.fieldCaption}>A vague description produces quotations you cannot compare.</Text>
           )}
         </View>
       </SectionCard>
@@ -1933,7 +1933,7 @@ function BeforePublishCard({ draft, ack, onToggleAck }: { draft: RequirementDraf
         <View style={[styles.checkbox, ack ? styles.checkboxOn : null]}>{ack && <CheckGlyph />}</View>
         <Text style={styles.ackText}>
           I understand that verified businesses in my category and service area will be alerted, that quotations stay sealed until{' '}
-          <Text style={styles.ackBold}>{formatDateTime(draft.closingAt)}</Text>, and that scope and specifications, quantity, indicative
+          <Text style={styles.ackBold}>{formatDateTime(draft.closingAt)}</Text>, and that the description and specifications, quantity, indicative
           budget, and the closing date and time cannot be changed once I publish.
         </Text>
       </Pressable>
@@ -1994,7 +1994,7 @@ function ReviewScreen({
           <SummaryLine label="Category" value={draft.category} />
           {!!itemName && <SummaryLine label="Item" value={itemName} />}
           <SummaryLine label="Title" value={draft.title} />
-          <SummaryBlock label="Scope" value={draft.scope} />
+          <SummaryBlock label="Description" value={draft.scope} />
           {!!specText && <SummaryBlock label="Specifications" value={specText} />}
           <SummaryLine label="Quantity" value={draft.quantity} />
           <SummaryLine label={draft.strictBudget ? "Budget (strict maximum)" : "Indicative budget"} value={formatBudget(draft.budgetMin, draft.budgetMax)} />
